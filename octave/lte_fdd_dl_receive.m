@@ -1,17 +1,17 @@
 %
-% Copyright 2011 Ben Wojtowicz
+% Copyright 2011-2012 Ben Wojtowicz
 %
 %    This program is free software: you can redistribute it and/or modify
-%    it under the terms of the GNU General Public License as published by
+%    it under the terms of the GNU Affero General Public License as published by
 %    the Free Software Foundation, either version 3 of the License, or
 %    (at your option) any later version.
 %
 %    This program is distributed in the hope that it will be useful,
 %    but WITHOUT ANY WARRANTY; without even the implied warranty of
 %    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-%    GNU General Public License for more details.
+%    GNU Affero General Public License for more details.
 %
-%    You should have received a copy of the GNU General Public License
+%    You should have received a copy of the GNU Affero General Public License
 %    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 %
 % Function:    lte_fdd_dl_receive
@@ -23,6 +23,8 @@
 % Spec:        N/A
 % Notes:       Only supports normal cyclic prefix
 % Rev History: Ben Wojtowicz 12/26/2011 Created
+%              Ben Wojtowicz 01/29/2012 Fixed license statement and bug
+%                                       with find_pss_and_fine_timing
 %
 function [] = lte_fdd_dl_receive(input_samps)
     % DEFINES
@@ -269,7 +271,7 @@ function [fine_start, N_id_2, pss_symb, pss_thresh] = find_pss_and_fine_timing(i
     fine_start(6)  = pss_timing_idx + (2048+144)*5 + 2048+160 - 15360;
     fine_start(7)  = pss_timing_idx + (2048+144)*6 + 2048+160 - 15360;
     while(fine_start(1) < 1)
-        fine_start = fine_start + 15360;
+        fine_start = fine_start + 307200;
     endwhile
 endfunction
 
