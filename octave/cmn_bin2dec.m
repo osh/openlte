@@ -25,6 +25,7 @@
 % Notes:       None
 % Rev History: Ben Wojtowicz 11/22/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
+%              Ben Wojtowicz 02/19/2012 Added newline to EOF
 %
 function [dec] = cmn_bin2dec(array, num_bits)
     [num_array, junk] = size(array);

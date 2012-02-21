@@ -25,6 +25,7 @@
 % Notes:       None
 % Rev History: Ben Wojtowicz 11/22/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
+%              Ben Wojtowicz 02/19/2012 Fixed mod(num_bits,3)==0 bug
 %
 function [array] = cmn_oct2bin(oct, num_bits)
     [junk, num_oct] = size(oct);
@@ -40,8 +41,10 @@ function [array] = cmn_oct2bin(oct, num_bits)
             idx                = idx - 3;
         endfor
 
-        % Convert non-whole digits
-        dig             = mod(tmp, 10);
-        array(n, 1:idx) = cmn_dec2bin(dig, mod(num_bits, 3));
+        if(mod(num_bits, 3) != 0)
+            % Convert non-whole digits
+            dig             = mod(tmp, 10);
+            array(n, 1:idx) = cmn_dec2bin(dig, mod(num_bits, 3));
+        endif
     endfor
 endfunction

@@ -14,23 +14,23 @@
 %    You should have received a copy of the GNU Affero General Public License
 %    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 %
-% Function:    lte_mib_unpack
-% Description: Unpacks all of the fiels from the Master
-%              Information Block
-% Inputs:      bw - System bandwidth (in number of RBs)
-%              phich_dur - PHICH Duration (normal or extended)
-%              phich_res - Number of PHICH groups (1/6, 1/2, 1, 2)
-%              sfn       - System frame number
-% Outputs:     mib       - Packed master information block
-% Spec:        3GPP TS 36.331 section 6.2.2 v10.0.0
+% Function:    lte_bcch_bch_msg_unpack
+% Description: Unpacks all of the fields from the BCCH BCH message
+% Inputs:      bcch_bch_msg - Packed BCCH BCH message
+% Outputs:     bw           - System bandwidth (in number of RBs)
+%              phich_dur    - PHICH Duration (normal or extended)
+%              phich_res    - Number of PHICH groups (1/6, 1/2, 1, 2)
+%              sfn          - System frame number
+% Spec:        3GPP TS 36.331 section 6.2.1 and 6.2.2 v10.0.0
 % Notes:       None
 % Rev History: Ben Wojtowicz 10/30/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
+%              Ben Wojtowicz 02/19/2012 Changed function name to match spec
 %
-function [bw, phich_dur, phich_res, sfn] = lte_mib_unpack(mib)
-    % Check mib
-    if(length(mib) ~= 24)
-        printf("ERROR: Invalid mib (length is %u, should be 24)\n", length(mib));
+function [bw, phich_dur, phich_res, sfn] = lte_bcch_bch_msg_unpack(bcch_bch_msg)
+    % Check bcch_bch_msg
+    if(length(bcch_bch_msg) ~= 24)
+        printf("ERROR: Invalid bcch_bch_msg (length is %u, should be 24)\n", length(bcch_bch_msg));
         bw        = 0;
         phich_dur = 0;
         phich_res = 0;
@@ -38,11 +38,11 @@ function [bw, phich_dur, phich_res, sfn] = lte_mib_unpack(mib)
         return;
     endif
 
-    % Unpack MIB
-    act_bw        = mib(1:3);
-    act_phich_dur = mib(4);
-    act_phich_res = mib(5:6);
-    act_sfn       = mib(7:14);
+    % Unpack the BCCH BCH message
+    act_bw        = bcch_bch_msg(1:3);
+    act_phich_dur = bcch_bch_msg(4);
+    act_phich_res = bcch_bch_msg(5:6);
+    act_sfn       = bcch_bch_msg(7:14);
 
     % Construct bandwidth
     act_bw = 4*act_bw(1) + 2*act_bw(2) + act_bw(3);

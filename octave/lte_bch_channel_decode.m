@@ -24,21 +24,13 @@
 % Notes:       None
 % Rev History: Ben Wojtowicz 11/12/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
+%              Ben Wojtowicz 02/19/2012 Commonized rate unmatcher and
+%                                       removed conversion to hard bits
 %
 function [mib, N_ant] = lte_bch_channel_decode(bch_bits)
-
-    % Rate match to get the d_bits
-    d_bits = lte_rate_unmatch(bch_bits);
+    % Rate unmatch to get the d_bits
+    d_bits = lte_rate_unmatch_conv(bch_bits, 40);
     d_bits = reshape(d_bits, 1, []);
-
-    % Convert from soft NRZ to hard bits for viterbi decoder
-    for(n=1:length(d_bits))
-        if(d_bits(n) > 0)
-            d_bits(n) = 0;
-        else
-            d_bits(n) = 1;
-        endif
-    endfor
 
     % Viterbi decode the d_bits to get the c_bits
     c_bits = cmn_viterbi_decode(d_bits, 7, 3, [133, 171, 165]);
@@ -78,117 +70,4 @@ function [mib, N_ant] = lte_bch_channel_decode(bch_bits)
         N_ant = 0;
         mib   = 0;
     endif
-endfunction
-
-function [d_bits] = lte_rate_unmatch(e_bits)
-    % In order to undo bit collection, selection and transmission, a dummy block must be
-    % sub-block interleaved to determine where NULL bits are to be inserted
-    % Sub block interleaving
-    % Step 1: Assign C_cc_sb to 32
-    C_cc_sb = 32;
-
-    % Step 2: Determine the number of rows
-    R_cc_sb    = 0;
-    d_bits_len = 40; % FIXME This is specific for BCH
-    while(d_bits_len > (C_cc_sb*R_cc_sb))
-        R_cc_sb = R_cc_sb + 1;
-    endwhile
-
-    % Inter-column permutation values
-    ic_perm = [1, 17, 9, 25, 5, 21, 13, 29, 3, 19, 11, 27, 7, 23, 15, 31, 0, 16, 8, 24, 4, 20, 12, 28, 2, 18, 10, 26, 6, 22, 14, 30] + 1;
-
-    % Steps 3, 4, and 5
-    for(x=0:3-1)
-        % Step 3: Pack data into matrix and pad with dummy (NULL==10000 for this routine)
-        if(d_bits_len < (C_cc_sb*R_cc_sb))
-            N_dummy = C_cc_sb*R_cc_sb - d_bits_len;
-        else
-            N_dummy = 0;
-        endif
-        tmp = [10000*ones(1, N_dummy), zeros(1,d_bits_len)];
-        idx = 0;
-        for(n=0:R_cc_sb-1)
-            for(m=0:C_cc_sb-1)
-                sb_mat(n+1,m+1) = tmp(idx+1);
-                idx             = idx + 1;
-            endfor
-        endfor
-
-        % Step 4: Inter-column permutation
-        for(n=0:R_cc_sb-1)
-            for(m=0:C_cc_sb-1)
-                sb_perm_mat(n+1,m+1) = sb_mat(n+1,ic_perm(m+1));
-            endfor
-        endfor
-
-        % Step 5: Read out the bits
-        idx = 0;
-        for(m=0:C_cc_sb-1)
-            for(n=0:R_cc_sb-1)
-                v(x+1,idx+1) = sb_perm_mat(n+1,m+1);
-                idx          = idx + 1;
-            endfor
-        endfor
-    endfor
-    
-    % Undo bit collection, selection, and transmission by recreating the circular buffer
-    K_pi  = R_cc_sb*C_cc_sb;
-    K_w   = 3*K_pi;
-    w_dum = [v(1,:), v(2,:), v(3,:)];
-    w     = 10000*ones(1,K_w);
-    E     = 1920;
-    k_idx = 0;
-    j_idx = 0;
-    while(k_idx < E)
-        if(w_dum(mod(j_idx, K_w)+1) != 10000)
-            % FIXME: soft combine the inputs
-            if(w(mod(j_idx, K_w)+1) == 10000)
-                w(mod(j_idx, K_w)+1) = e_bits(k_idx+1);
-%            elseif(e_bits(k_idx+1) != 10000)
-%                w(mod(j_idx, K_w)+1) = w(mod(j_idx, K_w)+1) + e_bits(k_idx+1);
-            endif
-            k_idx = k_idx + 1;
-        endif
-        j_idx = j_idx + 1;
-    endwhile
-
-    % Recreate sub-block interleaver output
-    v(1,:) = w(1:K_pi);
-    v(2,:) = w(K_pi+1:2*K_pi);
-    v(3,:) = w(2*K_pi+1:end);
-
-    % Sub block deinterleaving
-    % Steps 5, 4, and 3
-    for(x=0:3-1)
-        % Step 5: Load the permuted matrix
-        idx = 0;
-        for(m=0:C_cc_sb-1)
-            for(n=0:R_cc_sb-1)
-                sb_perm_mat(n+1,m+1) = v(x+1,idx+1);
-                idx                  = idx + 1;
-            endfor
-        endfor
-
-        % Step 4: Undo permutation
-        for(n=0:R_cc_sb-1)
-            for(m=0:C_cc_sb-1)
-                sb_mat(n+1,ic_perm(m+1)) = sb_perm_mat(n+1,m+1);
-            endfor
-        endfor
-
-        % Step 3: Unpack the data and remove dummy
-        if(d_bits_len < (C_cc_sb*R_cc_sb))
-            N_dummy = C_cc_sb*R_cc_sb - d_bits_len;
-        else
-            N_dummy = 0;
-        endif
-        idx = 0;
-        for(n=0:R_cc_sb-1)
-            for(m=0:C_cc_sb-1)
-                tmp(idx+1) = sb_mat(n+1,m+1);
-                idx        = idx + 1;
-            endfor
-        endfor
-        d_bits(x+1,:) = tmp(N_dummy+1:end);
-    endfor
 endfunction

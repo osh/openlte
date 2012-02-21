@@ -25,9 +25,10 @@
 %                         array in octal
 % Outputs:     out      - Ouput bit array
 % Spec:        N/A
-% Notes:       Currently only supports hard bits
+% Notes:       N/A
 % Rev History: Ben Wojtowicz 11/22/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
+%              Ben Wojtowicz 02/19/2012 Added soft bit decoding
 %
 function [out] = cmn_viterbi_decode(in, k, r, g)
 
@@ -82,23 +83,33 @@ function [out] = cmn_viterbi_decode(in, k, r, g)
     path_metric = zeros(num_states, (length(in)/r)+10);
     for(n=0:(length(in)/r)-1)
         br_metric = zeros(num_states, 2);
+        p_metric  = zeros(num_states, 2);
+        w_metric  = zeros(num_states, 2);
 
         for(m=0:num_states-1)
             % Calculate the accumulated branch metrics for each state
             for(o=0:1)
-                prev_state         = mod(bitshift(m, 1) + o, num_states);
-                br_metric(m+1,o+1) = br_metric(m+1,o+1) + path_metric(prev_state+1,n+1);
-                st_arr             = cmn_dec2bin(st_output(m+1,o+1), r);
+                prev_state        = mod(bitshift(m, 1) + o, num_states);
+                p_metric(m+1,o+1) = path_metric(prev_state+1,n+1);
+                st_arr            = cmn_dec2bin(st_output(m+1,o+1), r);
                 for(p=0:r-1)
-                    br_metric(m+1,o+1) = br_metric(m+1,o+1) + mod(st_arr(p+1)+in(n*r+p+1), 2);
+                    if(in(n*r+p+1) >= 0)
+                        in_bit = 0;
+                    else
+                        in_bit = 1;
+                    endif
+                    br_metric(m+1,o+1) = br_metric(m+1,o+1) + mod(st_arr(p+1)+in_bit, 2);
+                    w_metric(m+1,o+1)  = w_metric(m+1,o+1) + abs(in(n*r+p+1));
                 endfor
             endfor
 
-            % Keep the smallest branch metric as the path metric
-            if(br_metric(m+1,1) > br_metric(m+1,2))
-                path_metric_new(m+1) = br_metric(m+1,2);
+            % Keep the smallest branch metric as the path metric, weight the branch metric
+            tmp1 = br_metric(m+1,1) + p_metric(m+1,1);
+            tmp2 = br_metric(m+1,2) + p_metric(m+1,2);
+            if(tmp1 > tmp2)
+                path_metric_new(m+1) = p_metric(m+1,2) + w_metric(m+1,2)*br_metric(m+1,2);
             else
-                path_metric_new(m+1) = br_metric(m+1,1);
+                path_metric_new(m+1) = p_metric(m+1,1) + w_metric(m+1,1)*br_metric(m+1,1);
             endif
         endfor
         path_metric(:,n+2) = path_metric_new';

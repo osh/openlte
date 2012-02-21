@@ -27,6 +27,7 @@
 % Notes:       None
 % Rev History: Ben Wojtowicz 10/28/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
+%              Ben Wojtowicz 02/19/2012 Added newline to EOF
 %
 function [x] = lte_layer_mapper(d, v, style)
 

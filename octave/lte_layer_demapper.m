@@ -27,6 +27,7 @@
 % Notes:       None
 % Rev History: Ben Wojtowicz 10/28/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
+%              Ben Wojtowicz 02/19/2012 Fixed check for NULL symbols
 %
 function [d] = lte_layer_demapper(x, N_cw, style)
 
@@ -54,7 +55,7 @@ function [d] = lte_layer_demapper(x, N_cw, style)
                     d(0+1, 4*n+2+1) = x(2+1, n+1);
                     d(0+1, 4*n+3+1) = x(3+1, n+1);
                 endfor
-                if(abs(x(3+1,M_layer_symb)) < 10)
+                if(abs(x(3+1,M_layer_symb)) != 10)
                     M_symb = M_layer_symb*4;
                 else
                     M_symb = M_layer_symb*4 - 2;

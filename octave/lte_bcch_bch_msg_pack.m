@@ -14,20 +14,20 @@
 %    You should have received a copy of the GNU Affero General Public License
 %    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 %
-% Function:    lte_mib_pack
-% Description: Packs all of the fields into the Master
-%              Information Block
-% Inputs:      bw        - System bandwidth (in number of RBs)
-%              phich_dur - PHICH Duration (normal or extended)
-%              phich_res - Number of PHICH groups (1/6, 1/2, 1, 2)
-%              sfn       - System frame number
-% Outputs:     mib       - Packed master information block
-% Spec:        3GPP TS 36.331 section 6.2.2 v10.0.0
+% Function:    lte_bcch_bch_msg_pack
+% Description: Packs all of the fields into the BCCH BCH message
+% Inputs:      bw           - System bandwidth (in number of RBs)
+%              phich_dur    - PHICH Duration (normal or extended)
+%              phich_res    - Number of PHICH groups (1/6, 1/2, 1, 2)
+%              sfn          - System frame number
+% Outputs:     bcch_bch_msg - Packed BCCH BCH message
+% Spec:        3GPP TS 36.331 section 6.2.1 and 6.2.2 v10.0.0
 % Notes:       None
 % Rev History: Ben Wojtowicz 10/30/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
+%              Ben Wojtowicz 02/19/2012 Changed function name to match spec
 %
-function [mib] = lte_mib_pack(bw, phich_dur, phich_res, sfn)
+function [bcch_bch_msg] = lte_bcch_bch_msg_pack(bw, phich_dur, phich_res, sfn)
     % Check bandwidth
     if(bw == 6)
         act_bw = [0,0,0];
@@ -43,18 +43,18 @@ function [mib] = lte_mib_pack(bw, phich_dur, phich_res, sfn)
         act_bw = [1,0,1];
     else
         printf("ERROR: Invalid bw (%u)\n", bw);
-        mib = 0;
+        bcch_bch_msg = 0;
         return;
     endif
 
     % Check phich_dur
-    if(phich_dur(1) == "n")
+    if(phich_dur == "normal")
         act_phich_dur = 0;
-    elseif(phich_dur(1) == "e")
+    elseif(phich_dur == "extended")
         act_phich_dur = 1;
     else
         printf("ERROR: Invalid phich_dur (%s)\n", phich_dur);
-        mib = 0;
+        bcch_bch_msg = 0;
         return;
     endif
 
@@ -69,7 +69,7 @@ function [mib] = lte_mib_pack(bw, phich_dur, phich_res, sfn)
         act_phich_res = [1,1];
     else
         printf("ERROR: Invalid phich_res (%f)\n", phich_res);
-        mib = 0;
+        bcch_bch_msg = 0;
         return;
     endif
 
@@ -82,10 +82,10 @@ function [mib] = lte_mib_pack(bw, phich_dur, phich_res, sfn)
         endfor
     else
         printf("ERROR: Invalid sfn (%u)\n", sfn);
-        mib = 0;
+        bcch_bch_msg = 0;
         return;
     endif
 
-    % Pack MIB
-    mib = [act_bw, act_phich_dur, act_phich_res, act_sfn, zeros(1,10)];
+    % Pack the BCCH BCH message
+    bcch_bch_msg = [act_bw, act_phich_dur, act_phich_res, act_sfn, zeros(1,10)];
 endfunction

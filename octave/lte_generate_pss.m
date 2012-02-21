@@ -24,6 +24,7 @@
 % Notes:       None
 % Rev History: Ben Wojtowicz 10/28/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
+%              Ben Wojtowicz 02/19/2012 Removed newline at EOF
 %
 function [pss_d_u] = lte_generate_pss(N_id_2)
     % Validate N_id_2 and get the root index
@@ -49,4 +50,3 @@ function [pss_d_u] = lte_generate_pss(N_id_2)
         pss_d_u(n+1) = cos(-pi*root_idx*(n+1)*(n+2)/63) + j*sin(-pi*root_idx*(n+1)*(n+2)/63);
     endfor
 endfunction
-

@@ -24,8 +24,18 @@
 % Notes:       None
 % Rev History: Ben Wojtowicz 12/26/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
+%              Ben Wojtowicz 02/19/2012 Added conversion to hard bits
 %
 function [cfi] = lte_cfi_channel_decode(cfi_bits)
+    % Convert from soft NRZ to hard bits
+    for(n=1:length(cfi_bits))
+        if(cfi_bits(n) >= 0)
+            cfi_bits(n) = 0;
+        else
+            cfi_bits(n) = 1;
+        endif
+    endfor
+
     % Calculate the number of bit errors for each CFI
     cfi_bits_1 = [0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1];
     cfi_bits_2 = [1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0];
