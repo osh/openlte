@@ -1,0 +1,10 @@
+Version       Contents
+v00.01        First Octave release containing PSS, SSS, CRS, and PBCH
+              transmission and reception for FDD
+v00.02        Octave release with fixes in the license statement and a
+              bug fix in lte_fdd_dl_receive.m
+v00.03        Octave release with support for PDSCH transmission and
+              reception for SIB1 encoding/decoding.  This includes
+              turbo encoding/decoding.
+v00.04        First release with C++ gnuradio support.  Contains PSS
+              SSS, CRS, and PBCH reception for FDD in C++ for gnuradio.

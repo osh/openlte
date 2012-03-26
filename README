@@ -1,0 +1,38 @@
+This directory contains the openLTE source code.  For support, please
+subscribe to openlte-discuss@lists.sourceforge.net.  Details can be
+found at sourceforge.net/projects/openlte/.
+
+The directory structure for the project is:
+octave              Octave test code
+cmn_hdr             Common header files
+liblte              C++ library of commonly used LTE functions
+openlte_file_scan   A gnu-radio LTE file scanner application
+
+To build the C++ and python code use the following:
+
+  $ ./bootstrap
+  $ ./configure
+  $ make
+
+To install the C++ and python code use the following:
+
+  $ ./bootstrap
+  $ ./configure
+  $ make
+  $ make install
+
+To use the installed C++ and python code, set the PYTHONPATH
+env variable to <python_install_dir>/dist-packages/gnuradio/
+for instance /usr/local/lib/python2.7/dist-packages/gnuradio/.
+Then run openlte_file_scan/python/openlte_file_scan.py and
+specify a recorded LTE file as the input. For example:
+
+  $ ./openlte_file_scan/python/openlte_file_scan.py lte_file.bin
+
+The recorded LTE file currently must be interleaved 8-bit I and
+Q samples recorded at 30.72MHz.
+
+To use the octave code, run the top level octave .m files:
+lte_fdd_dl_transmit.m and lte_fdd_dl_receive.m.  If multiple
+transmit antennas are used, the outputs need to be combined
+before input to the receiver.
