@@ -73,9 +73,7 @@ MOSTLYCLEANFILES += $(DEPDIR)/*.S*
 ## .h file is sometimes built, but not always ... so that one has to
 ## be added manually by the including Makefile.am .
 
-swig_built_sources += \
-	src/LTE_fdd_dl_fs.py \
-	src/LTE_fdd_dl_fs.cc
+swig_built_sources += src/LTE_fdd_dl_fs.py src/LTE_fdd_dl_fs.cc
 
 STD_SWIG_PYTHON_ARGS += -outdir src
 
@@ -83,36 +81,36 @@ STD_SWIG_PYTHON_ARGS += -outdir src
 ## Makefile.am by setting the variable value there, then including
 ## Makefile.swig .
 
-LTE_fdd_dl_fs_swiginclude_HEADERS =	\
-	src/LTE_fdd_dl_fs.i		\
+LTE_fdd_dl_fs_swiginclude_HEADERS =		\
+	src/LTE_fdd_dl_fs.i			\
 	$(LTE_fdd_dl_fs_swiginclude_headers)
 
-LTE_fdd_dl_fs_pylib_LTLIBRARIES =	\
+LTE_fdd_dl_fs_pylib_LTLIBRARIES =		\
 	_LTE_fdd_dl_fs.la
 
-_LTE_fdd_dl_fs_la_SOURCES =		\
-	src/LTE_fdd_dl_fs.cc		\
+_LTE_fdd_dl_fs_la_SOURCES = 			\
+	src/LTE_fdd_dl_fs.cc			\
 	$(LTE_fdd_dl_fs_la_swig_sources)
 
-_LTE_fdd_dl_fs_la_LIBADD =		\
+_LTE_fdd_dl_fs_la_LIBADD =			\
 	$(STD_SWIG_LA_LIB_ADD)		\
 	$(LTE_fdd_dl_fs_la_swig_libadd)
 
-_LTE_fdd_dl_fs_la_LDFLAGS =		\
+_LTE_fdd_dl_fs_la_LDFLAGS =			\
 	$(STD_SWIG_LA_LD_FLAGS)		\
 	$(LTE_fdd_dl_fs_la_swig_ldflags)
 
-_LTE_fdd_dl_fs_la_CXXFLAGS =		\
+_LTE_fdd_dl_fs_la_CXXFLAGS =			\
 	$(STD_SWIG_CXX_FLAGS)		\
 	$(LTE_fdd_dl_fs_la_swig_cxxflags)
 
-LTE_fdd_dl_fs_python_PYTHON =		\
-	src/LTE_fdd_dl_fs.py		\
+LTE_fdd_dl_fs_python_PYTHON =			\
+	src/LTE_fdd_dl_fs.py			\
 	$(LTE_fdd_dl_fs_python)
 
 ## Entry rule for running SWIG
 
-src/LTE_fdd_dl_fs.h src/LTE_fdd_dl_fs.py src/LTE_fdd_dl_fs.c: src/LTE_fdd_dl_fs.i
+src/LTE_fdd_dl_fs.h src/LTE_fdd_dl_fs.py src/LTE_fdd_dl_fs.cc: src/LTE_fdd_dl_fs.i
 ## This rule will get called only when MAKE decides that one of the
 ## targets needs to be created or re-created, because:
 ##

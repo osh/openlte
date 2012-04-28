@@ -26,6 +26,7 @@
 % Rev History: Ben Wojtowicz 10/28/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
 %              Ben Wojtowicz 02/19/2012 Added newline to EOF
+%              Ben Wojtowicz 03/27/2012 Fixed a bug with 16QAM
 %
 function [symbs] = lte_modulation_mapper(bits, mod_type)
 
@@ -70,7 +71,7 @@ function [symbs] = lte_modulation_mapper(bits, mod_type)
             N_bits   = N_bits + 4-mod(N_bits, 4);
         endif
         for(n=0:(N_bits/4)-1)
-            input = loc_bits(n*2+1)*8 + loc_bits(n*2+1+1)*4 + loc_bits(n*2+2+1)*2 + loc_bits(n*4+3+1);
+            input = loc_bits(n*4+1)*8 + loc_bits(n*4+1+1)*4 + loc_bits(n*4+2+1)*2 + loc_bits(n*4+3+1);
             if(input == 0)
                 symbs(n+1) = +1/sqrt(10) + j*1/sqrt(10);
             elseif(input == 1)

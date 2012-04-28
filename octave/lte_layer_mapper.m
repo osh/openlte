@@ -28,6 +28,8 @@
 % Rev History: Ben Wojtowicz 10/28/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
 %              Ben Wojtowicz 02/19/2012 Added newline to EOF
+%              Ben Wojtowicz 03/28/2012 Fixed a bug in 3 antenna spatial
+%                                       multiplexing
 %
 function [x] = lte_layer_mapper(d, v, style)
 
@@ -96,7 +98,7 @@ function [x] = lte_layer_mapper(d, v, style)
                     for(n=0:M_layer_symb-1)
                         x(0+1, n+1) = d(0+1,     n+1);
                         x(1+1, n+1) = d(1+1, 2*n+0+1);
-                        x(2+1, n+1) = d(2+1, 2*n+1+1);
+                        x(2+1, n+1) = d(1+1, 2*n+1+1);
                     endfor
                 endif
             elseif(v == 4 && (N_cw == 1 || N_cw == 2))

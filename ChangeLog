@@ -8,3 +8,10 @@ v00.03        Octave release with support for PDSCH transmission and
               turbo encoding/decoding.
 v00.04        First release with C++ gnuradio support.  Contains PSS
               SSS, CRS, and PBCH reception for FDD in C++ for gnuradio.
+v00.05        C++ changes: Fixed bug in frequency offset removal,
+              added PDSCH reception for SIB1 decoding (including turbo
+              decoding).
+              Octave changes: Fixed bug in 3 antenna spacial multiplexing
+              (lte_layer_mapper).  Fixed bug in 16QAM
+              (lte_modulation_mapper).  Fixed parameter conversions in
+              SIB1 unpacking.
