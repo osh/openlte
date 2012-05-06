@@ -26,6 +26,8 @@
     ----------    -------------    --------------------------------------------
     02/26/2012    Ben Wojtowicz    Created file.
     04/25/2012    Ben Wojtowicz    Added Turbo encode/decode and PDSCH decode
+    05/06/2012    Ben Wojtowicz    Fixed bugs in find_pss_and_fine_timing and
+                                   find_sss (thanks Joel!!)
 
 *******************************************************************************/
 
@@ -1492,6 +1494,10 @@ LIBLTE_ERROR_ENUM liblte_phy_find_pss_and_fine_timing(LIBLTE_PHY_STRUCT *phy_str
 
         // Construct fine symbol start locations
         pss_timing_idx = symb_starts[N_symb]+(15360*N_s)+timing;
+        while((pss_timing_idx + 2048 + 144) < 15360)
+        {
+            pss_timing_idx += 307200;
+        }
         symb_starts[0] = pss_timing_idx + (2048+144)*1 - 15360;
         symb_starts[1] = pss_timing_idx + (2048+144)*1 + 2048+160- 15360;
         symb_starts[2] = pss_timing_idx + (2048+144)*2 + 2048+160- 15360;
@@ -1499,13 +1505,6 @@ LIBLTE_ERROR_ENUM liblte_phy_find_pss_and_fine_timing(LIBLTE_PHY_STRUCT *phy_str
         symb_starts[4] = pss_timing_idx + (2048+144)*4 + 2048+160- 15360;
         symb_starts[5] = pss_timing_idx + (2048+144)*5 + 2048+160- 15360;
         symb_starts[6] = pss_timing_idx + (2048+144)*6 + 2048+160- 15360;
-        while(symb_starts[0] < 0)
-        {
-            for(i=0; i<7; i++)
-            {
-                symb_starts[i] = symb_starts[i] + 307200;
-            }
-        }
 
         err = LIBLTE_SUCCESS;
     }
@@ -1558,7 +1557,7 @@ LIBLTE_ERROR_ENUM liblte_phy_find_sss(LIBLTE_PHY_STRUCT *phy_struct,
                          phy_struct->sss_re_0,
                          phy_struct->sss_im_0,
                          phy_struct->sss_re_5,
-                         phy_struct->sss_re_5);
+                         phy_struct->sss_im_5);
             for(j=0; j<62; j++)
             {
                 k                              = j - 31 + (LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP)/2;
