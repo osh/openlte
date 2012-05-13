@@ -28,6 +28,8 @@
     04/25/2012    Ben Wojtowicz    Added Turbo encode/decode and PDSCH decode
     05/06/2012    Ben Wojtowicz    Fixed bugs in find_pss_and_fine_timing and
                                    find_sss (thanks Joel!!)
+    05/13/2012    Ben Wojtowicz    Fixed a bug with frame_start_idx going
+                                   negative in find_sss (thanks again Joel!!)
 
 *******************************************************************************/
 
@@ -1593,8 +1595,12 @@ LIBLTE_ERROR_ENUM liblte_phy_find_sss(LIBLTE_PHY_STRUCT *phy_struct,
             abs_corr = sqrt(corr_re*corr_re + corr_im*corr_im);
             if(abs_corr > sss_thresh)
             {
+                while(symb_starts[5] < ((2048 + N_CP_L_ELSE)*4 + 2048 + N_CP_L_0))
+                {
+                    symb_starts[5] += 307200;
+                }
                 *N_id_1          = i;
-                *frame_start_idx = symb_starts[5] - ((2048+N_CP_L_ELSE)*4 + 2048+N_CP_L_0);
+                *frame_start_idx = symb_starts[5] - ((2048 + N_CP_L_ELSE)*4 + 2048 + N_CP_L_0);
                 break;
             }
 
@@ -1610,8 +1616,12 @@ LIBLTE_ERROR_ENUM liblte_phy_find_sss(LIBLTE_PHY_STRUCT *phy_struct,
             abs_corr = sqrt(corr_re*corr_re + corr_im*corr_im);
             if(abs_corr > sss_thresh)
             {
+                while(symb_starts[5] < (((2048 + N_CP_L_ELSE)*4 + 2048 + N_CP_L_0) - 15360*10))
+                {
+                    symb_starts[5] += 307200;
+                }
                 *N_id_1          = i;
-                *frame_start_idx = symb_starts[5] - ((2048+N_CP_L_ELSE)*4 + 2048+N_CP_L_0) - 15360*10;
+                *frame_start_idx = symb_starts[5] - ((2048 + N_CP_L_ELSE)*4 + 2048 + N_CP_L_0) - 15360*10;
                 break;
             }
         }
