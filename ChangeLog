@@ -20,3 +20,8 @@ v00.05.01     Fixed two bugs in liblte_phy.cc.  One relating to symb_starts
               using sss_re_5 instead of sss_im_5 in find_sss.
 v00.05.02     Fixed another bug in liblte_phy.cc relating to frame_start_idx
               going negative in find_sss.
+v00.05.03     Added more DL transmit functionality, rearranged liblte_phy to
+              match the specs, and fixed several bugs: 1) frame_start_idx
+              going negative in find_sss, 2) PDCCH sizes were too small,
+              3) PDCCH reg calculation was wrong, 4) rate match/unmatch bit
+              packing, 5) I/Q swap in LTE_fdd_dl_file_scan.

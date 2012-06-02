@@ -26,6 +26,7 @@
     ----------    -------------    --------------------------------------------
     03/24/2012    Ben Wojtowicz    Created file.
     04/21/2012    Ben Wojtowicz    Added SIB1 parameters, IEs, and messages
+    05/28/2012    Ben Wojtowicz    Added SIB1 pack functionality
 
 *******************************************************************************/
 
@@ -338,12 +339,15 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_bch_msg(LIBLTE_RRC_MSG_STRUCT *msg,
                  logical channel.
 
     Document Reference: 36.331 v10.0.0 Section 6.2.1
+
+    Notes: Currently only handles SIB1
 *********************************************************************/
 // Defines
 // Enums
 // Structs
 // Functions
-LIBLTE_ERROR_ENUM liblte_rrc_pack_bcch_dlsch_msg(LIBLTE_RRC_MSG_STRUCT *msg);
+LIBLTE_ERROR_ENUM liblte_rrc_pack_bcch_dlsch_msg(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *sib1,
+                                                 LIBLTE_RRC_MSG_STRUCT                   *msg);
 LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_dlsch_msg(LIBLTE_RRC_MSG_STRUCT                   *msg,
                                                    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *sib1);
 

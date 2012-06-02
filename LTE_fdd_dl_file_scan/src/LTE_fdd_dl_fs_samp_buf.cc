@@ -27,6 +27,7 @@
     03/23/2012    Ben Wojtowicz    Created file.
     04/21/2012    Ben Wojtowicz    Fixed bug in frequency offset removal, added
                                    PDSCH decode, general cleanup
+    06/28/2012    Ben Wojtowicz    Fixed a bug that was causing I and Q to swap
 
 *******************************************************************************/
 
@@ -64,7 +65,7 @@ static const int32 MAX_OUT = 0;
 
 LTE_fdd_dl_fs_samp_buf_sptr LTE_fdd_dl_fs_make_samp_buf()
 {
-  return LTE_fdd_dl_fs_samp_buf_sptr(new LTE_fdd_dl_fs_samp_buf());
+    return LTE_fdd_dl_fs_samp_buf_sptr(new LTE_fdd_dl_fs_samp_buf());
 }
 
 LTE_fdd_dl_fs_samp_buf::LTE_fdd_dl_fs_samp_buf()
@@ -148,6 +149,17 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
             last_samp_was_i = false;
         }
     }else{
+        // Process samples to prevent I/Q swap
+        if((ninput_items % 2) != 0)
+        {
+            if(true == last_samp_was_i)
+            {
+                last_samp_was_i = false;
+            }else{
+                last_samp_was_i = true;
+            }
+        }
+
         if(LIBLTE_SUCCESS == liblte_phy_find_coarse_timing_and_freq_offset(phy_struct,
                                                                            i_buf,
                                                                            q_buf,
@@ -164,6 +176,7 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                 i_buf[i]  = tmp_i*f_samp_re + tmp_q*f_samp_im;
                 q_buf[i]  = tmp_q*f_samp_re - tmp_i*f_samp_im;
             }
+
             if(LIBLTE_SUCCESS == liblte_phy_find_pss_and_fine_timing(phy_struct,
                                                                      i_buf,
                                                                      q_buf,
@@ -566,7 +579,6 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
             q_buf[i] = 0;
         }
         samp_buf_idx    = 0;
-        last_samp_was_i = false;
     }
 
     // Tell runtime system how many input items we consumed
