@@ -25,3 +25,6 @@ v00.05.03     Added more DL transmit functionality, rearranged liblte_phy to
               going negative in find_sss, 2) PDCCH sizes were too small,
               3) PDCCH reg calculation was wrong, 4) rate match/unmatch bit
               packing, 5) I/Q swap in LTE_fdd_dl_file_scan.
+v00.05.04     Fixed bugs in liblte_phy.cc in turbo_decode, rate_unmatch_turbo,
+              pdsch_channel_encode, and pdcch_channel_encode.  Added number of
+              bits used to SIB1 pack in liblte_rrc.cc.

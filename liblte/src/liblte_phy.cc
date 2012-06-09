@@ -36,6 +36,9 @@
                                    negative, 2) PDCCH sizes were too small, 3)
                                    PDCCH reg calculation was wrong, 4) rate
                                    match/unmatch bit packing.
+    06/09/2012    Ben Wojtowicz    Fixed several bugs in turbo_decode,
+                                   rate_unmatch_turbo, pdsch_channel_encode,
+                                   and pdcch_channel_encode.
 
 *******************************************************************************/
 
@@ -1383,7 +1386,6 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *ph
                                                   pdcch->alloc[alloc_idx].mod_type);
             }
             // Encode the PDSCH
-            pdcch->alloc[alloc_idx].rv_idx = 0;
             dlsch_channel_encode(phy_struct,
                                  in_bits,
                                  N_in_bits,
@@ -1997,7 +1999,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
                   LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
                   phy_struct->pdcch_y_re[0],
                   phy_struct->pdcch_y_im[0],
-                  288,
+                  576,
                   &M_ap_symb);
         // Map the symbols to resource elements, 3GPP TS 36.211 v10.1.0 section 6.7.4
         N_reg_pcfich = 4;
@@ -6317,8 +6319,8 @@ void turbo_decode(LIBLTE_PHY_STRUCT *phy_struct,
     // Step 1: Calculate in_act_1 using d0 and d1
     for(i=0; i<N_branch_bits-4; i++)
     {
-        phy_struct->td_vitdec_in[i*2+0] = d_bits[i*3+0];
-        phy_struct->td_vitdec_in[i*2+1] = d_bits[i*3+1];
+        phy_struct->td_vitdec_in[i*2+0] = d_bits[i*3+1];
+        phy_struct->td_vitdec_in[i*2+1] = d_bits[i*3+0];
     }
     viterbi_decode(phy_struct,
                    phy_struct->td_vitdec_in,
@@ -6338,7 +6340,7 @@ void turbo_decode(LIBLTE_PHY_STRUCT *phy_struct,
                 1,
                 &g_1,
                 false,
-                phy_struct->td_fb_1,
+                &phy_struct->td_fb_1[1],
                 &N_bits);
 
     // Step 3: Calculate in_calc_1 using in_act_1 and fb_1
@@ -6348,7 +6350,11 @@ void turbo_decode(LIBLTE_PHY_STRUCT *phy_struct,
     }
 
     // Step 4: Calculate in_int using d0
-    turbo_internal_interleaver(d_bits,
+    for(i=0; i<N_branch_bits-4; i++)
+    {
+        phy_struct->td_vitdec_in[i] = d_bits[i*3+0];
+    }
+    turbo_internal_interleaver(phy_struct->td_vitdec_in,
                                N_branch_bits-4,
                                phy_struct->td_in_int);
 
@@ -6438,7 +6444,14 @@ void turbo_decode(LIBLTE_PHY_STRUCT *phy_struct,
     // Step 14: Soft combine d0, in_calc_1, in_calc_2, and in_calc_3 to get output
     for(i=0; i<N_branch_bits-4; i++)
     {
-        tmp_s_bit = (d_bits[i*3+0]               +
+        // FIXME: Need soft values for td_in_calc_1, td_in_calc_2, and td_in_calc_3
+        if(d_bits[i*3+0] >= 0)
+        {
+            tmp_s_bit = 1;
+        }else{
+            tmp_s_bit = -1;
+        }
+        tmp_s_bit = (tmp_s_bit                   +
                      phy_struct->td_in_calc_1[i] +
                      phy_struct->td_in_calc_2[i] +
                      phy_struct->td_in_calc_3[i]);
@@ -6870,6 +6883,7 @@ void rate_unmatch_turbo(LIBLTE_PHY_STRUCT         *phy_struct,
             }
         }
 
+        w_idx = 0;
         if(x != 2)
         {
             // Step 4: Inter-column permutation
@@ -6882,16 +6896,23 @@ void rate_unmatch_turbo(LIBLTE_PHY_STRUCT         *phy_struct,
             }
 
             // Step 5: Read out the bits
+            K_pi = R_tc_sb*C_tc_sb;
             for(j=0; j<C_tc_sb; j++)
             {
                 for(i=0; i<R_tc_sb; i++)
                 {
-                    phy_struct->rut_w_dum[w_idx] = phy_struct->rut_sb_perm_mat[i][j];
-                    phy_struct->rut_w[w_idx]     = RX_NULL_BIT;
-                    w_idx++;
+                    if(x == 0)
+                    {
+                        phy_struct->rut_w_dum[w_idx] = phy_struct->rut_sb_perm_mat[i][j];
+                        phy_struct->rut_w[w_idx]     = RX_NULL_BIT;
+                        w_idx++;
+                    }else{
+                        phy_struct->rut_w_dum[K_pi+(2*w_idx)] = phy_struct->rut_sb_perm_mat[i][j];
+                        phy_struct->rut_w[K_pi+(2*w_idx)]     = RX_NULL_BIT;
+                        w_idx++;
+                    }
                 }
             }
-            K_pi = R_tc_sb*C_tc_sb;
         }else{
             // Step 4: Permutation for the last output
             K_pi = R_tc_sb*C_tc_sb;
@@ -6905,9 +6926,9 @@ void rate_unmatch_turbo(LIBLTE_PHY_STRUCT         *phy_struct,
             }
             for(i=0; i<K_pi; i++)
             {
-                pi_idx                       = (IC_PERM_TC[i/R_tc_sb]+C_tc_sb*(i%R_tc_sb)+1)%K_pi;
-                phy_struct->rut_w_dum[w_idx] = phy_struct->rut_y[pi_idx];
-                phy_struct->rut_w[w_idx]     = RX_NULL_BIT;
+                pi_idx                                  = (IC_PERM_TC[i/R_tc_sb]+C_tc_sb*(i%R_tc_sb)+1)%K_pi;
+                phy_struct->rut_w_dum[K_pi+(2*w_idx)+1] = phy_struct->rut_y[pi_idx];
+                phy_struct->rut_w[K_pi+(2*w_idx)+1]     = RX_NULL_BIT;
                 w_idx++;
             }
         }
@@ -6966,8 +6987,8 @@ void rate_unmatch_turbo(LIBLTE_PHY_STRUCT         *phy_struct,
     for(i=0; i<K_pi; i++)
     {
         phy_struct->rut_v[0][i] = phy_struct->rut_w[i];
-        phy_struct->rut_v[1][i] = phy_struct->rut_w[i+K_pi];
-        phy_struct->rut_v[2][i] = phy_struct->rut_w[i+2*K_pi];
+        phy_struct->rut_v[1][i] = phy_struct->rut_w[K_pi+2*i];
+        phy_struct->rut_v[2][i] = phy_struct->rut_w[K_pi+2*i+1];
     }
 
     // Sub-block deinterleaving

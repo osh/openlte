@@ -27,6 +27,7 @@
     03/24/2012    Ben Wojtowicz    Created file.
     04/25/2012    Ben Wojtowicz    Added SIB1 parameters, IEs, and messages
     06/02/2012    Ben Wojtowicz    Added message and IE packing
+    06/09/2012    Ben Wojtowicz    Added the number of bits used to SIB1 pack
 
 *******************************************************************************/
 
@@ -370,6 +371,9 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_block_type_1_msg(LIBLTE_RRC_SYS_INFO_
 
         // Non Critical Extension
         // FIXME
+
+        // Fill in the number of bits used
+        msg->N_bits = msg_ptr - msg->msg;
 
         err = LIBLTE_SUCCESS;
     }
