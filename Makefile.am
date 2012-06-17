@@ -27,8 +27,8 @@ include $(top_srcdir)/Makefile.common
 EXTRA_DIST = bootstrap configure config.h.in \
 	Makefile.swig Makefile.swig.gen.t
 
-SUBDIRS = liblte LTE_fdd_dl_file_scan
-DIST_SUBDIRS = liblte LTE_fdd_dl_file_scan
+SUBDIRS = liblte LTE_fdd_dl_file_scan LTE_fdd_dl_file_gen
+DIST_SUBDIRS = liblte LTE_fdd_dl_file_scan LTE_fdd_dl_file_gen
 
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA =

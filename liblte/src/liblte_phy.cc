@@ -39,6 +39,10 @@
     06/09/2012    Ben Wojtowicz    Fixed several bugs in turbo_decode,
                                    rate_unmatch_turbo, pdsch_channel_encode,
                                    and pdcch_channel_encode.
+    06/11/2012    Ben Wojtowicz    Added padding of dlsch inputs to TBS sizes.
+                                   Added BER tolerance for CFI decoding.  Fixed
+                                   various other bugs.  Enabled fftw input,
+                                   output, and plan in phy_struct.
 
 *******************************************************************************/
 
@@ -1045,6 +1049,7 @@ LIBLTE_ERROR_ENUM bch_channel_decode(LIBLTE_PHY_STRUCT *phy_struct,
 void dlsch_channel_encode(LIBLTE_PHY_STRUCT *phy_struct,
                           uint8             *in_bits,
                           uint32             N_in_bits,
+                          uint32             tbs,
                           uint32             tx_mode,
                           uint32             rv_idx,
                           uint32             G,
@@ -1194,6 +1199,7 @@ void cfi_channel_encode(LIBLTE_PHY_STRUCT *phy_struct,
     Document Reference: 3GPP TS 36.212 v10.1.0 section 5.3.4
 *********************************************************************/
 // Defines
+#define CFI_N_ACCEPTABLE_BERS 4
 // Enums
 // Structs
 // Functions
@@ -1286,19 +1292,19 @@ LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT **phy_struct)
     {
         *phy_struct = (LIBLTE_PHY_STRUCT *)malloc(sizeof(LIBLTE_PHY_STRUCT));
 
-//        /* Samples to symbols */
-//        phy_struct->in                  = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*2048*20);
-//        phy_struct->out                 = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*2048*20);
-//        phy_struct->samps_to_symbs_plan = fftw_plan_dft_1d(2048,
-//                                                           phy_struct->in,
-//                                                           phy_struct->out,
-//                                                           FFTW_FORWARD,
-//                                                           FFTW_ESTIMATE);
-//        phy_struct->symbs_to_samps_plan = fftw_plan_dft_1d(2048,
-//                                                           phy_struct->in,
-//                                                           phy_struct->out,
-//                                                           FFTW_BACKWARD,
-//                                                           FFTW_ESTIMATE);
+        /* Samples to symbols */
+        (*phy_struct)->s2s_in              = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*2048*20);
+        (*phy_struct)->s2s_out             = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*2048*20);
+        (*phy_struct)->symbs_to_samps_plan = fftw_plan_dft_1d(2048,
+                                                              (*phy_struct)->s2s_in,
+                                                              (*phy_struct)->s2s_out,
+                                                              FFTW_BACKWARD,
+                                                              FFTW_ESTIMATE);
+        (*phy_struct)->samps_to_symbs_plan = fftw_plan_dft_1d(2048,
+                                                              (*phy_struct)->s2s_in,
+                                                              (*phy_struct)->s2s_out,
+                                                              FFTW_FORWARD,
+                                                              FFTW_ESTIMATE);
 
         err = LIBLTE_SUCCESS;
     }
@@ -1319,11 +1325,11 @@ LIBLTE_ERROR_ENUM liblte_phy_cleanup(LIBLTE_PHY_STRUCT *phy_struct)
 
     if(phy_struct != NULL)
     {
-//        /* Samples to symbols */
-//        fftw_destroy_plan(phy_struct->symbs_to_samps_plan);
-//        fftw_destroy_plan(phy_struct->samps_to_symbs_plan);
-//        fftw_free(phy_struct->in);
-//        fftw_free(phy_struct->out);
+        /* Samples to symbols */
+        fftw_destroy_plan(phy_struct->samps_to_symbs_plan);
+        fftw_destroy_plan(phy_struct->symbs_to_samps_plan);
+        fftw_free(phy_struct->s2s_in);
+        fftw_free(phy_struct->s2s_out);
 
         free(phy_struct);
         err = LIBLTE_SUCCESS;
@@ -1389,6 +1395,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *ph
             dlsch_channel_encode(phy_struct,
                                  in_bits,
                                  N_in_bits,
+                                 pdcch->alloc[alloc_idx].tbs,
                                  pdcch->alloc[alloc_idx].tx_mode,
                                  pdcch->alloc[alloc_idx].rv_idx,
                                  N_bits_tot,
@@ -2132,7 +2139,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
                       LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
                       phy_struct->pdcch_y_re[0],
                       phy_struct->pdcch_y_im[0],
-                      288,
+                      576,
                       &M_ap_symb);
             // Initialize the search space
             for(p=0; p<N_ant; p++)
@@ -4620,11 +4627,8 @@ void symbols_to_samples(LIBLTE_PHY_STRUCT *phy_struct,
                         float             *samps_im,
                         uint32            *N_samps)
 {
-    fftw_plan     plan;
-    fftw_complex *in;
-    fftw_complex *out;
-    uint32        CP_len;
-    uint32        i;
+    uint32 CP_len;
+    uint32 i;
 
     // Calculate index and CP length
     if((symbol_offset % 7) == 0)
@@ -4634,30 +4638,26 @@ void symbols_to_samples(LIBLTE_PHY_STRUCT *phy_struct,
         CP_len = 144;
     }
 
-    // FIXME
-    in = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*2048*20);
-    out = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*2048*20);
-    plan = fftw_plan_dft_1d(2048, in, out, FFTW_BACKWARD, FFTW_ESTIMATE);
     for(i=0; i<2048; i++)
     {
-        in[i][0] = 0;
-        in[i][1] = 0;
+        phy_struct->s2s_in[i][0] = 0;
+        phy_struct->s2s_in[i][1] = 0;
     }
     for(i=0; i<1024-FFT_pad_size; i++)
     {
         // Positive spectrum
-        in[i+1][0] = symb_re[i+(1024-FFT_pad_size)];
-        in[i+1][1] = symb_im[i+(1024-FFT_pad_size)];
+        phy_struct->s2s_in[i+1][0] = symb_re[i+(1024-FFT_pad_size)];
+        phy_struct->s2s_in[i+1][1] = symb_im[i+(1024-FFT_pad_size)];
 
         // Negative spectrum
-        in[2048-i-1][0] = symb_re[(1024-FFT_pad_size)-i-1];
-        in[2048-i-1][1] = symb_im[(1024-FFT_pad_size)-i-1];
+        phy_struct->s2s_in[2048-i-1][0] = symb_re[(1024-FFT_pad_size)-i-1];
+        phy_struct->s2s_in[2048-i-1][1] = symb_im[(1024-FFT_pad_size)-i-1];
     }
-    fftw_execute(plan);
+    fftw_execute(phy_struct->symbs_to_samps_plan);
     for(i=0; i<2048; i++)
     {
-        samps_re[CP_len+i] = out[i][0];
-        samps_im[CP_len+i] = out[i][1];
+        samps_re[CP_len+i] = phy_struct->s2s_out[i][0];
+        samps_im[CP_len+i] = phy_struct->s2s_out[i][1];
     }
     for(i=0; i<CP_len; i++)
     {
@@ -4665,9 +4665,6 @@ void symbols_to_samples(LIBLTE_PHY_STRUCT *phy_struct,
         samps_im[i] = samps_im[2048+i];
     }
     *N_samps = 2048 + CP_len;
-    fftw_destroy_plan(plan);
-    fftw_free(in);
-    fftw_free(out);
 }
 
 /*********************************************************************
@@ -4687,12 +4684,9 @@ void samples_to_symbols(LIBLTE_PHY_STRUCT *phy_struct,
                         float             *symb_re,
                         float             *symb_im)
 {
-    fftw_plan     plan;
-    fftw_complex *in;
-    fftw_complex *out;
-    uint32        CP_len;
-    uint32        index;
-    uint32        i;
+    uint32 CP_len;
+    uint32 index;
+    uint32 i;
 
     // Calculate index and CP length
     if((symbol_offset % 7) == 0)
@@ -4707,29 +4701,22 @@ void samples_to_symbols(LIBLTE_PHY_STRUCT *phy_struct,
         index += 16;
     }
 
-    // FIXME
-    in = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*2048*20);
-    out = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*2048*20);
-    plan = fftw_plan_dft_1d(2048, in, out, FFTW_FORWARD, FFTW_ESTIMATE);
     for(i=0; i<2048; i++)
     {
-        in[i][0] = samps_re[index+CP_len-2+i];
-        in[i][1] = samps_im[index+CP_len-2+i];
+        phy_struct->s2s_in[i][0] = samps_re[index+CP_len-2+i];
+        phy_struct->s2s_in[i][1] = samps_im[index+CP_len-2+i];
     }
-    fftw_execute(plan);
+    fftw_execute(phy_struct->samps_to_symbs_plan);
     for(i=0; i<1024-FFT_pad_size; i++)
     {
         // Postive spectrum
-        symb_re[i+(1024-FFT_pad_size)] = out[i+1][0];
-        symb_im[i+(1024-FFT_pad_size)] = out[i+1][1];
+        symb_re[i+(1024-FFT_pad_size)] = phy_struct->s2s_out[i+1][0];
+        symb_im[i+(1024-FFT_pad_size)] = phy_struct->s2s_out[i+1][1];
 
         // Negative spectrum
-        symb_re[(1024-FFT_pad_size)-i-1] = out[2048-i-1][0];
-        symb_im[(1024-FFT_pad_size)-i-1] = out[2048-i-1][1];
+        symb_re[(1024-FFT_pad_size)-i-1] = phy_struct->s2s_out[2048-i-1][0];
+        symb_im[(1024-FFT_pad_size)-i-1] = phy_struct->s2s_out[2048-i-1][1];
     }
-    fftw_destroy_plan(plan);
-    fftw_free(in);
-    fftw_free(out);
 
     if(scale == 1)
     {
@@ -7624,6 +7611,7 @@ LIBLTE_ERROR_ENUM bch_channel_decode(LIBLTE_PHY_STRUCT *phy_struct,
 void dlsch_channel_encode(LIBLTE_PHY_STRUCT *phy_struct,
                           uint8             *in_bits,
                           uint32             N_in_bits,
+                          uint32             tbs,
                           uint32             tx_mode,
                           uint32             rv_idx,
                           uint32             G,
@@ -7647,22 +7635,24 @@ void dlsch_channel_encode(LIBLTE_PHY_STRUCT *phy_struct,
     // Define a_bits
     a_bits = in_bits;
 
-    // Calculate p_bits
-    calc_crc(a_bits, N_in_bits, CRC24A, p_bits, 24);
-
-    // Construct b_bits
+    // Pad input up to tbs size, calculate p_bits, and construct b_bits
     for(i=0; i<N_in_bits; i++)
     {
         phy_struct->dlsch_b_bits[i] = a_bits[i];
     }
+    for(i=N_in_bits; i<tbs; i++)
+    {
+        phy_struct->dlsch_b_bits[i] = 0;
+    }
+    calc_crc(phy_struct->dlsch_b_bits, tbs, CRC24A, p_bits, 24);
     for(i=0; i<24; i++)
     {
-        phy_struct->dlsch_b_bits[N_in_bits+i] = p_bits[i];
+        phy_struct->dlsch_b_bits[tbs+i] = p_bits[i];
     }
 
     // Construct c_bits
     code_block_segmentation(phy_struct->dlsch_b_bits,
-                            N_in_bits+24,
+                            tbs+24,
                             &N_codeblocks,
                             &N_fill_bits,
                             phy_struct->dlsch_c_bits[0],
@@ -8251,10 +8241,9 @@ LIBLTE_ERROR_ENUM cfi_channel_decode(LIBLTE_PHY_STRUCT *phy_struct,
 {
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_CRC;
     uint32            i;
-    uint32            ber_1 = 0;
-    uint32            ber_2 = 0;
-    uint32            ber_3 = 0;
-    uint32            ber_4 = 0;
+    uint32            ber[4] = {0,0,0,0};
+    uint32            min_ber;
+    uint32            cfi_num;
     uint8             in_bit;
 
     // Calculate the number of bit errors for each CFI
@@ -8270,41 +8259,37 @@ LIBLTE_ERROR_ENUM cfi_channel_decode(LIBLTE_PHY_STRUCT *phy_struct,
 
         if(CFI_BITS_1[i] != in_bit)
         {
-            ber_1++;
+            ber[0]++;
         }
         if(CFI_BITS_2[i] != in_bit)
         {
-            ber_2++;
+            ber[1]++;
         }
         if(CFI_BITS_3[i] != in_bit)
         {
-            ber_3++;
+            ber[2]++;
         }
         if(CFI_BITS_4[i] != in_bit)
         {
-            ber_4++;
+            ber[3]++;
         }
     }
 
-    // Find the CFI with no bit errors
-    if(ber_1 == 0)
+    // Find the CFI with the least number of bit errors
+    min_ber = 32;
+    for(i=0; i<4; i++)
     {
-        *cfi = 1;
-        err  = LIBLTE_SUCCESS;
+        if(ber[i] < min_ber)
+        {
+            min_ber = ber[i];
+            cfi_num = i+1;
+        }
     }
-    if(ber_2 == 0)
+
+    // Make sure the number of bit errors is acceptably low
+    if(min_ber < CFI_N_ACCEPTABLE_BERS)
     {
-        *cfi = 2;
-        err  = LIBLTE_SUCCESS;
-    }
-    if(ber_3 == 0)
-    {
-        *cfi = 3;
-        err  = LIBLTE_SUCCESS;
-    }
-    if(ber_4 == 0)
-    {
-        *cfi = 4;
+        *cfi = cfi_num;
         err  = LIBLTE_SUCCESS;
     }
 

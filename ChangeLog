@@ -28,3 +28,7 @@ v00.05.03     Added more DL transmit functionality, rearranged liblte_phy to
 v00.05.04     Fixed bugs in liblte_phy.cc in turbo_decode, rate_unmatch_turbo,
               pdsch_channel_encode, and pdcch_channel_encode.  Added number of
               bits used to SIB1 pack in liblte_rrc.cc.
+v00.06.00     Enabled fftw input, output, and plan from phy_struct in liblte_phy.
+              Added BER tolerance to CFI decoding.  Added a new gnuradio app
+              for generating an I/Q file with PSS, SSS, CRS, PBCH, PDCCH, and
+              PDSCH.

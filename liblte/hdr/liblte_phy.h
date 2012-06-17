@@ -29,6 +29,8 @@
     05/28/2012    Ben Wojtowicz    Rearranged to match spec order, added
                                    initial transmit functionality, and fixed
                                    a bug related to PDCCH sizes.
+    06/11/2012    Ben Wojtowicz    Enabled fftw input, output, and plan in
+                                   phy_struct.
 
 *******************************************************************************/
 
@@ -234,11 +236,11 @@ typedef struct{
     float timing_corr_freq_err[15360];
     float timing_abs_corr[15360];
 
-//    // Samples to Symbols & Symbols to Samples
-//    fftw_complex *in;
-//    fftw_complex *out;
-//    fftw_plan     samps_to_symbs_plan;
-//    fftw_plan     symbs_to_samps_plan;
+    // Samples to Symbols & Symbols to Samples
+    fftw_complex *s2s_in;
+    fftw_complex *s2s_out;
+    fftw_plan     symbs_to_samps_plan;
+    fftw_plan     samps_to_symbs_plan;
 
     // Viterbi decode
     float vd_path_metric[128][2048];
