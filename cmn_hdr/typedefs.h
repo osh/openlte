@@ -24,6 +24,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     02/02/2012    Ben Wojtowicz    Created file.
+    08/12/2012    Ben Wojtowicz    Added 64 bit typedefs.
 
 *******************************************************************************/
 
@@ -46,12 +47,14 @@
                               TYPEDEFS
 *******************************************************************************/
 
-typedef char           int8;
-typedef unsigned char  uint8;
-typedef short          int16;
-typedef unsigned short uint16;
-typedef int            int32;
-typedef unsigned int   uint32;
+typedef char               int8;
+typedef unsigned char      uint8;
+typedef short              int16;
+typedef unsigned short     uint16;
+typedef int                int32;
+typedef unsigned int       uint32;
+typedef long long          int64;
+typedef unsigned long long uint64;
 
 /*******************************************************************************
                               DECLARATIONS

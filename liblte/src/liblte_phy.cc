@@ -43,6 +43,7 @@
                                    Added BER tolerance for CFI decoding.  Fixed
                                    various other bugs.  Enabled fftw input,
                                    output, and plan in phy_struct.
+    08/19/2012    Ben Wojtowicz    Fixed a bug in the PDCCH decoder.
 
 *******************************************************************************/
 
@@ -2968,7 +2969,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                                            phy_struct->pdcch_y_est_im,
                                            phy_struct->pdcch_c_est_re[0],
                                            phy_struct->pdcch_c_est_im[0],
-                                           288,
+                                           576,
                                            idx,
                                            N_ant,
                                            LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,

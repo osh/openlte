@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     06/15/2012    Ben Wojtowicz    Created file.
+    08/19/2012    Ben Wojtowicz    Using the latest liblte library.
 
 *******************************************************************************/
 #ifndef __LTE_FDD_DL_FG_SAMP_BUF_H__
@@ -103,6 +104,7 @@ private:
 
     // LTE parameters
     LIBLTE_RRC_MIB_STRUCT                   mib;
+    LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT        bcch_dlsch_msg;
     LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT sib1;
     LIBLTE_PHY_PCFICH_STRUCT                pcfich;
     LIBLTE_PHY_PHICH_STRUCT                 phich;

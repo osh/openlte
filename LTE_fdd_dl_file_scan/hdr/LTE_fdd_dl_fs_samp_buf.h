@@ -25,6 +25,8 @@
     Revision History
     ----------    -------------    --------------------------------------------
     03/23/2012    Ben Wojtowicz    Created file.
+    08/19/2012    Ben Wojtowicz    Added states and state memory and added
+                                   decoding of all SIBs.
 
 *******************************************************************************/
 #ifndef __LTE_FDD_DL_FS_SAMP_BUF_H__
@@ -45,7 +47,6 @@
 
 #define LTE_FDD_DL_FS_SAMP_BUF_SIZE (307200*10)
 
-
 /*******************************************************************************
                               FORWARD DECLARATIONS
 *******************************************************************************/
@@ -57,6 +58,15 @@ class LTE_fdd_dl_fs_samp_buf;
 *******************************************************************************/
 
 typedef boost::shared_ptr<LTE_fdd_dl_fs_samp_buf> LTE_fdd_dl_fs_samp_buf_sptr;
+
+typedef enum{
+    LTE_FDD_DL_FS_SAMP_BUF_STATE_COARSE_TIMING_SEARCH = 0,
+    LTE_FDD_DL_FS_SAMP_BUF_STATE_PSS_AND_FINE_TIMING_SEARCH,
+    LTE_FDD_DL_FS_SAMP_BUF_STATE_SSS_SEARCH,
+    LTE_FDD_DL_FS_SAMP_BUF_STATE_BCH_DECODE,
+    LTE_FDD_DL_FS_SAMP_BUF_STATE_PDSCH_DECODE_SIB1,
+    LTE_FDD_DL_FS_SAMP_BUF_STATE_PDSCH_DECODE_SI_GENERIC,
+}LTE_FDD_DL_FS_SAMP_BUF_STATE_ENUM;
 
 /*******************************************************************************
                               CLASS DECLARATIONS
@@ -78,14 +88,48 @@ private:
     LTE_fdd_dl_fs_samp_buf();
 
     // LTE library
-    LIBLTE_PHY_STRUCT     *phy_struct;
-    LIBLTE_RRC_MSG_STRUCT  rrc_msg;
+    LIBLTE_PHY_STRUCT                *phy_struct;
+    LIBLTE_RRC_MSG_STRUCT             rrc_msg;
+    LIBLTE_RRC_MIB_STRUCT             mib;
+    LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT  bcch_dlsch_msg;
 
     // Sample buffer
     float  *i_buf;
     float  *q_buf;
-    uint32  samp_buf_idx;
+    uint32  samp_buf_w_idx;
+    uint32  samp_buf_r_idx;
     bool    last_samp_was_i;
+
+    // Variables
+    LTE_FDD_DL_FS_SAMP_BUF_STATE_ENUM state;
+    float                             freq_offset;
+    float                             phich_res;
+    uint32                            N_rb_dl;
+    uint32                            FFT_pad_size;
+    uint32                            sfn;
+    uint32                            N_sfr;
+    uint32                            N_id_cell;
+    uint32                            N_id_1;
+    uint32                            N_id_2;
+    uint8                             N_ant;
+    uint8                             prev_si_value_tag;
+    bool                              prev_si_value_tag_valid;
+    bool                              mib_printed;
+    bool                              sib1_printed;
+    bool                              sib2_printed;
+    bool                              sib3_printed;
+    bool                              sib4_printed;
+    bool                              sib8_printed;
+
+    // Helpers
+    void copy_input_to_samp_buf(const int8 *in, int32 ninput_items);
+    void freq_shift(uint32 start_idx, uint32 num_samps, float freq_offset);
+    void print_mib(LIBLTE_RRC_MIB_STRUCT *mib);
+    void print_sib1(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *sib1);
+    void print_sib2(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT *sib2);
+    void print_sib3(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3_STRUCT *sib3);
+    void print_sib4(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4_STRUCT *sib4);
+    void print_sib8(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT *sib8);
 };
 
 #endif /* __LTE_FDD_DL_FS_SAMP_BUF_H__ */

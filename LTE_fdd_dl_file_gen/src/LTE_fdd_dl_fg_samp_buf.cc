@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     06/16/2012    Ben Wojtowicz    Created file.
+    08/19/2012    Ben Wojtowicz    Using the latest liblte library.
 
 *******************************************************************************/
 
@@ -310,7 +311,10 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      ninput_items,
                    (sfn % 2)    == 0)
                 {
                     // SIB1
-                    liblte_rrc_pack_bcch_dlsch_msg(&sib1,
+                    bcch_dlsch_msg.N_sibs           = 0;
+                    bcch_dlsch_msg.sibs[0].sib_type = LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1;
+                    memcpy(&bcch_dlsch_msg.sibs[0].sib, &sib1, sizeof(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT));
+                    liblte_rrc_pack_bcch_dlsch_msg(&bcch_dlsch_msg,
                                                    &rrc_msg);
                     pdcch.N_alloc                 = 1;
                     pdcch.alloc[0].pre_coder_type = LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY;
