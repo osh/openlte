@@ -29,6 +29,7 @@
     05/28/2012    Ben Wojtowicz    Added SIB1 pack functionality
     08/19/2012    Ben Wojtowicz    Added functionality to support SIB2, SIB3,
                                    SIB4, and SIB8 packing and unpacking
+    10/06/2012    Ben Wojtowicz    Added more decoding/encoding.
 
 *******************************************************************************/
 
@@ -63,10 +64,51 @@ typedef struct{
 *******************************************************************************/
 
 /*********************************************************************
+    IE Name: MBSFN Notification Config
+
+    Description: Specifies the MBMS notification related configuration
+                 parameters, that are applicable for all MBSFN areas
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.7
+*********************************************************************/
+// Defines
+// Enums
+typedef enum{
+    LIBLTE_RRC_NOTIFICATION_REPETITION_COEFF_R9_N2 = 0,
+    LIBLTE_RRC_NOTIFICATION_REPETITION_COEFF_R9_N4,
+}LIBLTE_RRC_NOTIFICATION_REPETITION_COEFF_R9_ENUM;
+// Structs
+typedef struct{
+    LIBLTE_RRC_NOTIFICATION_REPETITION_COEFF_R9_ENUM repetition_coeff;
+    uint8                                            offset;
+    uint8                                            sf_index;
+}LIBLTE_RRC_MBSFN_NOTIFICATION_CONFIG_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_mbsfn_notification_config_ie(LIBLTE_RRC_MBSFN_NOTIFICATION_CONFIG_STRUCT  *mbsfn_notification_cnfg,
+                                                               uint8                                       **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_mbsfn_notification_config_ie(uint8                                       **ie_ptr,
+                                                                 LIBLTE_RRC_MBSFN_NOTIFICATION_CONFIG_STRUCT  *mbsfn_notification_cnfg);
+
+/*********************************************************************
+    IE Name: MBSFN Area Info List
+
+    Description: Contains the information required to acquire the MBMS
+                 control information associated with one or more MBSFN
+                 areas
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.7
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
     IE Name: MBSFN Subframe Config
 
     Description: Defines subframes that are reserved for MBSFN in
-                 downlink.
+                 downlink
 
     Document Reference: 36.331 v10.0.0 Section 6.3.7
 *********************************************************************/
@@ -99,9 +141,76 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_mbsfn_subframe_config_ie(uint8              
                                                              LIBLTE_RRC_MBSFN_SUBFRAME_CONFIG_STRUCT  *mbsfn_subfr_cnfg);
 
 /*********************************************************************
+    IE Name: PMCH Info List
+
+    Description: Specifies configuration of all PMCHs of an MBSFN area
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.7
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: C-RNTI
+
+    Description: Identifies a UE having a RRC connection within a cell
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.6
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_c_rnti_ie(uint16   rnti,
+                                            uint8  **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_c_rnti_ie(uint8  **ie_ptr,
+                                              uint16  *rnti);
+
+/*********************************************************************
+    IE Name: Dedicated Info CDMA2000
+
+    Description: Transfers UE specific CDMA2000 information between
+                 the network and the UE
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.6
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_dedicated_info_cdma2000_ie(uint8   *ded_info_cdma2000,
+                                                             uint32   length,
+                                                             uint8  **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_dedicated_info_cdma2000_ie(uint8  **ie_ptr,
+                                                               uint8   *ded_info_cdma2000,
+                                                               uint32  *length);
+
+/*********************************************************************
+    IE Name: Dedicated Info NAS
+
+    Description: Transfers UE specific NAS layer information between
+                 the network and the UE
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.6
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_dedicated_info_nas_ie(uint8   *ded_info_nas,
+                                                        uint32   length,
+                                                        uint8  **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_dedicated_info_nas_ie(uint8  **ie_ptr,
+                                                          uint8   *ded_info_nas,
+                                                          uint32  *length);
+
+/*********************************************************************
     IE Name: Filter Coefficient
 
-    Description: Specifies the measurement filtering coefficient.
+    Description: Specifies the measurement filtering coefficient
 
     Document Reference: 36.331 v10.0.0 Section 6.3.6
 *********************************************************************/
@@ -136,7 +245,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_filter_coefficient_ie(uint8                 
     IE Name: MMEC
 
     Description: Identifies an MME within the scope of an MME group
-                 within a PLMN.
+                 within a PLMN
 
     Document Reference: 36.331 v10.0.0 Section 6.3.6
 *********************************************************************/
@@ -153,7 +262,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_mmec_ie(uint8 **ie_ptr,
     IE Name: Neigh Cell Config
 
     Description: Provides the information related to MBSFN and TDD
-                 UL/DL configuration of neighbor cells.
+                 UL/DL configuration of neighbor cells
 
     Document Reference: 36.331 v10.0.0 Section 6.3.6
 *********************************************************************/
@@ -167,10 +276,154 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_neigh_cell_config_ie(uint8 **ie_ptr,
                                                          uint8  *neigh_cell_config);
 
 /*********************************************************************
+    IE Name: Other Config
+
+    Description: Contains configuration related to other configuration
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.6
+*********************************************************************/
+// Defines
+// Enums
+typedef enum{
+    LIBLTE_RRC_REPORT_PROXIMITY_INDICATION_EUTRA_R9_ENABLED = 0,
+}LIBLTE_RRC_REPORT_PROXIMITY_INDICATION_EUTRA_R9_ENUM;
+typedef enum{
+    LIBLTE_RRC_REPORT_PROXIMITY_INDICATION_UTRA_R9_ENABLED = 0,
+}LIBLTE_RRC_REPORT_PROXIMITY_INDICATION_UTRA_R9_ENUM;
+// Structs
+typedef struct{
+    LIBLTE_RRC_REPORT_PROXIMITY_INDICATION_EUTRA_R9_ENUM report_proximity_ind_eutra;
+    LIBLTE_RRC_REPORT_PROXIMITY_INDICATION_UTRA_R9_ENUM  report_proximity_ind_utra;
+    bool                                                 report_proximity_ind_eutra_present;
+    bool                                                 report_proximity_ind_utra_present;
+}LIBLTE_RRC_REPORT_PROXIMITY_CONFIG_R9_STRUCT;
+typedef struct{
+    LIBLTE_RRC_REPORT_PROXIMITY_CONFIG_R9_STRUCT report_proximity_cnfg;
+    bool                                         report_proximity_cnfg_present;
+}LIBLTE_RRC_OTHER_CONFIG_R9_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_other_config_ie(LIBLTE_RRC_OTHER_CONFIG_R9_STRUCT  *other_cnfg,
+                                                  uint8                             **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_other_config_ie(uint8                             **ie_ptr,
+                                                    LIBLTE_RRC_OTHER_CONFIG_R9_STRUCT  *other_cnfg);
+
+/*********************************************************************
+    IE Name: RAND CDMA2000 (1xRTT)
+
+    Description: Contains a random value, generated by the eNB, to be
+                 passed to the CDMA2000 upper layers
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.6
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rand_cdma2000_1xrtt_ie(uint32   rand,
+                                                         uint8  **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rand_cdma2000_1xrtt_ie(uint8  **ie_ptr,
+                                                           uint32  *rand);
+
+/*********************************************************************
+    IE Name: RAT Type
+
+    Description: Indicates the radio access technology (RAT),
+                 including E-UTRA, of the requested/transferred UE
+                 capabilities
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.6
+*********************************************************************/
+// Defines
+// Enums
+typedef enum{
+    LIBLTE_RRC_RAT_TYPE_EUTRA = 0,
+    LIBLTE_RRC_RAT_TYPE_UTRA,
+    LIBLTE_RRC_RAT_TYPE_GERAN_CS,
+    LIBLTE_RRC_RAT_TYPE_GERAN_PS,
+    LIBLTE_RRC_RAT_TYPE_CDMA2000_1XRTT,
+    LIBLTE_RRC_RAT_TYPE_SPARE_3,
+    LIBLTE_RRC_RAT_TYPE_SPARE_2,
+    LIBLTE_RRC_RAT_TYPE_SPARE_1,
+}LIBLTE_RRC_RAT_TYPE_ENUM;
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rat_type_ie(LIBLTE_RRC_RAT_TYPE_ENUM   rat_type,
+                                              uint8                    **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rat_type_ie(uint8                    **ie_ptr,
+                                                LIBLTE_RRC_RAT_TYPE_ENUM  *rat_type);
+
+/*********************************************************************
+    IE Name: RRC Transaction Identifier
+
+    Description: Identifies an RRC procedure along with the message
+                 type
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.6
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_transaction_identifier_ie(uint8   rrc_transaction_id,
+                                                                uint8 **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_transaction_identifier_ie(uint8 **ie_ptr,
+                                                                  uint8  *rrc_transaction_id);
+
+/*********************************************************************
+    IE Name: S-TMSI
+
+    Description: Contains an S-Temporary Mobile Subscriber Identity,
+                 a temporary UE identity provided by the EPC which
+                 uniquely identifies the UE within the tracking area
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.6
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+typedef struct{
+    uint32 m_tmsi;
+    uint8  mmec;
+}LIBLTE_RRC_S_TMSI_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_s_tmsi_ie(LIBLTE_RRC_S_TMSI_STRUCT  *s_tmsi,
+                                            uint8                    **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_s_tmsi_ie(uint8                    **ie_ptr,
+                                              LIBLTE_RRC_S_TMSI_STRUCT  *s_tmsi);
+
+/*********************************************************************
+    IE Name: UE Capability RAT Container List
+
+    Description: Contains list of containers, one for each RAT for
+                 which UE capabilities are transferred
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.6
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: UE EUTRA Capability
+
+    Description: Conveys the E-UTRA UE Radio Access Capability
+                 Parameters
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.6
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
     IE Name: UE Timers and Constants
 
     Description: Contains timers and constants used by the UE in
-                 either RRC_CONNECTED or RRC_IDLE.
+                 either RRC_CONNECTED or RRC_IDLE
 
     Document Reference: 36.331 v10.0.0 Section 6.3.6
 *********************************************************************/
@@ -254,7 +507,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_ue_timers_and_constants_ie(uint8            
 
     Description: Indicates the maximum allowed measurement bandwidth
                  on a carrier frequency as defined by the parameter
-                 Transmission Bandwidth Configuration.
+                 Transmission Bandwidth Configuration
 
     Document Reference: 36.331 v10.0.0 Section 6.3.5
 *********************************************************************/
@@ -279,7 +532,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_allowed_meas_bandwidth_ie(uint8             
     IE Name: Hysteresis
 
     Description: Used within the entry and leave condition of an
-                 event triggered reporting condition.
+                 event triggered reporting condition
 
     Document Reference: 36.331 v10.0.0 Section 6.3.5
 *********************************************************************/
@@ -291,6 +544,350 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_hysteresis_ie(uint8   hysteresis,
                                                 uint8 **ie_ptr);
 LIBLTE_ERROR_ENUM liblte_rrc_unpack_hysteresis_ie(uint8 **ie_ptr,
                                                   uint8  *hysteresis);
+
+/*********************************************************************
+    IE Name: Location Info
+
+    Description: Transfers location information available at the UE to
+                 correlate measurements and UE position information
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Meas Config
+
+    Description: Specifies measurements to be performed by the UE,
+                 and covers intra-frequency, inter-frequency and
+                 inter-RAT mobility as well as configuration of
+                 measurement gaps
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Meas ID
+
+    Description: Identifies a measurement configuration, i.e. linking
+                 of a measurement object and a reporting configuration
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+#define LIBLTE_RRC_MAX_MEAS_ID 32
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_meas_id_ie(uint8   meas_id,
+                                             uint8 **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_meas_id_ie(uint8 **ie_ptr,
+                                               uint8  *meas_id);
+
+/*********************************************************************
+    IE Name: Meas Id To Add Mod List
+
+    Description: Concerns a list of measurement identities to add or
+                 modify, with for each entry the meas ID, the
+                 associated meas object ID and the associated report
+                 config ID
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Meas Object CDMA2000
+
+    Description: Specifies information applicable for inter-RAT
+                 CDMA2000 neighboring cells
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Meas Object EUTRA
+
+    Description: Specifies information applicable for intra-frequency
+                 or inter-frequency E-UTRA cells
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Meas Object GERAN
+
+    Description: Specifies information applicable for inter-RAT
+                 GERAN neighboring frequencies
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Meas Object ID
+
+    Description: Identifies a measurement object configuration
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+#define LIBLTE_RRC_MAX_OBJECT_ID 32
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_meas_object_id_ie(uint8   meas_object_id,
+                                                    uint8 **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_meas_object_id_ie(uint8 **ie_ptr,
+                                                      uint8  *meas_object_id);
+
+/*********************************************************************
+    IE Name: Meas Object To Add Mod List
+
+    Description: Concerns a list of measurement objects to add or
+                 modify
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Meas Object UTRA
+
+    Description: Specifies information applicable for inter-RAT UTRA
+                 neighboring cells
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Meas Results
+
+    Description: Covers measured results for intra-frequency,
+                 inter-frequency and inter-RAT mobility
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Quantity Config
+
+    Description: Specifies the measurement quantities and layer 3
+                 filtering coefficients for E-UTRA and inter-RAT
+                 measurements
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Report Config EUTRA
+
+    Description: Specifies criteria for triggering of an E-UTRA
+                 measurement reporting event
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Report Config ID
+
+    Description: Identifies a measurement reporting configuration
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+#define LIBLTE_RRC_MAX_REPORT_CONFIG_ID 32
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_report_config_id_ie(uint8   report_cnfg_id,
+                                                      uint8 **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_report_config_id_ie(uint8 **ie_ptr,
+                                                        uint8  *report_cnfg_id);
+
+/*********************************************************************
+    IE Name: Report Config Inter RAT
+
+    Description: Specifies criteria for triggering of an inter-RAT
+                 measurement reporting event
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Report Config To Add Mod List
+
+    Description: Concerns a list of reporting configurations to add
+                 or modify
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Report Interval
+
+    Description: Indicates the interval between periodic reports
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+typedef enum{
+    LIBLTE_RRC_REPORT_INTERVAL_MS120 = 0,
+    LIBLTE_RRC_REPORT_INTERVAL_MS240,
+    LIBLTE_RRC_REPORT_INTERVAL_MS480,
+    LIBLTE_RRC_REPORT_INTERVAL_MS640,
+    LIBLTE_RRC_REPORT_INTERVAL_MS1024,
+    LIBLTE_RRC_REPORT_INTERVAL_MS2048,
+    LIBLTE_RRC_REPORT_INTERVAL_MS5120,
+    LIBLTE_RRC_REPORT_INTERVAL_MS10240,
+    LIBLTE_RRC_REPORT_INTERVAL_MIN1,
+    LIBLTE_RRC_REPORT_INTERVAL_MIN6,
+    LIBLTE_RRC_REPORT_INTERVAL_MIN12,
+    LIBLTE_RRC_REPORT_INTERVAL_MIN30,
+    LIBLTE_RRC_REPORT_INTERVAL_MIN60,
+    LIBLTE_RRC_REPORT_INTERVAL_SPARE3,
+    LIBLTE_RRC_REPORT_INTERVAL_SPARE2,
+    LIBLTE_RRC_REPORT_INTERVAL_SPARE1,
+}LIBLTE_RRC_REPORT_INTERVAL_ENUM;
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_report_interval_ie(LIBLTE_RRC_REPORT_INTERVAL_ENUM   report_int,
+                                                     uint8                           **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_report_interval_ie(uint8                           **ie_ptr,
+                                                       LIBLTE_RRC_REPORT_INTERVAL_ENUM  *report_int);
+
+/*********************************************************************
+    IE Name: RSRP Range
+
+    Description: Specifies the value range used in RSRP measurements
+                 and thresholds
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rsrp_range_ie(uint8   rsrp_range,
+                                                uint8 **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rsrp_range_ie(uint8 **ie_ptr,
+                                                  uint8  *rsrp_range);
+
+/*********************************************************************
+    IE Name: RSRQ Range
+
+    Description: Specifies the value range used in RSRQ measurements
+                 and thresholds
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rsrq_range_ie(uint8   rsrq_range,
+                                                uint8 **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rsrq_range_ie(uint8 **ie_ptr,
+                                                  uint8  *rsrq_range);
+
+/*********************************************************************
+    IE Name: Time To Trigger
+
+    Description: Specifies the value range used for the time to
+                 trigger parameter, which concerns the time during
+                 which specific criteria for the event needs to be
+                 met in order to trigger a measurement report
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.5
+*********************************************************************/
+// Defines
+// Enums
+typedef enum{
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS0 = 0,
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS40,
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS64,
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS80,
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS100,
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS128,
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS160,
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS256,
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS320,
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS480,
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS512,
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS640,
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS1024,
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS1280,
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS2560,
+    LIBLTE_RRC_TIME_TO_TRIGGER_MS5120,
+}LIBLTE_RRC_TIME_TO_TRIGGER_ENUM;
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_time_to_trigger_ie(LIBLTE_RRC_TIME_TO_TRIGGER_ENUM   time_to_trigger,
+                                                     uint8                           **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_time_to_trigger_ie(uint8                           **ie_ptr,
+                                                       LIBLTE_RRC_TIME_TO_TRIGGER_ENUM  *time_to_trigger);
 
 /*********************************************************************
     IE Name: Additional Spectrum Emission
@@ -312,7 +909,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_additional_spectrum_emission_ie(uint8 **ie_p
     IE Name: ARFCN value CDMA2000
 
     Description: Indicates the CDMA2000 carrier frequency within
-                 a CDMA2000 band.
+                 a CDMA2000 band
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -330,7 +927,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_arfcn_value_cdma2000_ie(uint8  **ie_ptr,
 
     Description: Indicates the ARFCN applicable for a downlink,
                  uplink, or bi-directional (TDD) E-UTRA carrier
-                 frequency.
+                 frequency
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -347,7 +944,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_arfcn_value_eutra_ie(uint8  **ie_ptr,
     IE Name: ARFCN value GERAN
 
     Description: Specifies the ARFCN value applicable for a GERAN
-                 BCCH carrier frequency.
+                 BCCH carrier frequency
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -365,7 +962,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_arfcn_value_geran_ie(uint8  **ie_ptr,
 
     Description: Indicates the ARFCN applicable for a downlink (Nd,
                  FDD) or bi-directional (Nt, TDD) UTRA carrier
-                 frequency.
+                 frequency
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -382,7 +979,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_arfcn_value_utra_ie(uint8  **ie_ptr,
     IE Name: Band Class CDMA2000
 
     Description: Defines the CDMA2000 band in which the CDMA2000
-                 carrier frequency can be found.
+                 carrier frequency can be found
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -433,7 +1030,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_band_class_cdma2000_ie(uint8                
     IE Name: Band Indicator GERAN
 
     Description: Indicates how to interpret an associated GERAN
-                 carrier ARFCN.
+                 carrier ARFCN
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -453,7 +1050,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_band_indicator_geran_ie(uint8               
 /*********************************************************************
     IE Name: Carrier Freq CDMA2000
 
-    Description: Provides the CDMA2000 carrier information.
+    Description: Provides the CDMA2000 carrier information
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -474,7 +1071,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_carrier_freq_cdma2000_ie(uint8              
     IE Name: Carrier Freq GERAN
 
     Description: Provides an unambiguous carrier frequency description
-                 of a GERAN cell.
+                 of a GERAN cell
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -492,9 +1089,23 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_carrier_freq_geran_ie(uint8                 
                                                           LIBLTE_RRC_CARRIER_FREQ_GERAN_STRUCT  *carrier_freq);
 
 /*********************************************************************
+    IE Name: Carrier Freqs GERAN
+
+    Description: Provides one or more GERAN ARFCN values, which
+                 represent a list of GERAN BCCH carrier frequencies
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.4
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
     IE Name: CDMA2000 Type
 
-    Description: Describes the type of CDMA2000 network.
+    Description: Describes the type of CDMA2000 network
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -514,7 +1125,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_cdma2000_type_ie(uint8                      
 /*********************************************************************
     IE Name: Cell Identity
 
-    Description: Unambiguously identifies a cell within a PLMN.
+    Description: Unambiguously identifies a cell within a PLMN
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -528,12 +1139,26 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_cell_identity_ie(uint8  **ie_ptr,
                                                      uint32  *cell_id);
 
 /*********************************************************************
+    IE Name: Cell Index List
+
+    Description: Concerns a list of cell indecies, which may be used
+                 for different purposes
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.4
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
     IE Name: Cell Reselection Priority
 
     Description: Contains the absolute priority of the concerned
                  carrier frequency/set of frequencies (GERAN)/
                  bandclass (CDMA2000), as used by the cell
-                 reselection procedure.
+                 reselection procedure
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -551,7 +1176,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_cell_reselection_priority_ie(uint8 **ie_ptr,
 
     Description: Indicates whether or not the UE shall perform a
                  CDMA2000 1xRTT pre-registration if the UE does not
-                 have a valid/current pre-registration.
+                 have a valid/current pre-registration
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -593,7 +1218,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_csfb_registration_param_1xrtt_v920_ie(uint8 
     IE Name: Cell Global ID EUTRA
 
     Description: Specifies the Evolved Cell Global Identifier (ECGI),
-                 the globally unique identity of a cell in E-UTRA.
+                 the globally unique identity of a cell in E-UTRA
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -620,7 +1245,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_cell_global_id_eutra_ie(uint8               
     IE Name: Cell Global ID UTRA
 
     Description: Specifies the global UTRAN Cell Identifier, the
-                 globally unique identity of a cell in UTRA.
+                 globally unique identity of a cell in UTRA
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -641,7 +1266,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_cell_global_id_utra_ie(uint8                
     IE Name: Cell Global ID GERAN
 
     Description: Specifies the Cell Global Identity (CGI), the
-                 globally unique identity of a cell in GERAN.
+                 globally unique identity of a cell in GERAN
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -663,7 +1288,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_cell_global_id_geran_ie(uint8               
     IE Name: Cell Global ID CDMA2000
 
     Description: Specifies the Cell Global Identity (CGI), the
-                 globally unique identity of a cell in CDMA2000.
+                 globally unique identity of a cell in CDMA2000
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -698,9 +1323,37 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_csg_identity_ie(uint8  **ie_ptr,
                                                     uint32  *csg_id);
 
 /*********************************************************************
+    IE Name: Mobility Control Info
+
+    Description: Includes parameters relevant for network controlled
+                 mobility to/within E-UTRA
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.4
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Mobility Parameters CDMA2000 (1xRTT)
+
+    Description: Contains the parameters provided to the UE for
+                 handover and (enhanced) CSFB to 1xRTT support
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.4
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
     IE Name: Mobility State Parameters
 
-    Description: Contains parameters to determine UE mobility state.
+    Description: Contains parameters to determine UE mobility state
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -742,7 +1395,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_mobility_state_parameters_ie(uint8          
 /*********************************************************************
     IE Name: Phys Cell ID
 
-    Description: Indicates the physical layer identity of the cell.
+    Description: Indicates the physical layer identity of the cell
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -759,7 +1412,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_phys_cell_id_ie(uint8  **ie_ptr,
     IE Name: Phys Cell ID Range
 
     Description: Encodes either a single or a range of physical cell
-                 identities.
+                 identities
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -796,10 +1449,23 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_phys_cell_id_range_ie(uint8                 
                                                           LIBLTE_RRC_PHYS_CELL_ID_RANGE_STRUCT  *phys_cell_id_range);
 
 /*********************************************************************
+    IE Name: Phys Cell ID Range UTRA FDD List
+
+    Description: Encodes one or more of Phys Cell ID Range UTRA FDD
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.4
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
     IE Name: Phys Cell ID CDMA2000
 
     Description: Identifies the PN offset that represents the
-                 "Physical cell identity" in CDMA2000.
+                 "Physical cell identity" in CDMA2000
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -816,7 +1482,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_phys_cell_id_cdma2000_ie(uint8  **ie_ptr,
 /*********************************************************************
     IE Name: Phys Cell ID GERAN
 
-    Description: Contains the Base Station Identity Code (BSIC).
+    Description: Contains the Base Station Identity Code (BSIC)
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -836,7 +1502,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_phys_cell_id_geran_ie(uint8                 
 /*********************************************************************
     IE Name: Phys Cell ID UTRA FDD
 
-    Description: Indicates the physical layer identity of the cell.
+    Description: Indicates the physical layer identity of the cell
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -852,7 +1518,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_phys_cell_id_utra_fdd_ie(uint8  **ie_ptr,
 /*********************************************************************
     IE Name: Phys Cell ID UTRA TDD
 
-    Description: Indicates the physical layer identity of the cell.
+    Description: Indicates the physical layer identity of the cell
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -868,7 +1534,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_phys_cell_id_utra_tdd_ie(uint8 **ie_ptr,
 /*********************************************************************
     IE Name: PLMN Identity
 
-    Description: Identifies a Public Land Mobile Network.
+    Description: Identifies a Public Land Mobile Network
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -916,7 +1582,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_pre_registration_info_hrpd_ie(uint8         
 
     Description: Indicates for cell selection/re-selection the
                  required minimum received RSRQ level in the (E-UTRA)
-                 cell.
+                 cell
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -933,7 +1599,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_q_qual_min_ie(uint8 **ie_ptr,
     IE Name: Q Rx Lev Min
 
     Description: Indicates the required minimum received RSRP level in
-                 the (E-UTRA) cell for cell selection/re-selection.
+                 the (E-UTRA) cell for cell selection/re-selection
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -952,7 +1618,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_q_rx_lev_min_ie(uint8 **ie_ptr,
     Description: Indicates a cell or frequency specific offset to be
                  applied when evaluating candidates for cell
                  reselection or when evaluating triggering conditions
-                 for measurement reporting.
+                 for measurement reporting
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -1003,7 +1669,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_q_offset_range_ie(uint8                     
 
     Description: Indicates a frequency specific offset to be applied
                  when evaluating triggering conditions for
-                 measurement reporting.
+                 measurement reporting
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -1019,7 +1685,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_q_offset_range_inter_rat_ie(uint8 **ie_ptr,
 /*********************************************************************
     IE Name: Reselection Threshold
 
-    Description: Indicates an RX level threshold for cell reselection.
+    Description: Indicates an RX level threshold for cell reselection
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -1036,7 +1702,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_reselection_threshold_ie(uint8 **ie_ptr,
     IE Name: Reselection Threshold Q
 
     Description: Indicates a quality level threshold for cell
-                 reselection.
+                 reselection
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -1053,7 +1719,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_reselection_threshold_q_ie(uint8 **ie_ptr,
     IE Name: S Cell Index
 
     Description: Contains a short identity, used to identify an
-                 SCell.
+                 SCell
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -1070,7 +1736,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_s_cell_index_ie(uint8 **ie_ptr,
     IE Name: Serv Cell Index
 
     Description: Contains a short identity, used to identify a
-                 serving cell.
+                 serving cell
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -1088,7 +1754,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_serv_cell_index_ie(uint8 **ie_ptr,
 
     Description: Contains factors, to be applied when the UE is in
                  medium or high speed state, used for scaling a
-                 mobility control related parameter.
+                 mobility control related parameter
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -1118,10 +1784,23 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_speed_state_scale_factors_ie(uint8          
                                                                  LIBLTE_RRC_SPEED_STATE_SCALE_FACTORS_STRUCT  *speed_state_scale_factors);
 
 /*********************************************************************
+    IE Name: System Info List GERAN
+
+    Description: Contains system information of a GERAN cell
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.4
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
     IE Name: System Time Info CDMA2000
 
     Description: Informs the UE about the absolute time in the current
-                 cell.
+                 cell
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -1143,7 +1822,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_system_time_info_cdma2000_ie(uint8          
     IE Name: Tracking Area Code
 
     Description: Identifies a tracking area within the scope of a
-                 PLMN.
+                 PLMN
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -1160,7 +1839,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_tracking_area_code_ie(uint8  **ie_ptr,
     IE Name: T Reselection
 
     Description: Contains the timer T_reselection_rat for E-UTRA,
-                 UTRA, GERAN, or CDMA2000.
+                 UTRA, GERAN, or CDMA2000
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
@@ -1177,7 +1856,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_t_reselection_ie(uint8 **ie_ptr,
     IE Name: Next Hop Chaining Count
 
     Description: Updates the Kenb key and corresponds to parameter
-                 NCC.
+                 NCC
 
     Document Reference: 36.331 v10.0.0 Section 6.3.3
 *********************************************************************/
@@ -1194,7 +1873,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_next_hop_chaining_count_ie(uint8 **ie_ptr,
     IE Name: Security Algorithm Config
 
     Description: Configures AS integrity protection algorithm (SRBs)
-                 and AS ciphering algorithm (SRBs and DRBs).
+                 and AS ciphering algorithm (SRBs and DRBs)
 
     Document Reference: 36.331 v10.0.0 Section 6.3.3
 *********************************************************************/
@@ -1235,7 +1914,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_security_algorithm_config_ie(uint8          
     IE Name: Short MAC I
 
     Description: Identifies and verifies the UE at RRC connection
-                 re-establishment.
+                 re-establishment
 
     Document Reference: 36.331 v10.0.0 Section 6.3.3
 *********************************************************************/
@@ -1249,14 +1928,184 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_short_mac_i_ie(uint8  **ie_ptr,
                                                    uint16  *short_mac_i);
 
 /*********************************************************************
-    IE Name: PDSCH Config Common
+    IE Name: Antenna Info
 
-    Description: Specifies the common PDSCH configuration.
+    Description: Specifies the common and the UE specific antenna
+                 configuration
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
 // Defines
 // Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: CQI Report Config
+
+    Description: Specifies the CQI reporting configuration
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Cross Carrier Scheduling Config
+
+    Description: Specifies the configuration when the cross carrier
+                 scheduling is used in a cell
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: CSI RS Config
+
+    Description: Specifies the CSI (Channel State Information)
+                 reference signal configuration
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: DRB Identity
+
+    Description: Identifies a DRB used by a UE
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_drb_identity_ie(uint8   drb_id,
+                                                  uint8 **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_drb_identity_ie(uint8 **ie_ptr,
+                                                    uint8  *drb_id);
+
+/*********************************************************************
+    IE Name: Logical Channel Config
+
+    Description: Configures the logical channel parameters
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+typedef enum{
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_KBPS_0 = 0,
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_KBPS_8,
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_KBPS_16,
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_KBPS_32,
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_KBPS_64,
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_KBPS_128,
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_KBPS_256,
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_INFINITY,
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_SPARE8,
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_SPARE7,
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_SPARE6,
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_SPARE5,
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_SPARE4,
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_SPARE3,
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_SPARE2,
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_SPARE1,
+}LIBLTE_RRC_PRIORITIZED_BIT_RATE_ENUM;
+typedef enum{
+    LIBLTE_RRC_BUCKET_SIZE_DURATION_MS50 = 0,
+    LIBLTE_RRC_BUCKET_SIZE_DURATION_MS100,
+    LIBLTE_RRC_BUCKET_SIZE_DURATION_MS150,
+    LIBLTE_RRC_BUCKET_SIZE_DURATION_MS300,
+    LIBLTE_RRC_BUCKET_SIZE_DURATION_MS500,
+    LIBLTE_RRC_BUCKET_SIZE_DURATION_MS1000,
+    LIBLTE_RRC_BUCKET_SIZE_DURATION_SPARE2,
+    LIBLTE_RRC_BUCKET_SIZE_DURATION_SPARE1,
+}LIBLTE_RRC_BUCKET_SIZE_DURATION_ENUM;
+typedef enum{
+    LIBLTE_RRC_LOGICAL_CHANNEL_SR_MASK_R9_SETUP = 0,
+}LIBLTE_RRC_LOGICAL_CHANNEL_SR_MASK_R9_ENUM;
+// Structs
+typedef struct{
+    LIBLTE_RRC_PRIORITIZED_BIT_RATE_ENUM prioritized_bit_rate;
+    LIBLTE_RRC_BUCKET_SIZE_DURATION_ENUM bucket_size_duration;
+    uint8                                priority;
+    uint8                                log_chan_group;
+    bool                                 log_chan_group_present;
+}LIBLTE_RRC_UL_SPECIFIC_PARAMETERS_STRUCT;
+typedef struct{
+    LIBLTE_RRC_UL_SPECIFIC_PARAMETERS_STRUCT   ul_specific_params;
+    LIBLTE_RRC_LOGICAL_CHANNEL_SR_MASK_R9_ENUM log_chan_sr_mask;
+    bool                                       ul_specific_params_present;
+    bool                                       log_chan_sr_mask_present;
+}LIBLTE_RRC_LOGICAL_CHANNEL_CONFIG_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_logical_channel_config_ie(LIBLTE_RRC_LOGICAL_CHANNEL_CONFIG_STRUCT  *log_chan_cnfg,
+                                                            uint8                                    **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_logical_channel_config_ie(uint8                                    **ie_ptr,
+                                                              LIBLTE_RRC_LOGICAL_CHANNEL_CONFIG_STRUCT  *log_chan_cnfg);
+
+/*********************************************************************
+    IE Name: MAC Main Config
+
+    Description: Specifies the MAC main configuration for signalling
+                 and data radio bearers
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: PDCP Config
+
+    Description: Sets the configurable PDCP parameters for data
+                 radio bearers
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: PDSCH Config
+
+    Description: Specifies the common and the UE specific PDSCH
+                 configuration
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+typedef enum{
+    LIBLTE_RRC_PDSCH_CONFIG_P_A_DB_N6 = 0,
+    LIBLTE_RRC_PDSCH_CONFIG_P_A_DB_N4_DOT_77,
+    LIBLTE_RRC_PDSCH_CONFIG_P_A_DB_N3,
+    LIBLTE_RRC_PDSCH_CONFIG_P_A_DB_N1_DOT_77,
+    LIBLTE_RRC_PDSCH_CONFIG_P_A_DB_0,
+    LIBLTE_RRC_PDSCH_CONFIG_P_A_DB_1,
+    LIBLTE_RRC_PDSCH_CONFIG_P_A_DB_2,
+    LIBLTE_RRC_PDSCH_CONFIG_P_A_DB_3,
+}LIBLTE_RRC_PDSCH_CONFIG_P_A_ENUM;
 // Structs
 typedef struct{
     uint8 p_b;
@@ -1267,11 +2116,15 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_pdsch_config_common_ie(LIBLTE_RRC_PDSCH_CONFIG
                                                          uint8                                 **ie_ptr);
 LIBLTE_ERROR_ENUM liblte_rrc_unpack_pdsch_config_common_ie(uint8                                 **ie_ptr,
                                                            LIBLTE_RRC_PDSCH_CONFIG_COMMON_STRUCT  *pdsch_config);
+LIBLTE_ERROR_ENUM liblte_rrc_pack_pdsch_config_dedicated_ie(LIBLTE_RRC_PDSCH_CONFIG_P_A_ENUM   p_a,
+                                                            uint8                            **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_pdsch_config_dedicated_ie(uint8                            **ie_ptr,
+                                                              LIBLTE_RRC_PDSCH_CONFIG_P_A_ENUM  *p_a);
 
 /*********************************************************************
     IE Name: PHICH Config
 
-    Description: Specifies the PHICH configuration.
+    Description: Specifies the PHICH configuration
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
@@ -1299,11 +2152,25 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_phich_config_ie(uint8                       
                                                     LIBLTE_RRC_PHICH_CONFIG_STRUCT  *phich_config);
 
 /*********************************************************************
+    IE Name: Physical Config Dedicated
+
+    Description: Specifies the UE specific physical channel
+                 configuration
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
     IE Name: P Max
 
     Description: Limits the UE's uplink transmission power on a
                  carrier frequency and is used to calculate the
-                 parameter P Compensation.
+                 parameter P Compensation
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
@@ -1317,10 +2184,10 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_p_max_ie(uint8 **ie_ptr,
                                              int8   *p_max);
 
 /*********************************************************************
-    IE Name: PRACH Config SIB
+    IE Name: PRACH Config
 
-    Description: Specifies the PRACH configuration for system
-                 information.
+    Description: Specifies the PRACH configuration in the system
+                 information and in the mobility control information
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
@@ -1337,17 +2204,30 @@ typedef struct{
     LIBLTE_RRC_PRACH_CONFIG_INFO_STRUCT prach_cnfg_info;
     uint16                              root_sequence_index;
 }LIBLTE_RRC_PRACH_CONFIG_SIB_STRUCT;
+typedef struct{
+    LIBLTE_RRC_PRACH_CONFIG_INFO_STRUCT prach_cnfg_info;
+    uint16                              root_sequence_index;
+    bool                                prach_cnfg_info_present;
+}LIBLTE_RRC_PRACH_CONFIG_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_rrc_pack_prach_config_sib_ie(LIBLTE_RRC_PRACH_CONFIG_SIB_STRUCT  *prach_cnfg,
                                                       uint8                              **ie_ptr);
 LIBLTE_ERROR_ENUM liblte_rrc_unpack_prach_config_sib_ie(uint8                              **ie_ptr,
                                                         LIBLTE_RRC_PRACH_CONFIG_SIB_STRUCT  *prach_cnfg);
+LIBLTE_ERROR_ENUM liblte_rrc_pack_prach_config_ie(LIBLTE_RRC_PRACH_CONFIG_STRUCT  *prach_cnfg,
+                                                  uint8                          **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_prach_config_ie(uint8                          **ie_ptr,
+                                                    LIBLTE_RRC_PRACH_CONFIG_STRUCT  *prach_cnfg);
+LIBLTE_ERROR_ENUM liblte_rrc_pack_prach_config_scell_r10_ie(uint8   prach_cnfg_idx,
+                                                            uint8 **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_prach_config_scell_r10_ie(uint8 **ie_ptr,
+                                                              uint8  *prach_cnfg_idx);
 
 /*********************************************************************
     IE Name: Presence Antenna Port 1
 
     Description: Indicates whether all the neighboring cells use
-                 antenna port 1.
+                 antenna port 1
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
@@ -1361,9 +2241,10 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_presence_antenna_port_1_ie(uint8 **ie_ptr,
                                                                bool   *presence_ant_port_1);
 
 /*********************************************************************
-    IE Name: PUCCH Config Common
+    IE Name: PUCCH Config
 
-    Description: Specifies the common PUCCH configuration.
+    Description: Specifies the common and the UE specific PUCCH
+                 configuration
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
@@ -1386,12 +2267,14 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_pucch_config_common_ie(LIBLTE_RRC_PUCCH_CONFIG
                                                          uint8                                 **ie_ptr);
 LIBLTE_ERROR_ENUM liblte_rrc_unpack_pucch_config_common_ie(uint8                                 **ie_ptr,
                                                            LIBLTE_RRC_PUCCH_CONFIG_COMMON_STRUCT  *pucch_cnfg);
+// FIXME
 
 /*********************************************************************
-    IE Name: PUSCH Config Common
+    IE Name: PUSCH Config
 
-    Description: Specifies the common PUSCH configuration and the
-                 reference signal configuration for PUSCH and PUCCH.
+    Description: Specifies the common and the UE specific PUSCH
+                 configuration and the reference signal configuration
+                 for PUSCH and PUCCH
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
@@ -1420,11 +2303,12 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_pusch_config_common_ie(LIBLTE_RRC_PUSCH_CONFIG
                                                          uint8                                 **ie_ptr);
 LIBLTE_ERROR_ENUM liblte_rrc_unpack_pusch_config_common_ie(uint8                                 **ie_ptr,
                                                            LIBLTE_RRC_PUSCH_CONFIG_COMMON_STRUCT  *pusch_cnfg);
+// FIXME
 
 /*********************************************************************
     IE Name: RACH Config Common
 
-    Description: Specifies the generic random access parameters.
+    Description: Specifies the generic random access parameters
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
@@ -1564,7 +2448,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rach_config_common_ie(uint8                 
 /*********************************************************************
     IE Name: RACH Config Dedicated
 
-    Description: Specifies the dedicated random access parameters.
+    Description: Specifies the dedicated random access parameters
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
@@ -1582,11 +2466,12 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rach_config_dedicated_ie(uint8              
                                                              LIBLTE_RRC_RACH_CONFIG_DEDICATED_STRUCT  *rach_cnfg);
 
 /*********************************************************************
-    IE Name: Radio Resource Config Common SIB
+    IE Name: Radio Resource Config Common
 
     Description: Specifies the common radio resource configurations
-                 for system information, including random access
-                 parameters and static physical layer parameters.
+                 in the system information and in the mobility control
+                 information, including random access parameters
+                 and static physical layer parameters
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
@@ -1733,12 +2618,81 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_rr_config_common_sib_ie(LIBLTE_RRC_RR_CONFIG_C
                                                           uint8                                  **ie_ptr);
 LIBLTE_ERROR_ENUM liblte_rrc_unpack_rr_config_common_sib_ie(uint8                                  **ie_ptr,
                                                             LIBLTE_RRC_RR_CONFIG_COMMON_SIB_STRUCT  *rr_cnfg);
+// FIXME
 
 /*********************************************************************
-    IE Name: Sounding RS UL Config Common
+    IE Name: Radio Resource Config Dedicated
+
+    Description: Sets up/Modifies/Releases RBs, modifies the MAC
+                 main configuration, modifies the SPS configuration
+                 and modifies dedicated physical configuration
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: RLC Config
+
+    Description: Specifies the RLC configuration of SRBs and DRBs
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: RLF Timers and Constants
+
+    Description: Contains UE specific timers and constants applicable
+                 for UEs in RRC_CONNECTED
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: RN Subframe Config
+
+    Description: Specifies the subframe configuration for an RN
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Scheduling Request Config
+
+    Description: Specifies the scheduling request related parameters
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: Sounding RS UL Config
 
     Description: Specifies the uplink Sounding RS configuration for
-                 periodic and aperiodic sounding.
+                 periodic and aperiodic sounding
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
@@ -1790,12 +2744,27 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_srs_ul_config_common_ie(LIBLTE_RRC_SRS_UL_CONF
                                                           uint8                                  **ie_ptr);
 LIBLTE_ERROR_ENUM liblte_rrc_unpack_srs_ul_config_common_ie(uint8                                  **ie_ptr,
                                                             LIBLTE_RRC_SRS_UL_CONFIG_COMMON_STRUCT  *srs_ul_cnfg);
+// FIXME
+
+/*********************************************************************
+    IE Name: SPS Config
+
+    Description: Specifies the semi-persistent scheduling
+                 configuration
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
 
 /*********************************************************************
     IE Name: TDD Config
 
     Description: Specifies the TDD specific physical channel
-                 configuration.
+                 configuration
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
@@ -1834,7 +2803,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_tdd_config_ie(uint8                         
     IE Name: Time Alignment Timer
 
     Description: Controls how long the UE is considered uplink time
-                 aligned.
+                 aligned
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
@@ -1858,10 +2827,55 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_time_alignment_timer_ie(uint8               
                                                             LIBLTE_RRC_TIME_ALIGNMENT_TIMER_ENUM  *time_alignment_timer);
 
 /*********************************************************************
-    IE Name: Uplink Power Control Common
+    IE Name: TPC PDCCH Config
 
-    Description: Specifies the parameters for uplink power control for
-                 system information.
+    Description: Specifies the RNTIs and indecies for PUCCH and PUSCH
+                 power control
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: UL Antenna Info
+
+    Description: Specifies the UL antenna configuration
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.2
+*********************************************************************/
+// Defines
+// Enums
+typedef enum{
+    LIBLTE_RRC_UL_TRANSMISSION_MODE_R10_TM1 = 0,
+    LIBLTE_RRC_UL_TRANSMISSION_MODE_R10_TM2,
+    LIBLTE_RRC_UL_TRANSMISSION_MODE_R10_SPARE6,
+    LIBLTE_RRC_UL_TRANSMISSION_MODE_R10_SPARE5,
+    LIBLTE_RRC_UL_TRANSMISSION_MODE_R10_SPARE4,
+    LIBLTE_RRC_UL_TRANSMISSION_MODE_R10_SPARE3,
+    LIBLTE_RRC_UL_TRANSMISSION_MODE_R10_SPARE2,
+    LIBLTE_RRC_UL_TRANSMISSION_MODE_R10_SPARE1,
+}LIBLTE_RRC_UL_TRANSMISSION_MODE_R10_ENUM;
+// Structs
+typedef struct{
+    LIBLTE_RRC_UL_TRANSMISSION_MODE_R10_ENUM ul_tx_mode;
+    bool                                     four_ant_port_activated;
+}LIBLTE_RRC_UL_ANTENNA_INFO_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_ul_antenna_info_ie(LIBLTE_RRC_UL_ANTENNA_INFO_STRUCT  *ul_ant_info,
+                                                     uint8                             **ie_ptr);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_ul_antenna_info_ie(uint8                             **ie_ptr,
+                                                       LIBLTE_RRC_UL_ANTENNA_INFO_STRUCT  *ul_ant_info);
+
+/*********************************************************************
+    IE Name: Uplink Power Control
+
+    Description: Specifies the parameters for uplink power control in
+                 the system information and in the dedicated
+                 signalling
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
@@ -1927,12 +2941,13 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_ul_power_control_common_ie(LIBLTE_RRC_UL_POWER
                                                              uint8                                     **ie_ptr);
 LIBLTE_ERROR_ENUM liblte_rrc_unpack_ul_power_control_common_ie(uint8                                     **ie_ptr,
                                                                LIBLTE_RRC_UL_POWER_CONTROL_COMMON_STRUCT  *ul_pwr_ctrl);
+// FIXME
 
 /*********************************************************************
     IE Name: System Information Block Type 2
 
     Description: Contains radio resource configuration that is common
-                 for all UEs.
+                 for all UEs
 
     Document Reference: 36.331 v10.0.0 Section 6.3.1
 *********************************************************************/
@@ -2016,7 +3031,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_2_ie(uint8              
                  intra-frequency, inter-frequency, and/or inter-RAT
                  cell re-selection as well as intra-frequency cell
                  re-selection information other than neighboring
-                 cell related.
+                 cell related
 
     Document Reference: 36.331 v10.0.0 Section 6.3.1
 *********************************************************************/
@@ -2092,7 +3107,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_3_ie(uint8              
     IE Name: System Information Block Type 4
 
     Description: Contains the neighboring cell related information
-                 relevant only for intra-frequency cell reselection.
+                 relevant only for intra-frequency cell reselection
 
     Document Reference: 36.331 v10.0.0 Section 6.3.1
 *********************************************************************/
@@ -2120,12 +3135,59 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_4_ie(uint8              
                                                              LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4_STRUCT  *sib4);
 
 /*********************************************************************
+    IE Name: System Information Block Type 5
+
+    Description: Contains information relevant only for
+                 inter-frequency cell reselection, i.e. information
+                 about other E-UTRA frequencies and inter-frequency
+                 neighboring cells relevant for cell reselection
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: System Information Block Type 6
+
+    Description: Contains information relevant only for inter-RAT
+                 cell reselection, i.e. information about UTRA
+                 frequencies and UTRA neighboring cells relevant for
+                 cell reselection
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: System Information Block Type 7
+
+    Description: Contains information relevant only for inter-RAT
+                 cell reselection, i.e. information about GERAN
+                 frequencies relevant for cell reselection
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
     IE Name: System Information Block Type 8
 
     Description: Contains information relevant only for inter-RAT
                  cell re-selection i.e. information about CDMA2000
                  frequencies and CDMA2000 neighboring cells relevant
-                 for cell re-selection.
+                 for cell re-selection
 
     Document Reference: 36.331 v10.0.0 Section 6.3.1
 *********************************************************************/
@@ -2182,6 +3244,73 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_block_type_8_ie(LIBLTE_RRC_SYS_INFO_B
 LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_8_ie(uint8                                   **ie_ptr,
                                                              LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT  *sib8);
 
+/*********************************************************************
+    IE Name: System Information Block Type 9
+
+    Description: Contains a home eNB name (HNB name)
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: System Information Block Type 10
+
+    Description: Contains an ETWS primary notification
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: System Information Block Type 11
+
+    Description: Contains an ETWS secondary notification
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: System Information Block Type 12
+
+    Description: Contains a CMAS notification
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    IE Name: System Information Block Type 13
+
+    Description: Contains the information required to acquire the
+                 MBMS control information associated with one or more
+                 MBSFN areas
+
+    Document Reference: 36.331 v10.0.0 Section 6.3.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
 /*******************************************************************************
                               MESSAGE DECLARATIONS
 *******************************************************************************/
@@ -2191,7 +3320,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_8_ie(uint8              
 
     Description: Contains information relevant when evaluating if a
                  UE is allowed to access a cell and defines the
-                 scheduling of other system information.
+                 scheduling of other system information
 
     Document Reference: 36.331 v10.0.0 Section 6.2.2 
 *********************************************************************/
@@ -2293,7 +3422,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_1_msg(LIBLTE_RRC_MSG_STR
 /*********************************************************************
     Message Name: System Information
 
-    Description: Conveys one or more System Information Blocks.
+    Description: Conveys one or more System Information Blocks
 
     Document Reference: 36.331 v10.0.0 Section 6.2.2
 *********************************************************************/
@@ -2341,7 +3470,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_msg(LIBLTE_RRC_MSG_STRUCT          
 
     Description: Contains the set of RRC messages that may be sent
                  from the E-UTRAN to the UE via BCH on the BCCH
-                 logical channel.
+                 logical channel
 
     Document Reference: 36.331 v10.0.0 Sections 6.2.1 and 6.2.2
 *********************************************************************/
@@ -2372,7 +3501,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_bch_msg(LIBLTE_RRC_MSG_STRUCT *msg,
 
     Description: Contains the set of RRC messages that may be sent
                  from the E-UTRAN to the UE via DLSCH on the BCCH
-                 logical channel.
+                 logical channel
 
     Document Reference: 36.331 v10.0.0 Section 6.2.1
 *********************************************************************/

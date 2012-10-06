@@ -35,3 +35,5 @@ v00.06.00     Enabled fftw input, output, and plan from phy_struct in liblte_phy
 v00.06.01     Added RRC support for packing/unpacking SIB2, SIB3, SIB4, and SIB8.
               Added states and state memory to the file scan sample buffer.
               Updated the file scan and file generator to use the latest library.
+v00.06.02     Added soft bit turbo decoding, random access and paging PDCCH decoding,
+              and more RRC support.

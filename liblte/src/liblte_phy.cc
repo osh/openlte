@@ -44,6 +44,9 @@
                                    various other bugs.  Enabled fftw input,
                                    output, and plan in phy_struct.
     08/19/2012    Ben Wojtowicz    Fixed a bug in the PDCCH decoder.
+    10/06/2012    Ben Wojtowicz    Added random access and paging PDCCH
+                                   decoding, soft turbo decoding, and PDSCH
+                                   decoding per allocation.
 
 *******************************************************************************/
 
@@ -743,6 +746,28 @@ void conv_encode(LIBLTE_PHY_STRUCT *phy_struct,
                  uint32            *N_d_bits);
 
 /*********************************************************************
+    Name: conv_encode_soft
+
+    Description: Convolutionally encodes a soft bit array using the
+                 provided parameters
+
+    Document Reference: 3GPP TS 36.212 v10.1.0 section 5.1.3.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+void conv_encode_soft(LIBLTE_PHY_STRUCT *phy_struct,
+                      int8              *c_bits,
+                      uint32             N_c_bits,
+                      uint32             constraint_len,
+                      uint32             rate,
+                      uint32            *g,
+                      bool               tail_bit,
+                      int8              *d_bits,
+                      uint32            *N_d_bits);
+
+/*********************************************************************
     Name: viterbi_decode
 
     Description: Viterbi decodes a convolutionally coded input bit
@@ -762,6 +787,28 @@ void viterbi_decode(LIBLTE_PHY_STRUCT *phy_struct,
                     uint32            *g,
                     uint8             *c_bits,
                     uint32            *N_c_bits);
+
+/*********************************************************************
+    Name: viterbi_decode_siso
+
+    Description: Soft input soft output viterbi decodes a
+                 convolutionally coded input bit array using the
+                 provided parameters
+
+    Document Reference: 3GPP TS 36.212 v10.1.0 section 5.1.3.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+void viterbi_decode_siso(LIBLTE_PHY_STRUCT *phy_struct,
+                         int8              *d_bits,
+                         uint32             N_d_bits,
+                         uint32             constraint_len,
+                         uint32             rate,
+                         uint32            *g,
+                         int8              *c_bits,
+                         uint32            *N_c_bits);
 
 /*********************************************************************
     Name: turbo_encode
@@ -856,6 +903,9 @@ void turbo_constituent_encoder(uint8  *in_bits,
 void turbo_internal_interleaver(uint8  *in_bits,
                                 uint32  N_in_bits,
                                 uint8  *out_bits);
+void turbo_internal_interleaver(int8   *in_bits,
+                                uint32  N_in_bits,
+                                int8   *out_bits);
 void turbo_internal_interleaver(float  *in_bits,
                                 uint32  N_in_bits,
                                 float  *out_bits);
@@ -875,6 +925,9 @@ void turbo_internal_interleaver(float  *in_bits,
 void turbo_internal_deinterleaver(float  *in_bits,
                                   uint32  N_in_bits,
                                   float  *out_bits);
+void turbo_internal_deinterleaver(int8   *in_bits,
+                                  uint32  N_in_bits,
+                                  int8   *out_bits);
 
 /*********************************************************************
     Name: rate_match_turbo
@@ -1118,10 +1171,12 @@ void dci_channel_encode(LIBLTE_PHY_STRUCT *phy_struct,
 LIBLTE_ERROR_ENUM dci_channel_decode(LIBLTE_PHY_STRUCT *phy_struct,
                                      float             *in_bits,
                                      uint32             N_in_bits,
-                                     uint16             rnti,
+                                     uint16             rnti_start,
+                                     uint16             rnti_range,
                                      uint8              ue_ant,
                                      uint8             *out_bits,
-                                     uint32             N_out_bits);
+                                     uint32             N_out_bits,
+                                     uint16            *rnti_found);
 
 /*********************************************************************
     Name: dci_1a_pack
@@ -1220,10 +1275,10 @@ LIBLTE_ERROR_ENUM cfi_channel_decode(LIBLTE_PHY_STRUCT *phy_struct,
 // Enums
 // Structs
 // Functions
-float get_soft_decision(float p1_re,
-                        float p1_im,
-                        float p2_re,
-                        float p2_im,
+float get_soft_decision(float rx_re,
+                        float rx_im,
+                        float exp_re,
+                        float exp_im,
                         float max_dist);
 
 /*********************************************************************
@@ -1498,15 +1553,16 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *ph
 
     Document Reference: 3GPP TS 36.211 v10.1.0 sections 6.3 and 6.4
 *********************************************************************/
-LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_decode(LIBLTE_PHY_STRUCT          *phy_struct,
-                                                  LIBLTE_PHY_SUBFRAME_STRUCT *subframe,
-                                                  LIBLTE_PHY_PDCCH_STRUCT    *pdcch,
-                                                  uint32                      N_id_cell,
-                                                  uint8                       N_ant,
-                                                  uint32                      N_sc_rb,
-                                                  uint32                      N_rb_dl,
-                                                  uint8                      *out_bits,
-                                                  uint32                     *N_out_bits)
+LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_decode(LIBLTE_PHY_STRUCT            *phy_struct,
+                                                  LIBLTE_PHY_SUBFRAME_STRUCT   *subframe,
+                                                  LIBLTE_PHY_ALLOCATION_STRUCT *alloc,
+                                                  uint32                        N_pdcch_symbs,
+                                                  uint32                        N_id_cell,
+                                                  uint8                         N_ant,
+                                                  uint32                        N_sc_rb,
+                                                  uint32                        N_rb_dl,
+                                                  uint8                        *out_bits,
+                                                  uint32                       *N_out_bits)
 {
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
     uint32            i;
@@ -1555,13 +1611,13 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_decode(LIBLTE_PHY_STRUCT          *ph
 
         // Extract resource elements and channel estimate 3GPP TS 36.211 v10.1.0 section 6.3.5
         idx = 0;
-        for(L=pdcch->N_symbs; L<14; L++)
+        for(L=N_pdcch_symbs; L<14; L++)
         {
             for(i=0; i<N_rb_dl; i++)
             {
-                for(prb_idx=0; prb_idx<pdcch->alloc[0].N_prb; prb_idx++)
+                for(prb_idx=0; prb_idx<alloc->N_prb; prb_idx++)
                 {
-                    if(i == pdcch->alloc[0].prb[prb_idx])
+                    if(i == alloc->prb[prb_idx])
                     {
                         for(j=0; j<N_sc_rb; j++)
                         {
@@ -1617,6 +1673,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_decode(LIBLTE_PHY_STRUCT          *ph
                 }
             }
         }
+
         pre_decoder_and_matched_filter(phy_struct->pdsch_y_est_re,
                                        phy_struct->pdsch_y_est_im,
                                        phy_struct->pdsch_c_est_re[0],
@@ -1624,7 +1681,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_decode(LIBLTE_PHY_STRUCT          *ph
                                        5000,
                                        idx,
                                        N_ant,
-                                       pdcch->alloc[0].pre_coder_type,
+                                       alloc->pre_coder_type,
                                        phy_struct->pdsch_x_re,
                                        phy_struct->pdsch_x_im,
                                        &M_layer_symb);
@@ -1632,19 +1689,19 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_decode(LIBLTE_PHY_STRUCT          *ph
                        phy_struct->pdsch_x_im,
                        M_layer_symb,
                        N_ant,
-                       pdcch->alloc[0].N_codewords,
-                       pdcch->alloc[0].pre_coder_type,
+                       alloc->N_codewords,
+                       alloc->pre_coder_type,
                        phy_struct->pdsch_d_re,
                        phy_struct->pdsch_d_im,
                        &M_symb);
         modulation_demapper(phy_struct->pdsch_d_re,
                             phy_struct->pdsch_d_im,
                             M_symb,
-                            pdcch->alloc[0].mod_type,
+                            alloc->mod_type,
                             phy_struct->pdsch_soft_bits,
                             &N_bits);
         // FIXME: Only handling 1 codeword
-        c_init = (pdcch->alloc[0].rnti << 14) | (0 << 13) | (subframe->num << 9) | N_id_cell;
+        c_init = (alloc->rnti << 14) | (0 << 13) | (subframe->num << 9) | N_id_cell;
         generate_prs_c(c_init, N_bits, phy_struct->pdsch_c);
         for(i=0; i<N_bits; i++)
         {
@@ -1653,9 +1710,9 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_decode(LIBLTE_PHY_STRUCT          *ph
         if(LIBLTE_SUCCESS == dlsch_channel_decode(phy_struct,
                                                   phy_struct->pdsch_descramb_bits,
                                                   N_bits,
-                                                  pdcch->alloc[0].tbs,
-                                                  pdcch->alloc[0].tx_mode,
-                                                  pdcch->alloc[0].rv_idx,
+                                                  alloc->tbs,
+                                                  alloc->tx_mode,
+                                                  alloc->rv_idx,
                                                   8,
                                                   250368, // FIXME: Using N_soft from a cat 1 UE (3GPP TS 36.306)
                                                   out_bits,
@@ -2448,6 +2505,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
     uint32            N_reg_pdcch;
     uint32            N_cce_pdcch;
     uint32            N_reg_cce;
+    uint16            rnti = 0;
     bool              valid_reg;
 
     if(phy_struct != NULL &&
@@ -2917,32 +2975,72 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
             {
                 phy_struct->pdcch_descramb_bits[j] = (float)phy_struct->pdcch_soft_bits[j]*(1-2*(float)phy_struct->pdcch_c[i*288+j]);
             }
-            if(pdcch->N_alloc <  LIBLTE_PHY_PDCCH_MAX_ALLOC &&
-               LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
-                                                    phy_struct->pdcch_descramb_bits,
-                                                    N_bits,
-                                                    LIBLTE_PHY_SI_RNTI,
-                                                    0,
-                                                    phy_struct->pdcch_dci,
-                                                    dci_1a_size))
+            if(pdcch->N_alloc  <  LIBLTE_PHY_PDCCH_MAX_ALLOC &&
+               (LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
+                                                     phy_struct->pdcch_descramb_bits,
+                                                     N_bits,
+                                                     LIBLTE_PHY_SI_RNTI,
+                                                     1,
+                                                     0,
+                                                     phy_struct->pdcch_dci,
+                                                     dci_1a_size,
+                                                     &rnti) ||
+                LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
+                                                     phy_struct->pdcch_descramb_bits,
+                                                     N_bits,
+                                                     LIBLTE_PHY_P_RNTI,
+                                                     1,
+                                                     0,
+                                                     phy_struct->pdcch_dci,
+                                                     dci_1a_size,
+                                                     &rnti) ||
+                LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
+                                                     phy_struct->pdcch_descramb_bits,
+                                                     N_bits,
+                                                     LIBLTE_PHY_RA_RNTI_START,
+                                                     LIBLTE_PHY_RA_RNTI_END - LIBLTE_PHY_RA_RNTI_START + 1,
+                                                     0,
+                                                     phy_struct->pdcch_dci,
+                                                     dci_1a_size,
+                                                     &rnti)))
             {
                 err = LIBLTE_SUCCESS;
                 dci_1a_unpack(phy_struct->pdcch_dci,
                               dci_1a_size,
                               LIBLTE_PHY_DCI_CA_NOT_PRESENT,
-                              LIBLTE_PHY_SI_RNTI,
+                              rnti,
                               N_rb_dl,
                               N_ant,
                               &pdcch->alloc[pdcch->N_alloc++]);
             }
-            if(pdcch->N_alloc <  LIBLTE_PHY_PDCCH_MAX_ALLOC &&
-               LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
-                                                    phy_struct->pdcch_descramb_bits,
-                                                    N_bits,
-                                                    LIBLTE_PHY_SI_RNTI,
-                                                    0,
-                                                    phy_struct->pdcch_dci,
-                                                    dci_1c_size))
+            if(pdcch->N_alloc  <  LIBLTE_PHY_PDCCH_MAX_ALLOC &&
+               (LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
+                                                     phy_struct->pdcch_descramb_bits,
+                                                     N_bits,
+                                                     LIBLTE_PHY_SI_RNTI,
+                                                     1,
+                                                     0,
+                                                     phy_struct->pdcch_dci,
+                                                     dci_1c_size,
+                                                     &rnti) ||
+                LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
+                                                     phy_struct->pdcch_descramb_bits,
+                                                     N_bits,
+                                                     LIBLTE_PHY_P_RNTI,
+                                                     1,
+                                                     0,
+                                                     phy_struct->pdcch_dci,
+                                                     dci_1c_size,
+                                                     &rnti) ||
+                LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
+                                                     phy_struct->pdcch_descramb_bits,
+                                                     N_bits,
+                                                     LIBLTE_PHY_RA_RNTI_START,
+                                                     LIBLTE_PHY_RA_RNTI_END - LIBLTE_PHY_RA_RNTI_START + 1,
+                                                     0,
+                                                     phy_struct->pdcch_dci,
+                                                     dci_1c_size,
+                                                     &rnti)))
             {
                 printf("DCI 1C FOUND L = 4, %u\n", i);
             }
@@ -2995,32 +3093,72 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
             {
                 phy_struct->pdcch_descramb_bits[j] = (float)phy_struct->pdcch_soft_bits[j]*(1-2*(float)phy_struct->pdcch_c[i*576+j]);
             }
-            if(pdcch->N_alloc <  LIBLTE_PHY_PDCCH_MAX_ALLOC &&
-               LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
-                                                    phy_struct->pdcch_descramb_bits,
-                                                    N_bits,
-                                                    LIBLTE_PHY_SI_RNTI,
-                                                    0,
-                                                    phy_struct->pdcch_dci,
-                                                    dci_1a_size))
+            if(pdcch->N_alloc  <  LIBLTE_PHY_PDCCH_MAX_ALLOC &&
+               (LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
+                                                     phy_struct->pdcch_descramb_bits,
+                                                     N_bits,
+                                                     LIBLTE_PHY_SI_RNTI,
+                                                     1,
+                                                     0,
+                                                     phy_struct->pdcch_dci,
+                                                     dci_1a_size,
+                                                     &rnti) ||
+                LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
+                                                     phy_struct->pdcch_descramb_bits,
+                                                     N_bits,
+                                                     LIBLTE_PHY_P_RNTI,
+                                                     1,
+                                                     0,
+                                                     phy_struct->pdcch_dci,
+                                                     dci_1a_size,
+                                                     &rnti) ||
+                LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
+                                                     phy_struct->pdcch_descramb_bits,
+                                                     N_bits,
+                                                     LIBLTE_PHY_RA_RNTI_START,
+                                                     LIBLTE_PHY_RA_RNTI_END - LIBLTE_PHY_RA_RNTI_START + 1,
+                                                     0,
+                                                     phy_struct->pdcch_dci,
+                                                     dci_1a_size,
+                                                     &rnti)))
             {
                 err = LIBLTE_SUCCESS;
                 dci_1a_unpack(phy_struct->pdcch_dci,
                               dci_1a_size,
                               LIBLTE_PHY_DCI_CA_NOT_PRESENT,
-                              LIBLTE_PHY_SI_RNTI,
+                              rnti,
                               N_rb_dl,
                               N_ant,
                               &pdcch->alloc[pdcch->N_alloc++]);
             }
-            if(pdcch->N_alloc <  LIBLTE_PHY_PDCCH_MAX_ALLOC &&
-               LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
-                                                    phy_struct->pdcch_descramb_bits,
-                                                    N_bits,
-                                                    LIBLTE_PHY_SI_RNTI,
-                                                    0,
-                                                    phy_struct->pdcch_dci,
-                                                    dci_1c_size))
+            if(pdcch->N_alloc  <  LIBLTE_PHY_PDCCH_MAX_ALLOC &&
+               (LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
+                                                     phy_struct->pdcch_descramb_bits,
+                                                     N_bits,
+                                                     LIBLTE_PHY_SI_RNTI,
+                                                     1,
+                                                     0,
+                                                     phy_struct->pdcch_dci,
+                                                     dci_1c_size,
+                                                     &rnti) ||
+                LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
+                                                     phy_struct->pdcch_descramb_bits,
+                                                     N_bits,
+                                                     LIBLTE_PHY_P_RNTI,
+                                                     1,
+                                                     0,
+                                                     phy_struct->pdcch_dci,
+                                                     dci_1c_size,
+                                                     &rnti) ||
+                LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
+                                                     phy_struct->pdcch_descramb_bits,
+                                                     N_bits,
+                                                     LIBLTE_PHY_RA_RNTI_START,
+                                                     LIBLTE_PHY_RA_RNTI_END - LIBLTE_PHY_RA_RNTI_START + 1,
+                                                     0,
+                                                     phy_struct->pdcch_dci,
+                                                     dci_1c_size,
+                                                     &rnti)))
             {
                 printf("DCI 1C FOUND L = 8, %u\n", i);
             }
@@ -3757,7 +3895,7 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
         // Determine channel estimates
         for(p=0; p<N_ant; p++)
         {
-            // Define v, crs, sym, and N_sym
+            // Define v, sym, and N_sym
             if(p == 0)
             {
                 v[0]   = 0;
@@ -6023,6 +6161,97 @@ void conv_encode(LIBLTE_PHY_STRUCT *phy_struct,
 }
 
 /*********************************************************************
+    Name: conv_encode_soft
+
+    Description: Convolutionally encodes a soft bit array using the
+                 provided parameters
+
+    Document Reference: 3GPP TS 36.212 v10.1.0 section 5.1.3.1
+*********************************************************************/
+void conv_encode_soft(LIBLTE_PHY_STRUCT *phy_struct,
+                      int8              *c_bits,
+                      uint32             N_c_bits,
+                      uint32             constraint_len,
+                      uint32             rate,
+                      uint32            *g,
+                      bool               tail_bit,
+                      int8              *d_bits,
+                      uint32            *N_d_bits)
+{
+    uint32 i;
+    uint32 j;
+    uint32 k;
+    uint32 tmp_sum;
+    uint32 tmp_sign;
+    int32  tmp_mag;
+    int8   s_reg[constraint_len];
+    uint8  g_array[3][constraint_len];
+
+    // Initialize the shift register
+    if(tail_bit)
+    {
+        for(i=0; i<constraint_len; i++)
+        {
+            s_reg[i] = c_bits[N_c_bits-i-1];
+        }
+    }else{
+        for(i=0; i<constraint_len; i++)
+        {
+            s_reg[i] = 127;
+        }
+    }
+
+    // Convert g from octal to binary array
+    for(i=0; i<rate; i++)
+    {
+        for(j=0; j<constraint_len; j++)
+        {
+            g_array[i][j] = (g[i] >> (constraint_len-j-1)) & 1;
+        }
+    }
+
+    // Convolutionally encode input
+    for(i=0; i<N_c_bits; i++)
+    {
+        // Add next bit to shift register
+        for(j=constraint_len-1; j>0; j--)
+        {
+            s_reg[j] = s_reg[j-1];
+        }
+        s_reg[0] = c_bits[i];
+
+        // Determine the output bits
+        for(j=0; j<rate; j++)
+        {
+            tmp_sum  = 0;
+            tmp_mag  = 0;
+            tmp_sign = 0;
+            for(k=0; k<constraint_len; k++)
+            {
+                if(1 == g_array[j][k])
+                {
+                    if(s_reg[k] >= 0)
+                    {
+                        tmp_mag += s_reg[k];
+                    }else{
+                        tmp_mag  += -s_reg[k];
+                        tmp_sign += 1;
+                    }
+                    tmp_sum++;
+                }
+            }
+            d_bits[i*rate + j] = tmp_mag >> (tmp_sum-1);
+            if(1 == (tmp_sign % 2))
+            {
+                d_bits[i*rate + j] = -d_bits[i*rate + j];
+            }
+        }
+    }
+
+    *N_d_bits = N_c_bits*rate;
+}
+
+/*********************************************************************
     Name: viterbi_decode
 
     Description: Viterbi decodes a convolutionally coded input bit
@@ -6085,7 +6314,7 @@ void viterbi_decode(LIBLTE_PHY_STRUCT *phy_struct,
             {
                 s_reg[k] = (prev_state >> (constraint_len-k-1)) & 1;
             }
-            s_reg[0]   = in_path;
+            s_reg[0] = in_path;
             for(k=0; k<rate; k++)
             {
                 phy_struct->vd_st_output[i][j][k] = 0;
@@ -6202,6 +6431,204 @@ void viterbi_decode(LIBLTE_PHY_STRUCT *phy_struct,
 }
 
 /*********************************************************************
+    Name: viterbi_decode_siso
+
+    Description: Soft input soft output viterbi decodes a
+                 convolutionally coded input bit array using the
+                 provided parameters
+
+    Document Reference: 3GPP TS 36.212 v10.1.0 section 5.1.3.1
+*********************************************************************/
+void viterbi_decode_siso(LIBLTE_PHY_STRUCT *phy_struct,
+                         int8              *d_bits,
+                         uint32             N_d_bits,
+                         uint32             constraint_len,
+                         uint32             rate,
+                         uint32            *g,
+                         int8              *c_bits,
+                         uint32            *N_c_bits)
+{
+    float  init_min;
+    float  tmp1;
+    float  tmp2;
+    float  max_weight = 0;
+    int32  i;
+    uint32 j;
+    uint32 k;
+    uint32 o;
+    uint32 N_states = 1<<(constraint_len-1);
+    uint32 idx;
+    uint32 tb_state_len;
+    uint8  in_path;
+    uint8  prev_state;
+    uint8  in_bit;
+    uint8  prev_state_0;
+    uint8  prev_state_1;
+    uint8  s_reg[constraint_len];
+    uint8  g_array[3][constraint_len];
+
+    // Convert g to binary
+    for(i=0; i<(int32)rate; i++)
+    {
+        for(j=0; j<constraint_len; j++)
+        {
+            g_array[i][j] = (g[i] >> (constraint_len-j-1)) & 1;
+        }
+    }
+
+    // Precalculate state transition outputs
+    for(i=0; i<(int32)N_states; i++)
+    {
+        // Determine the input path
+        if(i < (N_states/2))
+        {
+            in_path = 0;
+        }else{
+            in_path = 1;
+        }
+
+        // Determine the outputs based on the previous state and input path
+        for(j=0; j<2; j++)
+        {
+            prev_state = ((i << 1) + j) % N_states;
+            for(k=0; k<constraint_len; k++)
+            {
+                s_reg[k] = (prev_state >> (constraint_len-k-1)) & 1;
+            }
+            s_reg[0] = in_path;
+            for(k=0; k<rate; k++)
+            {
+                phy_struct->vd_st_output[i][j][k] = 0;
+                for(o=0; o<constraint_len; o++)
+                {
+                    phy_struct->vd_st_output[i][j][k] += s_reg[o]*g_array[k][o];
+                }
+                phy_struct->vd_st_output[i][j][k] %= 2;
+            }
+        }
+    }
+
+    // Calculate branch and path metrics
+    for(i=0; i<(int32)N_states; i++)
+    {
+        for(j=0; j<(N_d_bits/rate)+10; j++)
+        {
+            phy_struct->vd_path_metric[i][j] = 0;
+        }
+    }
+    for(i=0; i<(int32)(N_d_bits/rate); i++)
+    {
+        for(j=0; j<N_states; j++)
+        {
+            phy_struct->vd_br_metric[j][0] = 0;
+            phy_struct->vd_br_metric[j][1] = 0;
+            phy_struct->vd_p_metric[j][0]  = 0;
+            phy_struct->vd_p_metric[j][1]  = 0;
+            phy_struct->vd_br_weight[j][0] = 0;
+            phy_struct->vd_br_weight[j][1] = 0;
+
+            // Calculate the accumulated branch metrics for each state
+            for(k=0; k<2; k++)
+            {
+                prev_state                    = ((j<<1)+k) % N_states;
+                phy_struct->vd_p_metric[j][k] = phy_struct->vd_path_metric[prev_state][i];
+                for(o=0; o<rate; o++)
+                {
+                    if(d_bits[i*rate + o] >= 0)
+                    {
+                        in_bit = 0;
+                    }else{
+                        in_bit = 1;
+                    }
+                    if(phy_struct->vd_st_output[j][k][o] == in_bit)
+                    {
+                        phy_struct->vd_br_metric[j][k] += -1;
+                    }else{
+                        phy_struct->vd_br_metric[j][k] += 1;
+                    }
+                    phy_struct->vd_br_weight[j][k] += fabs(d_bits[i*rate + o]);
+                }
+            }
+
+            // Keep the smallest branch metric as the path metric, weight the branch metric
+            tmp1 = phy_struct->vd_br_metric[j][0] + phy_struct->vd_p_metric[j][0];
+            tmp2 = phy_struct->vd_br_metric[j][1] + phy_struct->vd_p_metric[j][1];
+            if(tmp1 > tmp2)
+            {
+                phy_struct->vd_path_metric[j][i+1] = phy_struct->vd_p_metric[j][1] + phy_struct->vd_br_weight[j][1]*phy_struct->vd_br_metric[j][1];
+                phy_struct->vd_w_metric[j][i+1]    = phy_struct->vd_br_weight[j][1];
+            }else{
+                phy_struct->vd_path_metric[j][i+1] = phy_struct->vd_p_metric[j][0] + phy_struct->vd_br_weight[j][0]*phy_struct->vd_br_metric[j][0];
+                phy_struct->vd_w_metric[j][i+1]    = phy_struct->vd_br_weight[j][0];
+            }
+        }
+    }
+
+    // Find the minimum metric for the last iteration
+    init_min                     = 1000000;
+    idx                          = 0;
+    phy_struct->vd_tb_state[idx] = 1000000;
+    for(i=0; i<(int32)N_states; i++)
+    {
+        if(phy_struct->vd_path_metric[i][(N_d_bits/rate)] < init_min)
+        {
+            init_min                      = phy_struct->vd_path_metric[i][(N_d_bits/rate)];
+            phy_struct->vd_tb_state[idx]  = i;
+            phy_struct->vd_tb_weight[idx] = phy_struct->vd_w_metric[i][(N_d_bits/rate)];
+            max_weight                    = phy_struct->vd_tb_weight[idx];
+            idx++;
+        }
+    }
+
+    // Traceback to find the minimum path metrics at each iteration
+    for(i=(N_d_bits/rate)-1; i>=0; i--)
+    {
+        prev_state_0 = ((((uint8)phy_struct->vd_tb_state[idx-1])<<1) + 0) % N_states;
+        prev_state_1 = ((((uint8)phy_struct->vd_tb_state[idx-1])<<1) + 1) % N_states;
+
+        // Keep the smallest state
+        if(phy_struct->vd_path_metric[prev_state_0][i] > phy_struct->vd_path_metric[prev_state_1][i])
+        {
+            phy_struct->vd_tb_state[idx]  = prev_state_1;
+            phy_struct->vd_tb_weight[idx] = phy_struct->vd_w_metric[prev_state_1][i];
+        }else{
+            phy_struct->vd_tb_state[idx]  = prev_state_0;
+            phy_struct->vd_tb_weight[idx] = phy_struct->vd_w_metric[prev_state_0][i];
+        }
+        if(phy_struct->vd_tb_weight[idx] > max_weight)
+        {
+            max_weight = phy_struct->vd_tb_weight[idx];
+        }
+        idx++;
+    }
+    tb_state_len = idx;
+
+    // Read through the traceback to determine the input bits
+    idx = 0;
+    for(i=tb_state_len-2; i>=0; i--)
+    {
+        // If transition has resulted in a lower valued state,
+        // the output is 0 and vice-versa
+        if(phy_struct->vd_tb_state[i] < phy_struct->vd_tb_state[i+1])
+        {
+            c_bits[idx++] = 127 * (phy_struct->vd_tb_weight[i]/max_weight);
+        }else if(phy_struct->vd_tb_state[i] > phy_struct->vd_tb_state[i+1]){
+            c_bits[idx++] = -127 * (phy_struct->vd_tb_weight[i]/max_weight);
+        }else{
+            // Check to see if the transition has resulted in the same state
+            // In this case, if state is 0 then output is 0
+            if(phy_struct->vd_tb_state[i] == 0)
+            {
+                c_bits[idx++] = 127 * (phy_struct->vd_tb_weight[i]/max_weight);
+            }else{
+                c_bits[idx++] = -127 * (phy_struct->vd_tb_weight[i]/max_weight);
+            }
+        }
+    }
+    *N_c_bits = idx;
+}
+
+/*********************************************************************
     Name: turbo_encode
 
     Description: Turbo encodes a bit array using the LTE Parallel
@@ -6298,6 +6725,7 @@ void turbo_decode(LIBLTE_PHY_STRUCT *phy_struct,
                   uint32            *N_c_bits)
 {
     float  tmp_s_bit;
+    float  max_value = 0;
     uint32 i;
     uint32 N_bits;
     uint32 N_branch_bits = N_d_bits/3;
@@ -6307,40 +6735,72 @@ void turbo_decode(LIBLTE_PHY_STRUCT *phy_struct,
     // Step 1: Calculate in_act_1 using d0 and d1
     for(i=0; i<N_branch_bits-4; i++)
     {
-        phy_struct->td_vitdec_in[i*2+0] = d_bits[i*3+1];
-        phy_struct->td_vitdec_in[i*2+1] = d_bits[i*3+0];
+        if(fabs(d_bits[i*3+0]) > max_value)
+        {
+            max_value = fabs(d_bits[i*3+0]);
+        }
+        if(fabs(d_bits[i*3+1]) > max_value)
+        {
+            max_value = fabs(d_bits[i*3+1]);
+        }
+        if(fabs(d_bits[i*3+2]) > max_value)
+        {
+            max_value = fabs(d_bits[i*3+2]);
+        }
     }
-    viterbi_decode(phy_struct,
-                   phy_struct->td_vitdec_in,
-                   (N_branch_bits-4)*2,
-                   4,
-                   2,
-                   g_2,
-                   phy_struct->td_in_act_1,
-                   &N_bits);
+    for(i=0; i<N_branch_bits-4; i++)
+    {
+        phy_struct->td_vitdec_in[i*2+0] = (int8)(d_bits[i*3+1]*127/max_value);
+        phy_struct->td_vitdec_in[i*2+1] = (int8)(d_bits[i*3+0]*127/max_value);
+    }
+
+    viterbi_decode_siso(phy_struct,
+                        phy_struct->td_vitdec_in,
+                        (N_branch_bits-4)*2,
+                        4,
+                        2,
+                        g_2,
+                        phy_struct->td_in_act_1,
+                        &N_bits);
 
     // Step 2: Calculate fb_1 using in_act_1
-    phy_struct->td_fb_1[0] = 0;
-    conv_encode(phy_struct,
-                phy_struct->td_in_act_1,
-                N_branch_bits-4,
-                3,
-                1,
-                &g_1,
-                false,
-                &phy_struct->td_fb_1[1],
-                &N_bits);
+    phy_struct->td_fb_1[0] = 127;
+    conv_encode_soft(phy_struct,
+                     phy_struct->td_in_act_1,
+                     N_branch_bits-4,
+                     3,
+                     1,
+                     &g_1,
+                     false,
+                     &phy_struct->td_fb_1[1],
+                     &N_bits);
 
     // Step 3: Calculate in_calc_1 using in_act_1 and fb_1
     for(i=0; i<N_branch_bits-4; i++)
     {
-        phy_struct->td_in_calc_1[i] = 1-2*(float)((phy_struct->td_in_act_1[i] + phy_struct->td_fb_1[i])%2);
+        if(phy_struct->td_in_act_1[i] >= 0 &&
+           phy_struct->td_fb_1[i]     >= 0)
+        {
+            phy_struct->td_in_calc_1[i] = (phy_struct->td_in_act_1[i] +
+                                           phy_struct->td_fb_1[i]) >> 1;
+        }else if(phy_struct->td_in_act_1[i] < 0 &&
+                 phy_struct->td_fb_1[i]     < 0){
+            phy_struct->td_in_calc_1[i] = (-phy_struct->td_in_act_1[i] -
+                                           phy_struct->td_fb_1[i]) >> 1;
+        }else if(phy_struct->td_in_act_1[i] >= 0 &&
+                 phy_struct->td_fb_1[i]     <  0){
+            phy_struct->td_in_calc_1[i] = -((phy_struct->td_in_act_1[i] -
+                                             phy_struct->td_fb_1[i]) >> 1);
+        }else{
+            phy_struct->td_in_calc_1[i] = -((-phy_struct->td_in_act_1[i] +
+                                             phy_struct->td_fb_1[i]) >> 1);
+        }
     }
 
     // Step 4: Calculate in_int using d0
     for(i=0; i<N_branch_bits-4; i++)
     {
-        phy_struct->td_vitdec_in[i] = d_bits[i*3+0];
+        phy_struct->td_vitdec_in[i] = (int8)(d_bits[i*3+0]*127/max_value);
     }
     turbo_internal_interleaver(phy_struct->td_vitdec_in,
                                N_branch_bits-4,
@@ -6354,69 +6814,99 @@ void turbo_decode(LIBLTE_PHY_STRUCT *phy_struct,
     // Step 6: Calculate int_act_1 using in_int and d2
     for(i=0; i<N_branch_bits-4; i++)
     {
-        phy_struct->td_vitdec_in[2*i+0] = d_bits[i*3+2];
+        phy_struct->td_vitdec_in[2*i+0] = (int8)(d_bits[i*3+2]*127/max_value);
         phy_struct->td_vitdec_in[2*i+1] = phy_struct->td_in_int[i];
     }
-    viterbi_decode(phy_struct,
-                   phy_struct->td_vitdec_in,
-                   (N_branch_bits-4)*2,
-                   4,
-                   2,
-                   g_2,
-                   phy_struct->td_int_act_1,
-                   &N_bits);
+    viterbi_decode_siso(phy_struct,
+                        phy_struct->td_vitdec_in,
+                        (N_branch_bits-4)*2,
+                        4,
+                        2,
+                        g_2,
+                        phy_struct->td_int_act_1,
+                        &N_bits);
 
     // Step 7: Calculate int_act_2 using in_int_1 and d2
     for(i=0; i<N_branch_bits-4; i++)
     {
-        phy_struct->td_vitdec_in[2*i+0] = d_bits[i*3+2];
+        phy_struct->td_vitdec_in[2*i+0] = (int8)(d_bits[i*3+2]*127/max_value);
         phy_struct->td_vitdec_in[2*i+1] = phy_struct->td_in_int_1[i];
     }
-    viterbi_decode(phy_struct,
-                   phy_struct->td_vitdec_in,
-                   (N_branch_bits-4)*2,
-                   4,
-                   2,
-                   g_2,
-                   phy_struct->td_int_act_2,
-                   &N_bits);
+    viterbi_decode_siso(phy_struct,
+                        phy_struct->td_vitdec_in,
+                        (N_branch_bits-4)*2,
+                        4,
+                        2,
+                        g_2,
+                        phy_struct->td_int_act_2,
+                        &N_bits);
 
     // Step 8: Calculate fb_int_1 using int_act_1
-    phy_struct->td_fb_int_1[0] = 0;
-    conv_encode(phy_struct,
-                phy_struct->td_int_act_1,
-                N_branch_bits-4,
-                3,
-                1,
-                &g_1,
-                false,
-                &phy_struct->td_fb_int_1[1],
-                &N_bits);
+    phy_struct->td_fb_int_1[0] = 127;
+    conv_encode_soft(phy_struct,
+                     phy_struct->td_int_act_1,
+                     N_branch_bits-4,
+                     3,
+                     1,
+                     &g_1,
+                     false,
+                     &phy_struct->td_fb_int_1[1],
+                     &N_bits);
 
     // Step 9: Calculate fb_int_2 using int_act_2
-    phy_struct->td_fb_int_2[0] = 0;
-    conv_encode(phy_struct,
-                phy_struct->td_int_act_2,
-                N_branch_bits-4,
-                3,
-                1,
-                &g_1,
-                false,
-                &phy_struct->td_fb_int_2[1],
-                &N_bits);
+    phy_struct->td_fb_int_2[0] = 127;
+    conv_encode_soft(phy_struct,
+                     phy_struct->td_int_act_2,
+                     N_branch_bits-4,
+                     3,
+                     1,
+                     &g_1,
+                     false,
+                     &phy_struct->td_fb_int_2[1],
+                     &N_bits);
 
     // Step 10: Calculate int_calc_1 using int_act_1 and fb_int_1
     for(i=0; i<N_branch_bits-4; i++)
     {
-        phy_struct->td_int_calc_1[i] = 1-2*(float)((phy_struct->td_int_act_1[i] +
-                                                    phy_struct->td_fb_int_1[i]) % 2);
+        if(phy_struct->td_int_act_1[i] >= 0 &&
+           phy_struct->td_fb_int_1[i]  >= 0)
+        {
+            phy_struct->td_int_calc_1[i] = (phy_struct->td_int_act_1[i] +
+                                            phy_struct->td_fb_int_1[i]) >> 1;
+        }else if(phy_struct->td_int_act_1[i] < 0 &&
+                 phy_struct->td_fb_int_1[i]  < 0){
+            phy_struct->td_int_calc_1[i] = (-phy_struct->td_int_act_1[i] -
+                                            phy_struct->td_fb_int_1[i]) >> 1;
+        }else if(phy_struct->td_int_act_1[i] >= 0 &&
+                 phy_struct->td_fb_int_1[i]  <  0){
+            phy_struct->td_int_calc_1[i] = -((phy_struct->td_in_act_1[i] -
+                                              phy_struct->td_fb_int_1[i]) >> 1);
+        }else{
+            phy_struct->td_int_calc_1[i] = -((-phy_struct->td_in_act_1[i] +
+                                              phy_struct->td_fb_int_1[i]) >> 1);
+        }
     }
 
     // Step 11: Calculate int_calc_2 using int_act_2 and fb_int_2
     for(i=0; i<N_branch_bits-4; i++)
     {
-        phy_struct->td_int_calc_2[i] = 1-2*(float)((phy_struct->td_int_act_2[i] +
-                                                    phy_struct->td_fb_int_2[i]) % 2);
+        if(phy_struct->td_int_act_2[i] >= 0 &&
+           phy_struct->td_fb_int_2[i]  >= 0)
+        {
+            phy_struct->td_int_calc_2[i] = (phy_struct->td_int_act_2[i] +
+                                            phy_struct->td_fb_int_2[i]) >> 1;
+        }else if(phy_struct->td_int_act_2[i] < 0 &&
+                 phy_struct->td_fb_int_2[i]  < 0){
+            phy_struct->td_int_calc_2[i] = (-phy_struct->td_int_act_2[i] -
+                                            phy_struct->td_fb_int_2[i]) >> 1;
+        }else if(phy_struct->td_int_act_2[i] >= 0 &&
+                 phy_struct->td_fb_int_2[i]  <  0){
+            phy_struct->td_int_calc_2[i] = -((phy_struct->td_int_act_2[i] -
+                                              phy_struct->td_fb_int_2[i]) >> 1);
+        }else{
+            phy_struct->td_int_calc_2[i] = -((-phy_struct->td_int_act_2[i] -
+                                              phy_struct->td_fb_int_2[i]) >> 1);
+        }
     }
 
     // Step 12: Calculate in_calc_2 using int_calc_1
@@ -6432,16 +6922,9 @@ void turbo_decode(LIBLTE_PHY_STRUCT *phy_struct,
     // Step 14: Soft combine d0, in_calc_1, in_calc_2, and in_calc_3 to get output
     for(i=0; i<N_branch_bits-4; i++)
     {
-        // FIXME: Need soft values for td_in_calc_1, td_in_calc_2, and td_in_calc_3
-        if(d_bits[i*3+0] >= 0)
-        {
-            tmp_s_bit = 1;
-        }else{
-            tmp_s_bit = -1;
-        }
-        tmp_s_bit = (tmp_s_bit                   +
-                     phy_struct->td_in_calc_1[i] +
-                     phy_struct->td_in_calc_2[i] +
+        tmp_s_bit = ((int8)(d_bits[i*3+0]*127/max_value) +
+                     phy_struct->td_in_calc_1[i]         +
+                     phy_struct->td_in_calc_2[i]         +
                      phy_struct->td_in_calc_3[i]);
         if(tmp_s_bit >= 0)
         {
@@ -6565,6 +7048,32 @@ void turbo_internal_interleaver(uint8  *in_bits,
         out_bits[i] = in_bits[idx];
     }
 }
+void turbo_internal_interleaver(int8   *in_bits,
+                                uint32  N_in_bits,
+                                int8   *out_bits)
+{
+    uint32 i;
+    uint32 f1 = 0;
+    uint32 f2 = 0;
+    uint32 idx;
+
+    // Determine f1 and f2
+    for(i=0; i<TURBO_INT_K_TABLE_SIZE; i++)
+    {
+        if(N_in_bits == TURBO_INT_K_TABLE[i])
+        {
+            f1 = TURBO_INT_F1_TABLE[i];
+            f2 = TURBO_INT_F2_TABLE[i];
+            break;
+        }
+    }
+
+    for(i=0; i<N_in_bits; i++)
+    {
+        idx         = (f1*i + f2*i*i) % N_in_bits;
+        out_bits[i] = in_bits[idx];
+    }
+}
 void turbo_internal_interleaver(float  *in_bits,
                                 uint32  N_in_bits,
                                 float  *out_bits)
@@ -6603,6 +7112,32 @@ void turbo_internal_interleaver(float  *in_bits,
 void turbo_internal_deinterleaver(float  *in_bits,
                                   uint32  N_in_bits,
                                   float  *out_bits)
+{
+    uint32 i;
+    uint32 f1 = 0;
+    uint32 f2 = 0;
+    uint32 idx;
+
+    // Determine f1 and f2
+    for(i=0; i<TURBO_INT_K_TABLE_SIZE; i++)
+    {
+        if(N_in_bits == TURBO_INT_K_TABLE[i])
+        {
+            f1 = TURBO_INT_F1_TABLE[i];
+            f2 = TURBO_INT_F2_TABLE[i];
+            break;
+        }
+    }
+
+    for(i=0; i<N_in_bits; i++)
+    {
+        idx           = (f1*i + f2*i*i) % N_in_bits;
+        out_bits[idx] = in_bits[i];
+    }
+}
+void turbo_internal_deinterleaver(int8   *in_bits,
+                                  uint32  N_in_bits,
+                                  int8   *out_bits)
 {
     uint32 i;
     uint32 f1 = 0;
@@ -7902,28 +8437,26 @@ void dci_channel_encode(LIBLTE_PHY_STRUCT *phy_struct,
 LIBLTE_ERROR_ENUM dci_channel_decode(LIBLTE_PHY_STRUCT *phy_struct,
                                      float             *in_bits,
                                      uint32             N_in_bits,
-                                     uint16             rnti,
+                                     uint16             rnti_start,
+                                     uint16             rnti_range,
                                      uint8              ue_ant,
                                      uint8             *out_bits,
-                                     uint32             N_out_bits)
+                                     uint32             N_out_bits,
+                                     uint16            *rnti_found)
 {
     LIBLTE_ERROR_ENUM  err = LIBLTE_ERROR_INVALID_CRC;
     uint32             i;
+    uint32             j;
     uint32             N_d_bits;
     uint32             N_c_bits;
     uint32             ber;
     uint32             g[3] = {0133, 0171, 0165}; // Numbers are in octal
+    uint16             rnti;
     uint8              x_rnti_bits[16];
     uint8              x_as_bits[16];
     uint8             *a_bits;
     uint8             *p_bits;
     uint8              calc_p_bits[16];
-
-    // Convert RNTI to bit array
-    for(i=0; i<16; i++)
-    {
-        x_rnti_bits[i] = (rnti >> (15-i)) & 1;
-    }
 
     // Construct UE antenna mask
     memset(x_as_bits, 0, sizeof(uint8)*16);
@@ -7957,19 +8490,34 @@ LIBLTE_ERROR_ENUM dci_channel_decode(LIBLTE_PHY_STRUCT *phy_struct,
     // Calculate p_bits
     calc_crc(a_bits, N_out_bits, CRC16, calc_p_bits, 16);
 
-    // Check CRC
-    ber = 0;
-    for(i=0; i<16; i++)
+    for(j=0; j<rnti_range; j++)
     {
-        ber += p_bits[i] ^ (calc_p_bits[i] ^ x_rnti_bits[i] ^ x_as_bits[i]);
-    }
-    if(ber == 0)
-    {
-        for(i=0; i<N_out_bits; i++)
+        // Convert RNTI to bit array
+        for(i=0; i<16; i++)
         {
-            out_bits[i] = a_bits[i];
+            rnti           = rnti_start + j;
+            x_rnti_bits[i] = (rnti >> (15-i)) & 1;
         }
-        err = LIBLTE_SUCCESS;
+
+        // Check CRC
+        ber = 0;
+        for(i=0; i<16; i++)
+        {
+            ber += p_bits[i] ^ (calc_p_bits[i] ^ x_rnti_bits[i] ^ x_as_bits[i]);
+        }
+        if(ber == 0)
+        {
+            for(i=0; i<N_out_bits; i++)
+            {
+                out_bits[i] = a_bits[i];
+            }
+            err = LIBLTE_SUCCESS;
+        }
+        if(LIBLTE_SUCCESS == err)
+        {
+            *rnti_found = rnti;
+            break;
+        }
     }
 
     return(err);
@@ -8123,8 +8671,10 @@ void dci_1a_unpack(uint8                           *in_bits,
         return;
     }
 
-    if(LIBLTE_PHY_SI_RNTI == rnti ||
-       LIBLTE_PHY_P_RNTI  == rnti)
+    if(LIBLTE_PHY_SI_RNTI        == rnti ||
+       LIBLTE_PHY_P_RNTI         == rnti ||
+       (LIBLTE_PHY_RA_RNTI_START <= rnti &&
+        LIBLTE_PHY_RA_RNTI_END   >= rnti))
     {
         // Determine if RIV uses local or distributed VRBs
         loc_or_dist = phy_bits_2_value(&dci, 1);
@@ -8304,18 +8854,18 @@ LIBLTE_ERROR_ENUM cfi_channel_decode(LIBLTE_PHY_STRUCT *phy_struct,
 
     Document Reference: N/A
 *********************************************************************/
-float get_soft_decision(float p1_re,
-                        float p1_im,
-                        float p2_re,
-                        float p2_im,
+float get_soft_decision(float rx_re,
+                        float rx_im,
+                        float exp_re,
+                        float exp_im,
                         float max_dist)
 {
     float diff_re;
     float diff_im;
     float dist;
 
-    diff_re = p1_re - p2_re;
-    diff_im = p1_im - p2_im;
+    diff_re = rx_re - exp_re;
+    diff_im = rx_im - exp_im;
     dist    = sqrt(diff_re*diff_re + diff_im*diff_im);
 
     if(dist >= max_dist)

@@ -30,6 +30,7 @@
     06/28/2012    Ben Wojtowicz    Fixed a bug that was causing I and Q to swap
     08/19/2012    Ben Wojtowicz    Added states and state memory and added
                                    decoding of all SIBs.
+    10/06/2012    Ben Wojtowicz    Updated to use the latest LTE library.
 
 *******************************************************************************/
 
@@ -365,7 +366,8 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                                      &pdcch) &&
                    LIBLTE_SUCCESS == liblte_phy_pdsch_channel_decode(phy_struct,
                                                                      &subframe,
-                                                                     &pdcch,
+                                                                     &pdcch.alloc[0],
+                                                                     pdcch.N_symbs,
                                                                      N_id_cell,
                                                                      N_ant,
                                                                      LIBLTE_PHY_N_SC_RB_NORMAL_CP,
@@ -416,7 +418,8 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                                      &pdcch) &&
                    LIBLTE_SUCCESS == liblte_phy_pdsch_channel_decode(phy_struct,
                                                                      &subframe,
-                                                                     &pdcch,
+                                                                     &pdcch.alloc[0],
+                                                                     pdcch.N_symbs,
                                                                      N_id_cell,
                                                                      N_ant,
                                                                      LIBLTE_PHY_N_SC_RB_NORMAL_CP,

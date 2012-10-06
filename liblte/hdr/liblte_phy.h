@@ -31,6 +31,9 @@
                                    a bug related to PDCCH sizes.
     06/11/2012    Ben Wojtowicz    Enabled fftw input, output, and plan in
                                    phy_struct.
+    10/06/2012    Ben Wojtowicz    Added random access and paging PDCCH
+                                   decoding, soft turbo decoding, and PDSCH
+                                   decoding per allocation.
 
 *******************************************************************************/
 
@@ -63,8 +66,10 @@
 #define LIBLTE_PHY_N_RB_DL_20MHZ       100
 #define LIBLTE_PHY_N_RB_DL_MAX         110
 #define LIBLTE_PHY_N_SC_RB_NORMAL_CP   12
-#define LIBLTE_PHY_SI_RNTI             0xFFFF
+#define LIBLTE_PHY_RA_RNTI_START       0x0001
+#define LIBLTE_PHY_RA_RNTI_END         0x003C
 #define LIBLTE_PHY_P_RNTI              0xFFFE
+#define LIBLTE_PHY_SI_RNTI             0xFFFF
 #define LIBLTE_PHY_N_ANT_MAX           4
 
 /*******************************************************************************
@@ -246,8 +251,10 @@ typedef struct{
     float vd_path_metric[128][2048];
     float vd_br_metric[128][2];
     float vd_p_metric[128][2];
-    float vd_w_metric[128][2];
+    float vd_br_weight[128][2];
+    float vd_w_metric[128][2048];
     float vd_tb_state[2048];
+    float vd_tb_weight[2048];
     uint8 vd_st_output[128][2][3];
 
     // Turbo encode
@@ -258,20 +265,20 @@ typedef struct{
     uint8 te_x_prime[6144];
 
     // Turbo decode
-    float td_vitdec_in[18432];
-    float td_in_int[6144];
-    float td_in_calc_1[6144];
-    float td_in_calc_2[6144];
-    float td_in_calc_3[6144];
-    float td_in_int_1[6144];
-    float td_int_calc_1[6144];
-    float td_int_calc_2[6144];
-    uint8 td_in_act_1[6144];
-    uint8 td_fb_1[6144];
-    uint8 td_int_act_1[6144];
-    uint8 td_int_act_2[6144];
-    uint8 td_fb_int_1[6144];
-    uint8 td_fb_int_2[6144];
+    int8 td_vitdec_in[18432];
+    int8 td_in_int[6144];
+    int8 td_in_calc_1[6144];
+    int8 td_in_calc_2[6144];
+    int8 td_in_calc_3[6144];
+    int8 td_in_int_1[6144];
+    int8 td_int_calc_1[6144];
+    int8 td_int_calc_2[6144];
+    int8 td_in_act_1[6144];
+    int8 td_fb_1[6144];
+    int8 td_int_act_1[6144];
+    int8 td_int_act_2[6144];
+    int8 td_fb_int_1[6144];
+    int8 td_fb_int_2[6144];
 
     // Rate Match Turbo
     uint8 rmt_tmp[6144];
@@ -394,15 +401,16 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *ph
 // Enums
 // Structs
 // Functions
-LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_decode(LIBLTE_PHY_STRUCT          *phy_struct,
-                                                  LIBLTE_PHY_SUBFRAME_STRUCT *subframe,
-                                                  LIBLTE_PHY_PDCCH_STRUCT    *pdcch,
-                                                  uint32                      N_id_cell,
-                                                  uint8                       N_ant,
-                                                  uint32                      N_sc_rb,
-                                                  uint32                      N_rb_dl,
-                                                  uint8                      *out_bits,
-                                                  uint32                     *N_out_bits);
+LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_decode(LIBLTE_PHY_STRUCT            *phy_struct,
+                                                  LIBLTE_PHY_SUBFRAME_STRUCT   *subframe,
+                                                  LIBLTE_PHY_ALLOCATION_STRUCT *alloc,
+                                                  uint32                        N_pdcch_symbs,
+                                                  uint32                        N_id_cell,
+                                                  uint8                         N_ant,
+                                                  uint32                        N_sc_rb,
+                                                  uint32                        N_rb_dl,
+                                                  uint8                        *out_bits,
+                                                  uint32                       *N_out_bits);
 
 /*********************************************************************
     Name: liblte_phy_bch_channel_encode
