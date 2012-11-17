@@ -31,6 +31,7 @@
     08/19/2012    Ben Wojtowicz    Added functionality to support SIB2, SIB3,
                                    SIB4, and SIB8 packing and unpacking
     10/06/2012    Ben Wojtowicz    Added more decoding/encoding.
+    11/10/2012    Ben Wojtowicz    Filled in the N_bits for SI messages
 
 *******************************************************************************/
 
@@ -5560,6 +5561,9 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_msg(LIBLTE_RRC_SYS_INFO_MSG_STRUCT *s
                 break;
             }
         }
+
+        // Fill in the number of bits used
+        msg->N_bits = msg_ptr - msg->msg;
     }
 
     return(err);

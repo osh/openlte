@@ -27,6 +27,8 @@
     03/23/2012    Ben Wojtowicz    Created file.
     08/19/2012    Ben Wojtowicz    Added states and state memory and added
                                    decoding of all SIBs.
+    11/10/2012    Ben Wojtowicz    Using the latest libraries to decode more
+                                   than 1 eNB
 
 *******************************************************************************/
 #ifndef __LTE_FDD_DL_FS_SAMP_BUF_H__
@@ -89,6 +91,7 @@ private:
 
     // LTE library
     LIBLTE_PHY_STRUCT                *phy_struct;
+    LIBLTE_PHY_COARSE_TIMING_STRUCT   timing_struct;
     LIBLTE_RRC_MSG_STRUCT             rrc_msg;
     LIBLTE_RRC_MIB_STRUCT             mib;
     LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT  bcch_dlsch_msg;
@@ -111,6 +114,7 @@ private:
     uint32                            N_id_cell;
     uint32                            N_id_1;
     uint32                            N_id_2;
+    uint32                            corr_peak_idx;
     uint8                             N_ant;
     uint8                             prev_si_value_tag;
     bool                              prev_si_value_tag_valid;
@@ -118,10 +122,14 @@ private:
     bool                              sib1_printed;
     bool                              sib2_printed;
     bool                              sib3_printed;
+    bool                              sib3_expected;
     bool                              sib4_printed;
+    bool                              sib4_expected;
     bool                              sib8_printed;
+    bool                              sib8_expected;
 
     // Helpers
+    void init(void);
     void copy_input_to_samp_buf(const int8 *in, int32 ninput_items);
     void freq_shift(uint32 start_idx, uint32 num_samps, float freq_offset);
     void print_mib(LIBLTE_RRC_MIB_STRUCT *mib);

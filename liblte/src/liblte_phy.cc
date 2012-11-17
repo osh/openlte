@@ -47,6 +47,10 @@
     10/06/2012    Ben Wojtowicz    Added random access and paging PDCCH
                                    decoding, soft turbo decoding, and PDSCH
                                    decoding per allocation.
+    11/10/2012    Ben Wojtowicz    Added TBS, MCS, and N_prb calculations for
+                                   SI PDSCH messages, added more sample defines,
+                                   and re-factored the coarse timing and freq
+                                   search to find more than 1 eNB.
 
 *******************************************************************************/
 
@@ -62,8 +66,6 @@
 *******************************************************************************/
 
 #define N_SYMB_DL_NORMAL_CP 7
-#define N_CP_L_ELSE         144
-#define N_CP_L_0            160
 
 /*******************************************************************************
                               TYPEDEFS
@@ -1349,14 +1351,14 @@ LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT **phy_struct)
         *phy_struct = (LIBLTE_PHY_STRUCT *)malloc(sizeof(LIBLTE_PHY_STRUCT));
 
         /* Samples to symbols */
-        (*phy_struct)->s2s_in              = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*2048*20);
-        (*phy_struct)->s2s_out             = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*2048*20);
-        (*phy_struct)->symbs_to_samps_plan = fftw_plan_dft_1d(2048,
+        (*phy_struct)->s2s_in              = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*LIBLTE_PHY_N_SAMPS_PER_SYMB*20);
+        (*phy_struct)->s2s_out             = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*LIBLTE_PHY_N_SAMPS_PER_SYMB*20);
+        (*phy_struct)->symbs_to_samps_plan = fftw_plan_dft_1d(LIBLTE_PHY_N_SAMPS_PER_SYMB,
                                                               (*phy_struct)->s2s_in,
                                                               (*phy_struct)->s2s_out,
                                                               FFTW_BACKWARD,
                                                               FFTW_ESTIMATE);
-        (*phy_struct)->samps_to_symbs_plan = fftw_plan_dft_1d(2048,
+        (*phy_struct)->samps_to_symbs_plan = fftw_plan_dft_1d(LIBLTE_PHY_N_SAMPS_PER_SYMB,
                                                               (*phy_struct)->s2s_in,
                                                               (*phy_struct)->s2s_out,
                                                               FFTW_FORWARD,
@@ -1426,6 +1428,8 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *ph
     uint32            M_symb;
     uint32            M_layer_symb;
     uint32            M_ap_symb;
+    uint32            first_sc;
+    uint32            last_sc;
 
     if(phy_struct != NULL &&
        pdcch      != NULL &&
@@ -1434,6 +1438,28 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *ph
        N_id_cell  <= 503  &&
        subframe   != NULL)
     {
+        // Determine first and last PBCH, PSS, and SSS subcarriers
+        if(N_rb_dl == 6)
+        {
+            first_sc = 0;
+            last_sc  = (6*N_sc_rb)-1;
+        }else if(N_rb_dl == 15){
+            first_sc = (4*N_sc_rb)+6;
+            last_sc  = (11*N_sc_rb)-7;
+        }else if(N_rb_dl == 25){
+            first_sc = (9*N_sc_rb)+6;
+            last_sc  = (16*N_sc_rb)-7;
+        }else if(N_rb_dl == 50){
+            first_sc = 22*N_sc_rb;
+            last_sc  = (28*N_sc_rb)-1;
+        }else if(N_rb_dl == 75){
+            first_sc = (34*N_sc_rb)+6;
+            last_sc  = (41*N_sc_rb)-7;
+        }else{ // N_rb_dl == 100
+            first_sc = 47*N_sc_rb;
+            last_sc  = (53*N_sc_rb)-1;
+        }
+
         for(alloc_idx=0; alloc_idx<pdcch->N_alloc; alloc_idx++)
         {
             // Determine the number of bits available for transmission
@@ -1494,7 +1520,6 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *ph
                       &M_ap_symb);
 
             // Map the symbols to resource elements 3GPP TS 36.211 v10.1.0 section 6.3.5
-            // FIXME: Handle PBCH/PSS/SSS
             for(p=0; p<N_ant; p++)
             {
                 idx = 0;
@@ -1527,6 +1552,24 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *ph
                                              (L % 7)         == 1 &&
                                              (N_id_cell % 3) == (j % 3)){
                                         // Skip CRS
+                                    }else if(subframe->num == 0        &&
+                                             (i*N_sc_rb+j) >= first_sc &&
+                                             (i*N_sc_rb+j) <= last_sc  &&
+                                             L             >= 7        &&
+                                             L             <= 10){
+                                        // Skip PBCH
+                                    }else if((subframe->num == 0        ||
+                                              subframe->num == 5)       &&
+                                             (i*N_sc_rb+j)  >= first_sc &&
+                                             (i*N_sc_rb+j)  <= last_sc  &&
+                                             L              == 6){
+                                        // Skip PSS
+                                    }else if((subframe->num == 0        ||
+                                              subframe->num == 5)       &&
+                                             (i*N_sc_rb+j)  >= first_sc &&
+                                             (i*N_sc_rb+j)  <= last_sc  &&
+                                             L              == 5){
+                                        // Skip SSS
                                     }else{
                                         subframe->tx_symb_re[p][L][i*N_sc_rb+j] = phy_struct->pdsch_y_re[p][idx];
                                         subframe->tx_symb_im[p][L][i*N_sc_rb+j] = phy_struct->pdsch_y_im[p][idx];
@@ -3370,7 +3413,7 @@ LIBLTE_ERROR_ENUM liblte_phy_find_pss_and_fine_timing(LIBLTE_PHY_STRUCT *phy_str
                 samples_to_symbols(phy_struct,
                                    i_samps,
                                    q_samps,
-                                   symb_starts[j]+(15360*i),
+                                   symb_starts[j]+(LIBLTE_PHY_N_SAMPS_PER_SLOT*i),
                                    0,
                                    LIBLTE_PHY_FFT_PAD_SIZE_20MHZ,
                                    0,
@@ -3409,7 +3452,7 @@ LIBLTE_ERROR_ENUM liblte_phy_find_pss_and_fine_timing(LIBLTE_PHY_STRUCT *phy_str
             samples_to_symbols(phy_struct,
                                i_samps,
                                q_samps,
-                               symb_starts[N_symb]+i+(15360*N_s),
+                               symb_starts[N_symb]+i+(LIBLTE_PHY_N_SAMPS_PER_SLOT*N_s),
                                0,
                                LIBLTE_PHY_FFT_PAD_SIZE_20MHZ,
                                0,
@@ -3435,18 +3478,18 @@ LIBLTE_ERROR_ENUM liblte_phy_find_pss_and_fine_timing(LIBLTE_PHY_STRUCT *phy_str
         *pss_thresh = corr_max;
 
         // Construct fine symbol start locations
-        pss_timing_idx = symb_starts[N_symb]+(15360*N_s)+timing;
-        while((pss_timing_idx + 2048 + 144) < 15360)
+        pss_timing_idx = symb_starts[N_symb]+(LIBLTE_PHY_N_SAMPS_PER_SLOT*N_s)+timing;
+        while((pss_timing_idx + LIBLTE_PHY_N_SAMPS_PER_SYMB + LIBLTE_PHY_N_SAMPS_CP_L_ELSE) < LIBLTE_PHY_N_SAMPS_PER_SLOT)
         {
-            pss_timing_idx += 307200;
+            pss_timing_idx += LIBLTE_PHY_N_SAMPS_PER_FRAME;
         }
-        symb_starts[0] = pss_timing_idx + (2048+144)*1 - 15360;
-        symb_starts[1] = pss_timing_idx + (2048+144)*1 + 2048+160 - 15360;
-        symb_starts[2] = pss_timing_idx + (2048+144)*2 + 2048+160 - 15360;
-        symb_starts[3] = pss_timing_idx + (2048+144)*3 + 2048+160 - 15360;
-        symb_starts[4] = pss_timing_idx + (2048+144)*4 + 2048+160 - 15360;
-        symb_starts[5] = pss_timing_idx + (2048+144)*5 + 2048+160 - 15360;
-        symb_starts[6] = pss_timing_idx + (2048+144)*6 + 2048+160 - 15360;
+        symb_starts[0] = pss_timing_idx + (LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_ELSE)*1 - LIBLTE_PHY_N_SAMPS_PER_SLOT;
+        symb_starts[1] = pss_timing_idx + (LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_ELSE)*1 + LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_0 - LIBLTE_PHY_N_SAMPS_PER_SLOT;
+        symb_starts[2] = pss_timing_idx + (LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_ELSE)*2 + LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_0 - LIBLTE_PHY_N_SAMPS_PER_SLOT;
+        symb_starts[3] = pss_timing_idx + (LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_ELSE)*3 + LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_0 - LIBLTE_PHY_N_SAMPS_PER_SLOT;
+        symb_starts[4] = pss_timing_idx + (LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_ELSE)*4 + LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_0 - LIBLTE_PHY_N_SAMPS_PER_SLOT;
+        symb_starts[5] = pss_timing_idx + (LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_ELSE)*5 + LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_0 - LIBLTE_PHY_N_SAMPS_PER_SLOT;
+        symb_starts[6] = pss_timing_idx + (LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_ELSE)*6 + LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_0 - LIBLTE_PHY_N_SAMPS_PER_SLOT;
 
         err = LIBLTE_SUCCESS;
     }
@@ -3596,12 +3639,12 @@ LIBLTE_ERROR_ENUM liblte_phy_find_sss(LIBLTE_PHY_STRUCT *phy_struct,
             abs_corr = sqrt(corr_re*corr_re + corr_im*corr_im);
             if(abs_corr > sss_thresh)
             {
-                while(symb_starts[5] < ((2048 + N_CP_L_ELSE)*4 + 2048 + N_CP_L_0))
+                while(symb_starts[5] < ((LIBLTE_PHY_N_SAMPS_PER_SYMB + LIBLTE_PHY_N_SAMPS_CP_L_ELSE)*4 + LIBLTE_PHY_N_SAMPS_PER_SYMB + LIBLTE_PHY_N_SAMPS_CP_L_0))
                 {
-                    symb_starts[5] += 307200;
+                    symb_starts[5] += LIBLTE_PHY_N_SAMPS_PER_FRAME;
                 }
                 *N_id_1          = i;
-                *frame_start_idx = symb_starts[5] - ((2048 + N_CP_L_ELSE)*4 + 2048 + N_CP_L_0);
+                *frame_start_idx = symb_starts[5] - ((LIBLTE_PHY_N_SAMPS_PER_SYMB + LIBLTE_PHY_N_SAMPS_CP_L_ELSE)*4 + LIBLTE_PHY_N_SAMPS_PER_SYMB + LIBLTE_PHY_N_SAMPS_CP_L_0);
                 err              = LIBLTE_SUCCESS;
                 break;
             }
@@ -3618,12 +3661,12 @@ LIBLTE_ERROR_ENUM liblte_phy_find_sss(LIBLTE_PHY_STRUCT *phy_struct,
             abs_corr = sqrt(corr_re*corr_re + corr_im*corr_im);
             if(abs_corr > sss_thresh)
             {
-                while(symb_starts[5] < (((2048 + N_CP_L_ELSE)*4 + 2048 + N_CP_L_0) + 15360*10))
+                while(symb_starts[5] < (((LIBLTE_PHY_N_SAMPS_PER_SYMB + LIBLTE_PHY_N_SAMPS_CP_L_ELSE)*4 + LIBLTE_PHY_N_SAMPS_PER_SYMB + LIBLTE_PHY_N_SAMPS_CP_L_0) + LIBLTE_PHY_N_SAMPS_PER_SLOT*10))
                 {
-                    symb_starts[5] += 307200;
+                    symb_starts[5] += LIBLTE_PHY_N_SAMPS_PER_FRAME;
                 }
                 *N_id_1          = i;
-                *frame_start_idx = symb_starts[5] - ((2048 + N_CP_L_ELSE)*4 + 2048 + N_CP_L_0) - 15360*10;
+                *frame_start_idx = symb_starts[5] - ((LIBLTE_PHY_N_SAMPS_PER_SYMB + LIBLTE_PHY_N_SAMPS_CP_L_ELSE)*4 + LIBLTE_PHY_N_SAMPS_PER_SYMB + LIBLTE_PHY_N_SAMPS_CP_L_0) - LIBLTE_PHY_N_SAMPS_PER_SLOT*10;
                 err              = LIBLTE_SUCCESS;
                 break;
             }
@@ -3642,128 +3685,147 @@ LIBLTE_ERROR_ENUM liblte_phy_find_sss(LIBLTE_PHY_STRUCT *phy_struct,
 
     Document Reference: 3GPP TS 36.211 v10.1.0
 *********************************************************************/
-LIBLTE_ERROR_ENUM liblte_phy_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUCT *phy_struct,
-                                                                float             *i_samps,
-                                                                float             *q_samps,
-                                                                uint32            *symb_starts,
-                                                                float             *freq_offset)
+LIBLTE_ERROR_ENUM liblte_phy_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUCT               *phy_struct,
+                                                                float                           *i_samps,
+                                                                float                           *q_samps,
+                                                                LIBLTE_PHY_COARSE_TIMING_STRUCT *timing_struct)
 {
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
     float             corr_re;
     float             corr_im;
+    float             corr_mean = 0;
     float             abs_corr_max;
-    int32             abs_corr_idx[2];
+    float             freq_err[LIBLTE_PHY_N_MAX_ROUGH_CORR_SEARCH_PEAKS];
+    int32             abs_corr_idx[LIBLTE_PHY_N_MAX_ROUGH_CORR_SEARCH_PEAKS];
+    int32             tmp_idx;
     uint32            slot;
     uint32            i;
     uint32            j;
     uint32            k;
     uint32            idx;
 
-    if(phy_struct  != NULL &&
-       i_samps     != NULL &&
-       q_samps     != NULL &&
-       symb_starts != NULL &&
-       freq_offset != NULL)
+    if(phy_struct    != NULL &&
+       i_samps       != NULL &&
+       q_samps       != NULL &&
+       timing_struct != NULL)
     {
-        // Rough correlation
-        for(i=0; i<15360; i++)
+        // Timing correlation
+        for(i=0; i<LIBLTE_PHY_N_SAMPS_PER_SLOT; i++)
         {
             phy_struct->timing_abs_corr[i] = 0;
         }
-        for(slot=0; slot<10; slot++)
+        for(slot=0; slot<20; slot++)
         {
-            for(i=0; i<15360; i+=40)
+            for(i=0; i<LIBLTE_PHY_N_SAMPS_PER_SLOT; i++)
             {
                 corr_re = 0;
                 corr_im = 0;
-                for(j=0; j<144; j++)
+                for(j=0; j<LIBLTE_PHY_N_SAMPS_CP_L_ELSE; j++)
                 {
-                    idx      = (slot*15360) + i + j;
-                    corr_re += i_samps[idx]*i_samps[idx+2048] + q_samps[idx]*q_samps[idx+2048];
-                    corr_im += i_samps[idx]*q_samps[idx+2048] - q_samps[idx]*i_samps[idx+2048];
+                    idx      = (slot*LIBLTE_PHY_N_SAMPS_PER_SLOT) + i + j;
+                    corr_re += i_samps[idx]*i_samps[idx+LIBLTE_PHY_N_SAMPS_PER_SYMB] + q_samps[idx]*q_samps[idx+LIBLTE_PHY_N_SAMPS_PER_SYMB];
+                    corr_im += i_samps[idx]*q_samps[idx+LIBLTE_PHY_N_SAMPS_PER_SYMB] - q_samps[idx]*i_samps[idx+LIBLTE_PHY_N_SAMPS_PER_SYMB];
                 }
                 phy_struct->timing_abs_corr[i] += corr_re*corr_re + corr_im*corr_im;
             }
         }
 
-        // Find first and second max
-        for(i=0; i<2; i++)
+        // Find mean of correlation and gate correlation results
+        for(i=0; i<LIBLTE_PHY_N_SAMPS_PER_SLOT; i++)
         {
-            abs_corr_idx[i] = 0;
-            abs_corr_max    = 0;
-            for(j=0; j<7680; j++)
+            corr_mean                                                  += phy_struct->timing_abs_corr[i];
+            phy_struct->timing_abs_corr[i+LIBLTE_PHY_N_SAMPS_PER_SLOT]  = phy_struct->timing_abs_corr[i];
+        }
+        corr_mean /= LIBLTE_PHY_N_SAMPS_PER_SLOT;
+        for(i=0; i<LIBLTE_PHY_N_SAMPS_PER_SLOT; i++)
+        {
+            if(phy_struct->timing_abs_corr[i] <= corr_mean)
             {
-                if(phy_struct->timing_abs_corr[(i*7680)+j] > abs_corr_max)
-                {
-                    abs_corr_max    = phy_struct->timing_abs_corr[(i*7680)+j];
-                    abs_corr_idx[i] = (i*7680)+j;
-                }
+                phy_struct->timing_abs_corr[i]                             = 0;
+                phy_struct->timing_abs_corr[i+LIBLTE_PHY_N_SAMPS_PER_SLOT] = 0;
             }
         }
 
-        // Fine correlation and fractional frequency offset
-        for(i=0; i<15360; i++)
+        // Multiply to get (first_symbol * fourth_symbol)
+        for(i=0; i<LIBLTE_PHY_N_SAMPS_PER_SLOT; i++)
         {
-            phy_struct->timing_abs_corr[i]      = 0;
-            phy_struct->timing_corr_freq_err[i] = 0;
+            phy_struct->timing_abs_corr[i] *= phy_struct->timing_abs_corr[(LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_0+(LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_ELSE)*3)+i];
         }
-        for(slot=0; slot<10; slot++)
+
+        // Search for all of the eNB signals
+        timing_struct->n_corr_peaks = LIBLTE_PHY_N_MAX_ROUGH_CORR_SEARCH_PEAKS;
+        for(i=0; i<LIBLTE_PHY_N_MAX_ROUGH_CORR_SEARCH_PEAKS; i++)
         {
-            for(i=0; i<2; i++)
+            abs_corr_max    = 0;
+            abs_corr_idx[i] = 0;
+            for(j=0; j<LIBLTE_PHY_N_SAMPS_PER_SLOT; j++)
             {
-                if((abs_corr_idx[i] - 40) < 0)
+                if(phy_struct->timing_abs_corr[j] > abs_corr_max)
                 {
-                    abs_corr_idx[i] = 40;
+                    abs_corr_max    = phy_struct->timing_abs_corr[j];
+                    abs_corr_idx[i] = j;
                 }
-                if((abs_corr_idx[i] + 40) > 15359)
+            }
+
+            if(0 == abs_corr_max)
+            {
+                timing_struct->n_corr_peaks = i;
+                break;
+            }else{
+                // Get rid of max and peaks
+                tmp_idx = abs_corr_idx[i];
+                while(tmp_idx > 0)
                 {
-                    abs_corr_idx[i] = 15359 - 40;
+                    tmp_idx -= 2192;
                 }
-                for(j=abs_corr_idx[i]-40; j<(uint32)(abs_corr_idx[i]+41); j++)
+                for(j=0; j<7; j++)
                 {
-                    corr_re = 0;
-                    corr_im = 0;
-                    for(k=0; k<144; k++)
+                    tmp_idx += 2192;
+                    for(k=0; k<300; k++)
                     {
-                        idx      = (slot*15360) + j + k;
-                        corr_re += i_samps[idx]*i_samps[idx+2048] + q_samps[idx]*q_samps[idx+2048];
-                        corr_im += i_samps[idx]*q_samps[idx+2048] - q_samps[idx]*i_samps[idx+2048];
+                        if((tmp_idx - 150 + k) >= 0)
+                        {
+                            phy_struct->timing_abs_corr[tmp_idx - 150 + k] = 0;
+                        }
                     }
-                    phy_struct->timing_abs_corr[j]      += corr_re*corr_re + corr_im*corr_im;
-                    phy_struct->timing_corr_freq_err[j] += atan2f(corr_im, corr_re)/(2048*2*M_PI*(0.0005/15360));
-                }
-            }
-        }
-
-        // Find first and second max
-        for(i=0; i<2; i++)
-        {
-            abs_corr_idx[i] = 0;
-            abs_corr_max    = 0;
-            for(j=0; j<7680; j++)
-            {
-                if(phy_struct->timing_abs_corr[(i*7680)+j] > abs_corr_max)
-                {
-                    abs_corr_max    = phy_struct->timing_abs_corr[(i*7680)+j];
-                    abs_corr_idx[i] = (i*7680)+j;
                 }
             }
         }
 
         // Determine frequency offset
-        // FIXME: No integer offset is calculated
-        *freq_offset = ((phy_struct->timing_corr_freq_err[abs_corr_idx[0]]/10 +
-                         phy_struct->timing_corr_freq_err[abs_corr_idx[1]]/10)/2);
-
-        // Determine the symbol start locations from the correlation peaks
-        // FIXME: Needs some work
-        while(abs_corr_idx[0] > 0)
+        for(slot=0; slot<20; slot++)
         {
-            abs_corr_idx[0] -= 2192;
+            for(i=0; i<timing_struct->n_corr_peaks; i++)
+            {
+                corr_re = 0;
+                corr_im = 0;
+                for(j=0; j<LIBLTE_PHY_N_SAMPS_CP_L_ELSE; j++)
+                {
+                    idx      = (slot*LIBLTE_PHY_N_SAMPS_PER_SLOT) + abs_corr_idx[i] + j;
+                    corr_re += i_samps[idx]*i_samps[idx+LIBLTE_PHY_N_SAMPS_PER_SYMB] + q_samps[idx]*q_samps[idx+LIBLTE_PHY_N_SAMPS_PER_SYMB];
+                    corr_im += i_samps[idx]*q_samps[idx+LIBLTE_PHY_N_SAMPS_PER_SYMB] - q_samps[idx]*i_samps[idx+LIBLTE_PHY_N_SAMPS_PER_SYMB];
+                }
+                freq_err[i] += atan2f(corr_im, corr_re)/(LIBLTE_PHY_N_SAMPS_PER_SYMB*2*M_PI*(0.0005/LIBLTE_PHY_N_SAMPS_PER_SLOT));
+            }
         }
-        for(i=0; i<7; i++)
+        for(i=0; i<timing_struct->n_corr_peaks; i++)
         {
-            symb_starts[i] = abs_corr_idx[0] + ((i+1)*2192);
+            // FIXME: No integer offset is calculated
+            timing_struct->freq_offset[i] = freq_err[i]/20;
+        }
+
+        // Determine the symbol start locations
+        // FIXME: Needs some work
+        for(i=0; i<timing_struct->n_corr_peaks; i++)
+        {
+            while(abs_corr_idx[i] > 0)
+            {
+                abs_corr_idx[i] -= 2192;
+            }
+            for(j=0; j<7; j++)
+            {
+                timing_struct->symb_starts[i][j] = abs_corr_idx[i] + ((j+1)*2192);
+            }
         }
 
         err = LIBLTE_SUCCESS;
@@ -3848,7 +3910,7 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
     float              ce_mag;
     float              ce_ang;
     uint32             v_shift         = N_id_cell % 6;
-    uint32             subfr_start_idx = frame_start_idx + subfr_num*30720;
+    uint32             subfr_start_idx = frame_start_idx + subfr_num*LIBLTE_PHY_N_SAMPS_PER_SUBFR;
     uint32             N_sym;
     uint32             m_prime;
     uint32             i;
@@ -3874,7 +3936,7 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
             samples_to_symbols(phy_struct,
                                i_samps,
                                q_samps,
-                               subfr_start_idx + (i/7)*15360,
+                               subfr_start_idx + (i/7)*LIBLTE_PHY_N_SAMPS_PER_SLOT,
                                i%7,
                                FFT_pad_size,
                                0,
@@ -4160,6 +4222,64 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
                     }
                 }
             }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    Name: liblte_phy_get_tbs_mcs_and_n_prb_for_si
+
+    Description: Determines the transport block size, modulation and
+                 coding scheme, and the number of PRBs needed to send
+                 a certain number of bits for SI
+
+    Document Reference: 3GPP TS 36.213 v10.3.0 section 7.1.7
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_si(uint32  N_bits,
+                                                          uint32  N_rb_dl,
+                                                          uint32 *tbs,
+                                                          uint8  *mcs,
+                                                          uint32 *N_prb)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+    uint32            N_prb_tmp;
+    uint32            N_bits_per_prb;
+
+    if(tbs   != NULL &&
+       mcs   != NULL &&
+       N_prb != NULL)
+    {
+        // Choose N_prb == 2 to give the largest possible tbs
+        N_prb_tmp = 2;
+        for(i=0; i<27; i++)
+        {
+            if(N_bits < TBS_71721[i][N_prb_tmp])
+            {
+                *tbs = TBS_71721[i][N_prb_tmp];
+                *mcs = i;
+                break;
+            }
+        }
+
+        // Targetting a coding rate of 4:1
+        N_bits_per_prb = get_num_bits_in_prb(1, 3, 0, N_rb_dl, 2, LIBLTE_PHY_MODULATION_TYPE_QPSK);
+        *N_prb         = 0;
+        for(i=0; i<N_rb_dl; i++)
+        {
+            if((*tbs * 4) < (N_bits_per_prb*i))
+            {
+                *N_prb = i;
+                break;
+            }
+        }
+        if(*N_prb == 0)
+        {
+            *N_prb = N_rb_dl;
         }
 
         err = LIBLTE_SUCCESS;
@@ -4772,12 +4892,12 @@ void symbols_to_samples(LIBLTE_PHY_STRUCT *phy_struct,
     // Calculate index and CP length
     if((symbol_offset % 7) == 0)
     {
-        CP_len = 160;
+        CP_len = LIBLTE_PHY_N_SAMPS_CP_L_0;
     }else{
-        CP_len = 144;
+        CP_len = LIBLTE_PHY_N_SAMPS_CP_L_ELSE;
     }
 
-    for(i=0; i<2048; i++)
+    for(i=0; i<LIBLTE_PHY_N_SAMPS_PER_SYMB; i++)
     {
         phy_struct->s2s_in[i][0] = 0;
         phy_struct->s2s_in[i][1] = 0;
@@ -4789,21 +4909,21 @@ void symbols_to_samples(LIBLTE_PHY_STRUCT *phy_struct,
         phy_struct->s2s_in[i+1][1] = symb_im[i+(1024-FFT_pad_size)];
 
         // Negative spectrum
-        phy_struct->s2s_in[2048-i-1][0] = symb_re[(1024-FFT_pad_size)-i-1];
-        phy_struct->s2s_in[2048-i-1][1] = symb_im[(1024-FFT_pad_size)-i-1];
+        phy_struct->s2s_in[LIBLTE_PHY_N_SAMPS_PER_SYMB-i-1][0] = symb_re[(1024-FFT_pad_size)-i-1];
+        phy_struct->s2s_in[LIBLTE_PHY_N_SAMPS_PER_SYMB-i-1][1] = symb_im[(1024-FFT_pad_size)-i-1];
     }
     fftw_execute(phy_struct->symbs_to_samps_plan);
-    for(i=0; i<2048; i++)
+    for(i=0; i<LIBLTE_PHY_N_SAMPS_PER_SYMB; i++)
     {
         samps_re[CP_len+i] = phy_struct->s2s_out[i][0];
         samps_im[CP_len+i] = phy_struct->s2s_out[i][1];
     }
     for(i=0; i<CP_len; i++)
     {
-        samps_re[i] = samps_re[2048+i];
-        samps_im[i] = samps_im[2048+i];
+        samps_re[i] = samps_re[LIBLTE_PHY_N_SAMPS_PER_SYMB+i];
+        samps_im[i] = samps_im[LIBLTE_PHY_N_SAMPS_PER_SYMB+i];
     }
-    *N_samps = 2048 + CP_len;
+    *N_samps = LIBLTE_PHY_N_SAMPS_PER_SYMB + CP_len;
 }
 
 /*********************************************************************
@@ -4830,17 +4950,17 @@ void samples_to_symbols(LIBLTE_PHY_STRUCT *phy_struct,
     // Calculate index and CP length
     if((symbol_offset % 7) == 0)
     {
-        CP_len = 160;
+        CP_len = LIBLTE_PHY_N_SAMPS_CP_L_0;
     }else{
-        CP_len = 144;
+        CP_len = LIBLTE_PHY_N_SAMPS_CP_L_ELSE;
     }
-    index = slot_start_idx + (2048+144)*symbol_offset;
+    index = slot_start_idx + (LIBLTE_PHY_N_SAMPS_PER_SYMB+LIBLTE_PHY_N_SAMPS_CP_L_ELSE)*symbol_offset;
     if(symbol_offset > 0)
     {
         index += 16;
     }
 
-    for(i=0; i<2048; i++)
+    for(i=0; i<LIBLTE_PHY_N_SAMPS_PER_SYMB; i++)
     {
         phy_struct->s2s_in[i][0] = samps_re[index+CP_len-2+i];
         phy_struct->s2s_in[i][1] = samps_im[index+CP_len-2+i];
@@ -4853,8 +4973,8 @@ void samples_to_symbols(LIBLTE_PHY_STRUCT *phy_struct,
         symb_im[i+(1024-FFT_pad_size)] = phy_struct->s2s_out[i+1][1];
 
         // Negative spectrum
-        symb_re[(1024-FFT_pad_size)-i-1] = phy_struct->s2s_out[2048-i-1][0];
-        symb_im[(1024-FFT_pad_size)-i-1] = phy_struct->s2s_out[2048-i-1][1];
+        symb_re[(1024-FFT_pad_size)-i-1] = phy_struct->s2s_out[LIBLTE_PHY_N_SAMPS_PER_SYMB-i-1][0];
+        symb_im[(1024-FFT_pad_size)-i-1] = phy_struct->s2s_out[LIBLTE_PHY_N_SAMPS_PER_SYMB-i-1][1];
     }
 
     if(scale == 1)
@@ -8586,14 +8706,8 @@ void dci_1a_pack(LIBLTE_PHY_ALLOCATION_STRUCT    *alloc,
         phy_value_2_bits(alloc->rv_idx, &dci, 2);
 
         // TPC
-        if(alloc->N_prb == 2)
-        {
-            N_prb_1a = 2;
-            phy_value_2_bits(0, &dci, 2);
-        }else{
-            N_prb_1a = 3;
-            phy_value_2_bits(1, &dci, 2);
-        }
+        N_prb_1a = 3;
+        phy_value_2_bits(1, &dci, 2);
 
         // Calculate the TBS
         alloc->tbs = TBS_71721[alloc->mcs][N_prb_1a-1];
@@ -8651,7 +8765,6 @@ void dci_1a_unpack(uint8                           *in_bits,
     uint32  tpc;
     uint32  dci_0_1a_flag;
     uint32  loc_or_dist;
-    uint32  mcs;
     uint32  harq_process;
     uint32  new_data_ind;
     uint8  *dci = in_bits;
@@ -8704,7 +8817,7 @@ void dci_1a_unpack(uint8                           *in_bits,
         }
 
         // Extract the rest of the fields
-        mcs           = phy_bits_2_value(&dci, 5);
+        alloc->mcs    = phy_bits_2_value(&dci, 5);
         harq_process  = phy_bits_2_value(&dci, 3);
         new_data_ind  = phy_bits_2_value(&dci, 1);
         alloc->rv_idx = phy_bits_2_value(&dci, 2);
@@ -8739,7 +8852,7 @@ void dci_1a_unpack(uint8                           *in_bits,
             alloc->tx_mode = 2;
         }
         alloc->N_codewords = 1;
-        alloc->tbs         = TBS_71721[mcs][N_prb_1a-1];
+        alloc->tbs         = TBS_71721[alloc->mcs][N_prb_1a-1];
         alloc->rnti        = rnti;
     }else{
         printf("ERROR: Not handling DCI 1As for C-RNTI\n");

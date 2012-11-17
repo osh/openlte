@@ -31,6 +31,8 @@
     08/19/2012    Ben Wojtowicz    Added states and state memory and added
                                    decoding of all SIBs.
     10/06/2012    Ben Wojtowicz    Updated to use the latest LTE library.
+    11/10/2012    Ben Wojtowicz    Using the latest libraries to decode more
+                                   than 1 eNB
 
 *******************************************************************************/
 
@@ -84,6 +86,8 @@ LTE_fdd_dl_fs_samp_buf::LTE_fdd_dl_fs_samp_buf()
                      gr_make_io_signature(MIN_IN,  MAX_IN,  sizeof(int8)),
                      gr_make_io_signature(MIN_OUT, MAX_OUT, sizeof(int8)))
 {
+    uint32 i;
+
     // Initialize the LTE library
     liblte_phy_init(&phy_struct);
 
@@ -95,25 +99,12 @@ LTE_fdd_dl_fs_samp_buf::LTE_fdd_dl_fs_samp_buf()
     last_samp_was_i = false;
 
     // Variables
-    state                   = LTE_FDD_DL_FS_SAMP_BUF_STATE_COARSE_TIMING_SEARCH;
-    freq_offset             = 0;
-    phich_res               = 0;
-    N_rb_dl                 = LIBLTE_PHY_N_RB_DL_1_4MHZ;
-    FFT_pad_size            = LIBLTE_PHY_FFT_PAD_SIZE_1_4MHZ;
-    sfn                     = 0;
-    N_sfr                   = 0;
-    N_ant                   = 0;
-    N_id_cell               = 0;
-    N_id_1                  = 0;
-    N_id_2                  = 0;
-    prev_si_value_tag       = 0;
-    prev_si_value_tag_valid = false;
-    mib_printed             = false;
-    sib1_printed            = false;
-    sib2_printed            = false;
-    sib3_printed            = false;
-    sib4_printed            = false;
-    sib8_printed            = false;
+    init();
+    corr_peak_idx = 0;
+    for(i=0; i<LIBLTE_PHY_N_MAX_ROUGH_CORR_SEARCH_PEAKS; i++)
+    {
+        timing_struct.freq_offset[i] = 0;
+    }
 }
 LTE_fdd_dl_fs_samp_buf::~LTE_fdd_dl_fs_samp_buf()
 {
@@ -136,7 +127,6 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
     const int8                 *in  = (const int8 *)input_items[0];
     float                       pss_thresh;
     uint32                      i;
-    uint32                      symb_starts[7];
     uint32                      pss_symb;
     uint32                      frame_start_idx;
     uint32                      num_samps_needed = COARSE_TIMING_SEARCH_NUM_SAMPS;
@@ -166,7 +156,7 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
         if(LTE_FDD_DL_FS_SAMP_BUF_STATE_COARSE_TIMING_SEARCH != state)
         {
             // Correct frequency error
-            freq_shift(0, LTE_FDD_DL_FS_SAMP_BUF_SIZE, freq_offset);
+            freq_shift(0, LTE_FDD_DL_FS_SAMP_BUF_SIZE, timing_struct.freq_offset[corr_peak_idx]);
         }
 
         // Get number of samples needed for each state
@@ -194,17 +184,28 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
 
         while(samp_buf_r_idx < (samp_buf_w_idx - num_samps_needed))
         {
+            if(mib_printed  == true          &&
+               sib1_printed == true          &&
+               sib2_printed == true          &&
+               sib3_printed == sib3_expected &&
+               sib4_printed == sib4_expected &&
+               sib8_printed == sib8_expected)
+            {
+                corr_peak_idx++;
+                init();
+            }
+
             switch(state)
             {
             case LTE_FDD_DL_FS_SAMP_BUF_STATE_COARSE_TIMING_SEARCH:
                 if(LIBLTE_SUCCESS == liblte_phy_find_coarse_timing_and_freq_offset(phy_struct,
                                                                                    i_buf,
                                                                                    q_buf,
-                                                                                   symb_starts,
-                                                                                   &freq_offset))
+                                                                                   &timing_struct) &&
+                   corr_peak_idx < timing_struct.n_corr_peaks)
                 {
                     // Correct frequency error
-                    freq_shift(0, LTE_FDD_DL_FS_SAMP_BUF_SIZE, freq_offset);
+                    freq_shift(0, LTE_FDD_DL_FS_SAMP_BUF_SIZE, timing_struct.freq_offset[corr_peak_idx]);
 
                     // Search for PSS and fine timing
                     state            = LTE_FDD_DL_FS_SAMP_BUF_STATE_PSS_AND_FINE_TIMING_SEARCH;
@@ -219,7 +220,7 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                 if(LIBLTE_SUCCESS == liblte_phy_find_pss_and_fine_timing(phy_struct,
                                                                          i_buf,
                                                                          q_buf,
-                                                                         symb_starts,
+                                                                         timing_struct.symb_starts[corr_peak_idx],
                                                                          &N_id_2,
                                                                          &pss_symb,
                                                                          &pss_thresh))
@@ -239,7 +240,7 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                          i_buf,
                                                          q_buf,
                                                          N_id_2,
-                                                         symb_starts,
+                                                         timing_struct.symb_starts[corr_peak_idx],
                                                          pss_thresh,
                                                          &N_id_1,
                                                          &frame_start_idx))
@@ -473,7 +474,7 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
         samp_buf_r_idx -= 100;
         samps_to_copy   = samp_buf_w_idx - samp_buf_r_idx;
         samp_buf_w_idx  = 0;
-        freq_shift(samp_buf_r_idx, samps_to_copy, -freq_offset);
+        freq_shift(samp_buf_r_idx, samps_to_copy, -timing_struct.freq_offset[corr_peak_idx]);
         for(i=0; i<samps_to_copy; i++)
         {
             i_buf[samp_buf_w_idx]   = i_buf[samp_buf_r_idx];
@@ -492,6 +493,31 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
 
     // Tell runtime system how many output items we produced.
     return(0);
+}
+
+void LTE_fdd_dl_fs_samp_buf::init(void)
+{
+    state                   = LTE_FDD_DL_FS_SAMP_BUF_STATE_COARSE_TIMING_SEARCH;
+    phich_res               = 0;
+    N_rb_dl                 = LIBLTE_PHY_N_RB_DL_1_4MHZ;
+    FFT_pad_size            = LIBLTE_PHY_FFT_PAD_SIZE_1_4MHZ;
+    sfn                     = 0;
+    N_sfr                   = 0;
+    N_ant                   = 0;
+    N_id_cell               = 0;
+    N_id_1                  = 0;
+    N_id_2                  = 0;
+    prev_si_value_tag       = 0;
+    prev_si_value_tag_valid = false;
+    mib_printed             = false;
+    sib1_printed            = false;
+    sib2_printed            = false;
+    sib3_printed            = false;
+    sib3_expected           = false;
+    sib4_printed            = false;
+    sib4_expected           = false;
+    sib8_printed            = false;
+    sib8_expected           = false;
 }
 
 void LTE_fdd_dl_fs_samp_buf::copy_input_to_samp_buf(const int8 *in, int32 ninput_items)
@@ -545,9 +571,9 @@ void LTE_fdd_dl_fs_samp_buf::print_mib(LIBLTE_RRC_MIB_STRUCT *mib)
 {
     if(false == mib_printed)
     {
-        printf("DL LTE Channel found:\n");
+        printf("DL LTE Channel found [%u]:\n", corr_peak_idx);
         printf("\tMIB Decoded:\n");
-        printf("\t\t%-40s=%20.2f\n", "Frequency Offset", freq_offset);
+        printf("\t\t%-40s=%20.2f\n", "Frequency Offset", timing_struct.freq_offset[corr_peak_idx]);
         printf("\t\t%-40s=%20u\n", "System Frame Number", sfn);
         printf("\t\t%-40s=%20u\n", "Physical Cell ID", N_id_cell);
         printf("\t\t%-40s=%20u\n", "Number of TX Antennas", N_ant);
@@ -749,9 +775,11 @@ void LTE_fdd_dl_fs_samp_buf::print_sib1(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT 
                 {
                 case LIBLTE_RRC_SIB_TYPE_3:
                     printf("\t\t\t\t%s = %s\n", "SIB Type", "3");
+                    sib3_expected = true;
                     break;
                 case LIBLTE_RRC_SIB_TYPE_4:
                     printf("\t\t\t\t%s = %s\n", "SIB Type", "4");
+                    sib4_expected = true;
                     break;
                 case LIBLTE_RRC_SIB_TYPE_5:
                     printf("\t\t\t\t%s = %s\n", "SIB Type", "5");
@@ -764,6 +792,7 @@ void LTE_fdd_dl_fs_samp_buf::print_sib1(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT 
                     break;
                 case LIBLTE_RRC_SIB_TYPE_8:
                     printf("\t\t\t\t%s = %s\n", "SIB Type", "8");
+                    sib8_expected = true;
                     break;
                 case LIBLTE_RRC_SIB_TYPE_9:
                     printf("\t\t\t\t%s = %s\n", "SIB Type", "9");
@@ -1664,7 +1693,7 @@ void LTE_fdd_dl_fs_samp_buf::print_sib2(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT 
             printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 2B", "2dB");
             break;
         }
-        printf("\t\t%-40s=%18udB\n", "Delta Preamble Message 3", sib2->rr_config_common_sib.ul_pwr_ctrl.delta_preamble_msg3);
+        printf("\t\t%-40s=%18ddB\n", "Delta Preamble Message 3", sib2->rr_config_common_sib.ul_pwr_ctrl.delta_preamble_msg3);
         switch(sib2->rr_config_common_sib.ul_cp_length)
         {
         case LIBLTE_RRC_UL_CP_LENGTH_1:

@@ -26,6 +26,8 @@
     ----------    -------------    --------------------------------------------
     06/15/2012    Ben Wojtowicz    Created file.
     08/19/2012    Ben Wojtowicz    Using the latest liblte library.
+    11/10/2012    Ben Wojtowicz    Added SIB2 support and changed the parameter
+                                   input method to be "interactive"
 
 *******************************************************************************/
 #ifndef __LTE_FDD_DL_FG_SAMP_BUF_H__
@@ -46,6 +48,20 @@
 
 #define LTE_FDD_DL_FG_SAMP_BUF_SIZE (307200)
 
+// Configurable Parameters
+#define BANDWIDTH_PARAM          "bandwidth"
+#define FREQ_BAND_PARAM          "freq_band"
+#define N_FRAMES_PARAM           "n_frames"
+#define N_ANT_PARAM              "n_ant"
+#define N_ID_CELL_PARAM          "n_id_cell"
+#define MCC_PARAM                "mcc"
+#define MNC_PARAM                "mnc"
+#define CELL_ID_PARAM            "cell_id"
+#define TRACKING_AREA_CODE_PARAM "tracking_area_code"
+#define Q_RX_LEV_MIN_PARAM       "q_rx_lev_min"
+#define P0_NOMINAL_PUSCH_PARAM   "p0_nominal_pusch"
+#define P0_NOMINAL_PUCCH_PARAM   "p0_nominal_pucch"
+
 /*******************************************************************************
                               FORWARD DECLARATIONS
 *******************************************************************************/
@@ -62,12 +78,7 @@ typedef boost::shared_ptr<LTE_fdd_dl_fg_samp_buf> LTE_fdd_dl_fg_samp_buf_sptr;
                               CLASS DECLARATIONS
 *******************************************************************************/
 
-LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf(uint32  _N_frames,
-                                                        uint32  _N_ant,
-                                                        uint32  _N_id_cell,
-                                                        float   _bandwidth,
-                                                        char   *_mcc,
-                                                        char   *_mnc);
+LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf();
 class LTE_fdd_dl_fg_samp_buf : public gr_sync_block
 {
 public:
@@ -78,19 +89,9 @@ public:
                gr_vector_void_star       &output_items);
 
 private:
-    friend LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf(uint32  _N_frames,
-                                                                   uint32  _N_ant,
-                                                                   uint32  _N_id_cell,
-                                                                   float   _bandwidth,
-                                                                   char   *_mcc,
-                                                                   char   *_mnc);
+    friend LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf();
 
-    LTE_fdd_dl_fg_samp_buf(uint32  _N_frames,
-                           uint32  _N_ant,
-                           uint32  _N_id_cell,
-                           float   _bandwidth,
-                           char   *_mcc,
-                           char   *_mnc);
+    LTE_fdd_dl_fg_samp_buf();
 
     // LTE library
     LIBLTE_PHY_STRUCT     *phy_struct;
@@ -106,6 +107,7 @@ private:
     LIBLTE_RRC_MIB_STRUCT                   mib;
     LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT        bcch_dlsch_msg;
     LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT sib1;
+    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT sib2;
     LIBLTE_PHY_PCFICH_STRUCT                pcfich;
     LIBLTE_PHY_PHICH_STRUCT                 phich;
     LIBLTE_PHY_PDCCH_STRUCT                 pdcch;
@@ -118,7 +120,27 @@ private:
     uint32                                  N_id_2;
     uint32                                  N_rb_dl;
     uint32                                  FFT_pad_size;
+    uint32                                  si_periodicity_T;
+    uint32                                  si_win_len;
     uint8                                   N_ant;
+
+    // Configuration
+    void print_config(void);
+    void change_config(char *line);
+    bool set_bandwidth(char *char_value);
+    bool set_n_ant(char *char_value);
+    bool set_n_id_cell(char *char_value);
+    bool set_mcc(char *char_value);
+    bool set_mnc(char *char_value);
+    bool set_param(uint32 *param, char *char_value, uint32 llimit, uint32 ulimit);
+    bool set_param(uint16 *param, char *char_value, uint16 llimit, uint16 ulimit);
+    bool set_param(uint8 *param, char *char_value, uint8 llimit, uint8 ulimit);
+    bool set_param(int32 *param, char *char_value, int32 llimit, int32 ulimit);
+    bool set_param(int16 *param, char *char_value, int16 llimit, int16 ulimit);
+    bool set_param(int8 *param, char *char_value, int8 llimit, int8 ulimit);
+    bool char_to_uint32(char *char_value, uint32 *uint32_value);
+    bool char_to_int32(char *char_value, int32 *int32_value);
+    bool need_config;
 };
 
 #endif /* __LTE_FDD_DL_FG_SAMP_BUF_H__ */

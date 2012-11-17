@@ -34,6 +34,10 @@
     10/06/2012    Ben Wojtowicz    Added random access and paging PDCCH
                                    decoding, soft turbo decoding, and PDSCH
                                    decoding per allocation.
+    11/10/2012    Ben Wojtowicz    Added TBS, MCS, and N_prb calculations for
+                                   SI PDSCH messages, added more sample defines,
+                                   and re-factored the coarse timing and freq
+                                   search to find more than 1 eNB.
 
 *******************************************************************************/
 
@@ -52,25 +56,45 @@
                               DEFINES
 *******************************************************************************/
 
+// FFT Padding
 #define LIBLTE_PHY_FFT_PAD_SIZE_1_4MHZ 988
 #define LIBLTE_PHY_FFT_PAD_SIZE_3MHZ   934
 #define LIBLTE_PHY_FFT_PAD_SIZE_5MHZ   874
 #define LIBLTE_PHY_FFT_PAD_SIZE_10MHZ  724
 #define LIBLTE_PHY_FFT_PAD_SIZE_15MHZ  574
 #define LIBLTE_PHY_FFT_PAD_SIZE_20MHZ  424
-#define LIBLTE_PHY_N_RB_DL_1_4MHZ      6
-#define LIBLTE_PHY_N_RB_DL_3MHZ        15
-#define LIBLTE_PHY_N_RB_DL_5MHZ        25
-#define LIBLTE_PHY_N_RB_DL_10MHZ       50
-#define LIBLTE_PHY_N_RB_DL_15MHZ       75
-#define LIBLTE_PHY_N_RB_DL_20MHZ       100
-#define LIBLTE_PHY_N_RB_DL_MAX         110
-#define LIBLTE_PHY_N_SC_RB_NORMAL_CP   12
-#define LIBLTE_PHY_RA_RNTI_START       0x0001
-#define LIBLTE_PHY_RA_RNTI_END         0x003C
-#define LIBLTE_PHY_P_RNTI              0xFFFE
-#define LIBLTE_PHY_SI_RNTI             0xFFFF
-#define LIBLTE_PHY_N_ANT_MAX           4
+
+// N_rb_dl
+#define LIBLTE_PHY_N_RB_DL_1_4MHZ 6
+#define LIBLTE_PHY_N_RB_DL_3MHZ   15
+#define LIBLTE_PHY_N_RB_DL_5MHZ   25
+#define LIBLTE_PHY_N_RB_DL_10MHZ  50
+#define LIBLTE_PHY_N_RB_DL_15MHZ  75
+#define LIBLTE_PHY_N_RB_DL_20MHZ  100
+#define LIBLTE_PHY_N_RB_DL_MAX    110
+
+// N_sc_rb
+#define LIBLTE_PHY_N_SC_RB_NORMAL_CP 12
+// FIXME: Add Extended CP
+
+// RNTI
+#define LIBLTE_PHY_RA_RNTI_START 0x0001
+#define LIBLTE_PHY_RA_RNTI_END   0x003C
+#define LIBLTE_PHY_P_RNTI        0xFFFE
+#define LIBLTE_PHY_SI_RNTI       0xFFFF
+
+// N_ant
+#define LIBLTE_PHY_N_ANT_MAX 4
+
+// Symbol, CP, Slot, Subframe, and Frame timing
+#define LIBLTE_PHY_N_SAMPS_PER_SYMB  2048
+#define LIBLTE_PHY_N_SAMPS_CP_L_0    160
+#define LIBLTE_PHY_N_SAMPS_CP_L_ELSE 144
+#define LIBLTE_PHY_N_SAMPS_PER_SLOT  15360
+#define LIBLTE_PHY_N_SLOTS_PER_SUBFR 2
+#define LIBLTE_PHY_N_SAMPS_PER_SUBFR (LIBLTE_PHY_N_SAMPS_PER_SLOT*LIBLTE_PHY_N_SLOTS_PER_SUBFR)
+#define LIBLTE_PHY_N_SUBFR_PER_FRAME 10
+#define LIBLTE_PHY_N_SAMPS_PER_FRAME (LIBLTE_PHY_N_SAMPS_PER_SUBFR*LIBLTE_PHY_N_SUBFR_PER_FRAME)
 
 /*******************************************************************************
                               TYPEDEFS
@@ -238,8 +262,7 @@ typedef struct{
     int8  sss_z1_m1[31];
 
     // Timing
-    float timing_corr_freq_err[15360];
-    float timing_abs_corr[15360];
+    float timing_abs_corr[LIBLTE_PHY_N_SAMPS_PER_SLOT*2];
 
     // Samples to Symbols & Symbols to Samples
     fftw_complex *s2s_in;
@@ -625,14 +648,19 @@ LIBLTE_ERROR_ENUM liblte_phy_find_sss(LIBLTE_PHY_STRUCT *phy_struct,
     Document Reference: 3GPP TS 36.211 v10.1.0
 *********************************************************************/
 // Defines
+#define LIBLTE_PHY_N_MAX_ROUGH_CORR_SEARCH_PEAKS 5
 // Enums
 // Structs
+typedef struct{
+    float  freq_offset[LIBLTE_PHY_N_MAX_ROUGH_CORR_SEARCH_PEAKS];
+    uint32 symb_starts[LIBLTE_PHY_N_MAX_ROUGH_CORR_SEARCH_PEAKS][7];
+    uint32 n_corr_peaks;
+}LIBLTE_PHY_COARSE_TIMING_STRUCT;
 // Functions
-LIBLTE_ERROR_ENUM liblte_phy_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUCT *phy_struct,
-                                                                float             *i_samps,
-                                                                float             *q_samps,
-                                                                uint32            *symb_starts,
-                                                                float             *freq_offset);
+LIBLTE_ERROR_ENUM liblte_phy_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUCT               *phy_struct,
+                                                                float                           *i_samps,
+                                                                float                           *q_samps,
+                                                                LIBLTE_PHY_COARSE_TIMING_STRUCT *timing_struct);
 
 /*********************************************************************
     Name: liblte_phy_create_subframe
@@ -675,5 +703,24 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
                                                  uint32                      N_id_cell,
                                                  uint8                       N_ant,
                                                  LIBLTE_PHY_SUBFRAME_STRUCT *subframe);
+
+/*********************************************************************
+    Name: liblte_phy_get_tbs_mcs_and_n_prb_for_si
+
+    Description: Determines the transport block size, modulation and
+                 coding scheme, and the number of PRBs needed to send
+                 a certain number of bits for SI
+
+    Document Reference: 3GPP TS 36.213 v10.3.0 section 7.1.7
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_si(uint32  N_bits,
+                                                          uint32  N_rb_dl,
+                                                          uint32 *tbs,
+                                                          uint8  *mcs,
+                                                          uint32 *N_prb);
 
 #endif /* __LIBLTE_PHY_H__ */
