@@ -3,10 +3,12 @@ subscribe to openlte-discuss@lists.sourceforge.net.  Details can be
 found at sourceforge.net/projects/openlte/.
 
 The directory structure for the project is:
-octave              Octave test code
-cmn_hdr             Common header files
-liblte              C++ library of commonly used LTE functions
-openlte_file_scan   A gnu-radio LTE file scanner application
+octave                Octave test code
+cmn_hdr               Common header files
+liblte                C++ library of commonly used LTE functions
+config                Contains various configuration files
+LTE_fdd_dl_file_scan  A gnu-radio LTE FDD DL file scanner application
+LTE_fdd_dl_file_gen   A gnu-radio LTE FDD DL file generator application
 
 To build the C++ and python code use the following:
 
@@ -21,16 +23,30 @@ To install the C++ and python code use the following:
   $ make
   $ make install
 
-To use the installed C++ and python code, set the PYTHONPATH
-env variable to <python_install_dir>/dist-packages/gnuradio/
+To use the installed C++ and python code for the file scanner,
+set the PYTHONPATH env variable to
+<python_install_dir>/dist-packages/gnuradio/
 for instance /usr/local/lib/python2.7/dist-packages/gnuradio/.
-Then run openlte_file_scan/python/openlte_file_scan.py and
+Then run LTE_fdd_dl_file_scan/python/LTE_fdd_dl_file_scan.py and
 specify a recorded LTE file as the input. For example:
 
-  $ ./openlte_file_scan/python/openlte_file_scan.py lte_file.bin
+  $ ./LTE_fdd_dl_file_scan/python/LTE_fdd_dl_file_scan.py lte_file.bin
 
 The recorded LTE file currently must be interleaved 8-bit I and
 Q samples recorded at 30.72MHz.
+
+To use the installed C++ and python code for the file generator,
+set the PYTHONPATH env variable to
+<python_install_dir>/dist-packages/gnuradio/
+for instance /usr/local/lib/python2.7/dist-packages/gnuradio/.
+Then run LTE_fdd_dl_file_gen/python/LTE_fdd_dl_file_gen.py and
+specify an output file for the LTE fdd downlink signal.  For example:
+
+  $ ./LTE_fdd_dl_file_gen/python/LTE_fdd_dl_file_gen.py lte_file.bin
+
+The generated LTE file contains interleaved 8-bit I and Q samples
+at a sample rate of 30.72MHz.  The output file can be used as the
+input for the LTE_fdd_dl_file_scan application.
 
 To use the octave code, run the top level octave .m files:
 lte_fdd_dl_transmit.m and lte_fdd_dl_receive.m.  If multiple
