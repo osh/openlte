@@ -38,6 +38,7 @@
                                    SI PDSCH messages, added more sample defines,
                                    and re-factored the coarse timing and freq
                                    search to find more than 1 eNB.
+    12/01/2012    Ben Wojtowicz    Added ability to preconfigure CRS.
 
 *******************************************************************************/
 
@@ -144,6 +145,9 @@ typedef struct{
     Document Reference: N/A
 *********************************************************************/
 // Defines
+#define LIBLTE_PHY_INIT_N_ID_CELL_UNKNOWN 0xFFFF
+// Enums
+// Structs
 typedef struct{
     // PDSCH
     float  pdsch_y_est_re[5000];
@@ -264,6 +268,11 @@ typedef struct{
     // Timing
     float timing_abs_corr[LIBLTE_PHY_N_SAMPS_PER_SLOT*2];
 
+    // CRS Storage
+    float  crs_re_storage[20][3][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
+    float  crs_im_storage[20][3][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
+    uint32 N_id_cell_crs;
+
     // Samples to Symbols & Symbols to Samples
     fftw_complex *s2s_in;
     fftw_complex *s2s_out;
@@ -353,10 +362,9 @@ typedef struct{
     float rx_symb_re[LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
     float rx_symb_im[LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
 }LIBLTE_PHY_STRUCT;
-// Enums
-// Structs
 // Functions
-LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT **phy_struct);
+LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT **phy_struct,
+                                  uint16              N_id_cell);
 
 /*********************************************************************
     Name: liblte_phy_cleanup

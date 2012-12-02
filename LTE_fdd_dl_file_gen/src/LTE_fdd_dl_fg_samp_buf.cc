@@ -28,6 +28,8 @@
     08/19/2012    Ben Wojtowicz    Using the latest liblte library.
     11/10/2012    Ben Wojtowicz    Added SIB2 support and changed the parameter
                                    input method to be "interactive"
+    12/01/2012    Ben Wojtowicz    Using the latest liblte library and added
+                                   4 antenna support
 
 *******************************************************************************/
 
@@ -74,9 +76,6 @@ LTE_fdd_dl_fg_samp_buf::LTE_fdd_dl_fg_samp_buf()
                      gr_make_io_signature(MIN_IN,  MAX_IN,  sizeof(int8)),
                      gr_make_io_signature(MIN_OUT, MAX_OUT, sizeof(int8)))
 {
-    // Initialize the LTE library
-    liblte_phy_init(&phy_struct);
-
     // Initialize the LTE parameters
     // General
     bandwidth    = 10;
@@ -223,6 +222,11 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      ninput_items,
         getline(&line, &line_size, stdin);
         line[strlen(line)-1] = '\0';
         change_config(line);
+        if(!need_config)
+        {
+            // Initialize the LTE library
+            liblte_phy_init(&phy_struct, N_id_cell);
+        }
     }
     free(line);
 
@@ -675,7 +679,8 @@ bool LTE_fdd_dl_fg_samp_buf::set_n_ant(char *char_value)
 
     if(false  == char_to_uint32(char_value, &value) &&
        (value == 1                                  ||
-        value == 2))// FIXME: 4 antenna support
+        value == 2                                  ||
+        value == 4))
     {
         N_ant = value;
         err   = false;

@@ -33,6 +33,7 @@
     10/06/2012    Ben Wojtowicz    Updated to use the latest LTE library.
     11/10/2012    Ben Wojtowicz    Using the latest libraries to decode more
                                    than 1 eNB
+    12/01/2012    Ben Wojtowicz    Using the latest liblte library
 
 *******************************************************************************/
 
@@ -89,7 +90,7 @@ LTE_fdd_dl_fs_samp_buf::LTE_fdd_dl_fs_samp_buf()
     uint32 i;
 
     // Initialize the LTE library
-    liblte_phy_init(&phy_struct);
+    liblte_phy_init(&phy_struct, LIBLTE_PHY_INIT_N_ID_CELL_UNKNOWN);
 
     // Initialize the sample buffer
     i_buf           = (float *)malloc(LTE_FDD_DL_FS_SAMP_BUF_SIZE*sizeof(float));

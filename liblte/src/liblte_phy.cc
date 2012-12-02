@@ -51,6 +51,9 @@
                                    SI PDSCH messages, added more sample defines,
                                    and re-factored the coarse timing and freq
                                    search to find more than 1 eNB.
+    12/01/2012    Ben Wojtowicz    Added the ability to preconfigure CRS, fixed
+                                   decoding of 4 antennas, optimized prs
+                                   generation.
 
 *******************************************************************************/
 
@@ -1342,15 +1345,29 @@ uint32 phy_bits_2_value(uint8  **bits,
 
     Document Reference: N/A
 *********************************************************************/
-LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT **phy_struct)
+LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT **phy_struct,
+                                  uint16              N_id_cell)
 {
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
 
     if(phy_struct != NULL)
     {
         *phy_struct = (LIBLTE_PHY_STRUCT *)malloc(sizeof(LIBLTE_PHY_STRUCT));
 
-        /* Samples to symbols */
+        // CRS Storage
+        if(LIBLTE_PHY_INIT_N_ID_CELL_UNKNOWN != N_id_cell)
+        {
+            (*phy_struct)->N_id_cell_crs = N_id_cell;
+            for(i=0; i<20; i++)
+            {
+                generate_crs(i, 0, N_id_cell, (*phy_struct)->crs_re_storage[i][0], (*phy_struct)->crs_im_storage[i][0]);
+                generate_crs(i, 1, N_id_cell, (*phy_struct)->crs_re_storage[i][1], (*phy_struct)->crs_im_storage[i][1]);
+                generate_crs(i, 4, N_id_cell, (*phy_struct)->crs_re_storage[i][2], (*phy_struct)->crs_im_storage[i][2]);
+            }
+        }
+
+        // Samples to symbols
         (*phy_struct)->s2s_in              = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*LIBLTE_PHY_N_SAMPS_PER_SYMB*20);
         (*phy_struct)->s2s_out             = (fftw_complex *)fftw_malloc(sizeof(fftw_complex)*LIBLTE_PHY_N_SAMPS_PER_SYMB*20);
         (*phy_struct)->symbs_to_samps_plan = fftw_plan_dft_1d(LIBLTE_PHY_N_SAMPS_PER_SYMB,
@@ -1383,7 +1400,7 @@ LIBLTE_ERROR_ENUM liblte_phy_cleanup(LIBLTE_PHY_STRUCT *phy_struct)
 
     if(phy_struct != NULL)
     {
-        /* Samples to symbols */
+        // Samples to symbols
         fftw_destroy_plan(phy_struct->samps_to_symbs_plan);
         fftw_destroy_plan(phy_struct->symbs_to_samps_plan);
         fftw_free(phy_struct->s2s_in);
@@ -3226,16 +3243,18 @@ LIBLTE_ERROR_ENUM liblte_phy_map_crs(LIBLTE_PHY_STRUCT          *phy_struct,
                                      uint32                      N_id_cell,
                                      uint8                       N_ant)
 {
-    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
-    uint32            p;
-    uint32            i;
-    uint32            j;
-    uint32            k;
-    uint32            m_prime;
-    uint32            v_shift = N_id_cell % 6;
-    uint32            v[4];
-    uint32            sym[4];
-    uint32            N_sym;
+    LIBLTE_ERROR_ENUM  err = LIBLTE_ERROR_INVALID_INPUTS;
+    float             *crs_re[14];
+    float             *crs_im[14];
+    uint32             p;
+    uint32             i;
+    uint32             j;
+    uint32             k;
+    uint32             m_prime;
+    uint32             v_shift = N_id_cell % 6;
+    uint32             v[4];
+    uint32             sym[4];
+    uint32             N_sym;
 
     if(phy_struct != NULL &&
        subframe   != NULL &&
@@ -3243,12 +3262,40 @@ LIBLTE_ERROR_ENUM liblte_phy_map_crs(LIBLTE_PHY_STRUCT          *phy_struct,
        N_id_cell  <= 503)
     {
         // Generate cell specific reference signals
-        generate_crs(subframe->num*2,   0, N_id_cell, phy_struct->crs_re[0],  phy_struct->crs_im[0]);
-        generate_crs(subframe->num*2,   1, N_id_cell, phy_struct->crs_re[1],  phy_struct->crs_im[1]);
-        generate_crs(subframe->num*2,   4, N_id_cell, phy_struct->crs_re[4],  phy_struct->crs_im[4]);
-        generate_crs(subframe->num*2+1, 0, N_id_cell, phy_struct->crs_re[7],  phy_struct->crs_im[7]);
-        generate_crs(subframe->num*2+1, 1, N_id_cell, phy_struct->crs_re[8],  phy_struct->crs_im[8]);
-        generate_crs(subframe->num*2+1, 4, N_id_cell, phy_struct->crs_re[11], phy_struct->crs_im[11]);
+        if(phy_struct->N_id_cell_crs == N_id_cell)
+        {
+            crs_re[0]  = &phy_struct->crs_re_storage[subframe->num*2  ][0][0];
+            crs_im[0]  = &phy_struct->crs_im_storage[subframe->num*2  ][0][0];
+            crs_re[1]  = &phy_struct->crs_re_storage[subframe->num*2  ][1][0];
+            crs_im[1]  = &phy_struct->crs_im_storage[subframe->num*2  ][1][0];
+            crs_re[4]  = &phy_struct->crs_re_storage[subframe->num*2  ][2][0];
+            crs_im[4]  = &phy_struct->crs_im_storage[subframe->num*2  ][2][0];
+            crs_re[7]  = &phy_struct->crs_re_storage[subframe->num*2+1][0][0];
+            crs_im[7]  = &phy_struct->crs_im_storage[subframe->num*2+1][0][0];
+            crs_re[8]  = &phy_struct->crs_re_storage[subframe->num*2+1][1][0];
+            crs_im[8]  = &phy_struct->crs_im_storage[subframe->num*2+1][1][0];
+            crs_re[11] = &phy_struct->crs_re_storage[subframe->num*2+1][2][0];
+            crs_im[11] = &phy_struct->crs_im_storage[subframe->num*2+1][2][0];
+        }else{
+            generate_crs(subframe->num*2,   0, N_id_cell, phy_struct->crs_re[0],  phy_struct->crs_im[0]);
+            generate_crs(subframe->num*2,   1, N_id_cell, phy_struct->crs_re[1],  phy_struct->crs_im[1]);
+            generate_crs(subframe->num*2,   4, N_id_cell, phy_struct->crs_re[4],  phy_struct->crs_im[4]);
+            generate_crs(subframe->num*2+1, 0, N_id_cell, phy_struct->crs_re[7],  phy_struct->crs_im[7]);
+            generate_crs(subframe->num*2+1, 1, N_id_cell, phy_struct->crs_re[8],  phy_struct->crs_im[8]);
+            generate_crs(subframe->num*2+1, 4, N_id_cell, phy_struct->crs_re[11], phy_struct->crs_im[11]);
+            crs_re[0]  = &phy_struct->crs_re[0 ][0];
+            crs_im[0]  = &phy_struct->crs_im[0 ][0];
+            crs_re[1]  = &phy_struct->crs_re[1 ][0];
+            crs_im[1]  = &phy_struct->crs_im[1 ][0];
+            crs_re[4]  = &phy_struct->crs_re[4 ][0];
+            crs_im[4]  = &phy_struct->crs_im[4 ][0];
+            crs_re[7]  = &phy_struct->crs_re[7 ][0];
+            crs_im[7]  = &phy_struct->crs_im[7 ][0];
+            crs_re[8]  = &phy_struct->crs_re[8 ][0];
+            crs_im[8]  = &phy_struct->crs_im[8 ][0];
+            crs_re[11] = &phy_struct->crs_re[11][0];
+            crs_im[11] = &phy_struct->crs_im[11][0];
+        }
 
         for(p=0; p<N_ant; p++)
         {
@@ -3292,8 +3339,8 @@ LIBLTE_ERROR_ENUM liblte_phy_map_crs(LIBLTE_PHY_STRUCT          *phy_struct,
                 {
                     k                                  = 6*j + (v[i] + v_shift)%6;
                     m_prime                            = j + LIBLTE_PHY_N_RB_DL_MAX - N_rb_dl;
-                    subframe->tx_symb_re[p][sym[i]][k] = phy_struct->crs_re[sym[i]][m_prime];
-                    subframe->tx_symb_im[p][sym[i]][k] = phy_struct->crs_im[sym[i]][m_prime];
+                    subframe->tx_symb_re[p][sym[i]][k] = crs_re[sym[i]][m_prime];
+                    subframe->tx_symb_im[p][sym[i]][k] = crs_im[sym[i]][m_prime];
                 }
             }
         }
@@ -4642,10 +4689,10 @@ void pre_decoder_and_matched_filter(float                          *y_re,
                               h_im_ptr[2][i*4+0] * y_im[i*4+0] +
                               h_re_ptr[0][i*4+0] * y_re[i*4+1] +
                               h_im_ptr[0][i*4+0] * y_im[i*4+1]) / h_norm_0_2;
-            x_im_ptr[1][i] = (-h_re_ptr[2][i*4+0] * y_im[i*4+0] +
-                              h_im_ptr[2][i*4+0] * y_re[i*4+0] -
-                              h_re_ptr[0][i*4+0] * y_re[i*4+1] +
-                              h_im_ptr[0][i*4+0] * y_im[i*4+1]) / h_norm_0_2;
+            x_im_ptr[1][i] = -(-h_re_ptr[2][i*4+0] * y_im[i*4+0] +
+                               h_im_ptr[2][i*4+0] * y_re[i*4+0] -
+                               h_re_ptr[0][i*4+0] * y_im[i*4+1] +
+                               h_im_ptr[0][i*4+0] * y_re[i*4+1]) / h_norm_0_2;
             x_re_ptr[2][i] = (h_re_ptr[1][i*4+2] * y_re[i*4+2] +
                               h_im_ptr[1][i*4+2] * y_im[i*4+2] +
                               h_re_ptr[3][i*4+2] * y_re[i*4+3] +
@@ -4658,10 +4705,10 @@ void pre_decoder_and_matched_filter(float                          *y_re,
                               h_im_ptr[3][i*4+2] * y_im[i*4+2] +
                               h_re_ptr[1][i*4+2] * y_re[i*4+3] +
                               h_im_ptr[1][i*4+2] * y_im[i*4+3]) / h_norm_1_3;
-            x_im_ptr[3][i] = (-h_re_ptr[3][i*4+2] * y_im[i*4+2] +
-                              h_im_ptr[3][i*4+2] * y_re[i*4+2] -
-                              h_re_ptr[1][i*4+2] * y_re[i*4+3] +
-                              h_im_ptr[1][i*4+2] * y_im[i*4+3]) / h_norm_1_3;
+            x_im_ptr[3][i] = -(-h_re_ptr[3][i*4+2] * y_im[i*4+2] +
+                               h_im_ptr[3][i*4+2] * y_re[i*4+2] -
+                               h_re_ptr[1][i*4+2] * y_im[i*4+3] +
+                               h_im_ptr[1][i*4+2] * y_re[i*4+3]) / h_norm_1_3;
         }
         if((M_ap_symb % 4) != 0)
         {
@@ -5877,48 +5924,33 @@ void generate_prs_c(uint32  c_init,
                     uint32 *c)
 {
     uint32 i;
-    uint32 j;
-    uint8  x1[31];
-    uint8  x2[31];
+    uint32 x1;
+    uint32 x2;
     uint8  new_bit1;
     uint8  new_bit2;
 
-    // Initialize the m-sequences
-    for(i=0; i<31; i++)
-    {
-        x1[i] = 0;
-        x2[i] = (c_init & (1<<i))>>i;
-    }
-    x1[0] = 1;
+    // Initialize the 2nd m-sequence
+    x2 = c_init;
 
-    // Advance m-sequences
+    // Advance the 2nd m-sequence
     for(i=0; i<(1600-31); i++)
     {
-        new_bit1 = x1[3] ^ x1[0];
-        new_bit2 = x2[3] ^ x2[2] ^ x2[1] ^ x2[0];
+        new_bit2 = ((x2 >> 3) ^ (x2 >> 2) ^ (x2 >> 1) ^ x2) & 0x1;
 
-        for(j=0; j<30; j++)
-        {
-            x1[j] = x1[j+1];
-            x2[j] = x2[j+1];
-        }
-        x1[30] = new_bit1;
-        x2[30] = new_bit2;
+        x2 = (x2 >> 1) | (new_bit2 << 30);
     }
+
+    // Initialize the 1st m-sequence
+    x1 = 0x54D21B24; // This is the result of advancing the initial value of 0x00000001
 
     // Generate c
     for(i=0; i<len; i++)
     {
-        new_bit1 = x1[3] ^ x1[0];
-        new_bit2 = x2[3] ^ x2[2] ^ x2[1] ^ x2[0];
+        new_bit1 = ((x1 >> 3) ^ x1) & 0x1;
+        new_bit2 = ((x2 >> 3) ^ (x2 >> 2) ^ (x2 >> 1) ^ x2) & 0x1;
 
-        for(j=0; j<30; j++)
-        {
-            x1[j] = x1[j+1];
-            x2[j] = x2[j+1];
-        }
-        x1[30] = new_bit1;
-        x2[30] = new_bit2;
+        x1 = (x1 >> 1) | (new_bit1 << 30);
+        x2 = (x2 >> 1) | (new_bit2 << 30);
 
         c[i] = new_bit1 ^ new_bit2;
     }

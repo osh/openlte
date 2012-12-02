@@ -39,3 +39,5 @@ v00.06.02     Added soft bit turbo decoding, random access and paging PDCCH deco
               and more RRC support.
 v00.06.03     Added SIB2 support and interactive configuration to file_gen app.
               Added multiple eNB decode support to libraries and file_scan app.
+v00.06.04     Optimized the psuedo random sequence generator, added pre-configuring
+              of the cell specific reference signals, and fixed 4 antenna reception.
