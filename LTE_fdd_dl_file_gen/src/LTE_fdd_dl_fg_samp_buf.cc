@@ -30,6 +30,9 @@
                                    input method to be "interactive"
     12/01/2012    Ben Wojtowicz    Using the latest liblte library and added
                                    4 antenna support
+    12/26/2012    Ben Wojtowicz    Added SIB3, SIB4, and SIB8 support, fixed a
+                                   file size bug, and pulled in a 64 bit bug fix
+                                   from Thomas Bertani.
 
 *******************************************************************************/
 
@@ -45,7 +48,6 @@
                               DEFINES
 *******************************************************************************/
 
-#define MAX_NOUTPUT_ITEMS 10000
 
 /*******************************************************************************
                               TYPEDEFS
@@ -116,6 +118,7 @@ LTE_fdd_dl_fg_samp_buf::LTE_fdd_dl_fg_samp_buf()
     sib1.q_rx_lev_min_offset              = 1;
     sib1.freq_band_indicator              = 1;
     sib1.system_info_value_tag            = 0;
+    sib1.p_max_present                    = true;
     sib1.p_max                            = -30;
     sib1.tdd                              = false;
     // SIB2
@@ -172,6 +175,34 @@ LTE_fdd_dl_fg_samp_buf::LTE_fdd_dl_fg_samp_buf()
     sib2.additional_spectrum_emission                                                 = 1;
     sib2.mbsfn_subfr_cnfg_list_size                                                   = 0;
     sib2.time_alignment_timer                                                         = LIBLTE_RRC_TIME_ALIGNMENT_TIMER_SF500;
+    // SIB3
+    sib3_present                          = 0;
+    sib3.q_hyst                           = LIBLTE_RRC_Q_HYST_DB_0;
+    sib3.speed_state_resel_params.present = false;
+    sib3.s_non_intra_search_present       = false;
+    sib3.thresh_serving_low               = 0;
+    sib3.cell_resel_prio                  = 0;
+    sib3.q_rx_lev_min                     = sib1.q_rx_lev_min;
+    sib3.p_max_present                    = true;
+    sib3.p_max                            = sib1.p_max;
+    sib3.s_intra_search_present           = false;
+    sib3.allowed_meas_bw_present          = false;
+    sib3.presence_ant_port_1              = false;
+    sib3.neigh_cell_cnfg                  = 0;
+    sib3.t_resel_eutra                    = 0;
+    sib3.t_resel_eutra_sf_present         = false;
+    // SIB4
+    sib4_present                         = 0;
+    sib4.intra_freq_neigh_cell_list_size = 0;
+    sib4.intra_freq_black_cell_list_size = 0;
+    sib4.csg_phys_cell_id_range_present  = false;
+    // SIB8
+    sib8_present                 = 0;
+    sib8.sys_time_info_present   = false;
+    sib8.search_win_size_present = true;
+    sib8.search_win_size         = 0;
+    sib8.params_hrpd_present     = false;
+    sib8.params_1xrtt_present    = false;
     // PCFICH
     pcfich.cfi = 2;
 
@@ -179,10 +210,11 @@ LTE_fdd_dl_fg_samp_buf::LTE_fdd_dl_fg_samp_buf()
     need_config = true;
 
     // Allocate the sample buffer
-    i_buf         = (float *)malloc(4*LTE_FDD_DL_FG_SAMP_BUF_SIZE*sizeof(float));
-    q_buf         = (float *)malloc(4*LTE_FDD_DL_FG_SAMP_BUF_SIZE*sizeof(float));
-    samp_buf_idx  = 0;
-    samples_ready = false;
+    i_buf           = (float *)malloc(4*LTE_FDD_DL_FG_SAMP_BUF_SIZE*sizeof(float));
+    q_buf           = (float *)malloc(4*LTE_FDD_DL_FG_SAMP_BUF_SIZE*sizeof(float));
+    samp_buf_idx    = 0;
+    samples_ready   = false;
+    last_samp_was_i = false;
 }
 LTE_fdd_dl_fg_samp_buf::~LTE_fdd_dl_fg_samp_buf()
 {
@@ -194,23 +226,25 @@ LTE_fdd_dl_fg_samp_buf::~LTE_fdd_dl_fg_samp_buf()
     free(q_buf);
 }
 
-int32 LTE_fdd_dl_fg_samp_buf::work(int32                      ninput_items,
+int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                                    gr_vector_const_void_star &input_items,
                                    gr_vector_void_star       &output_items)
 {
-    LIBLTE_PHY_SUBFRAME_STRUCT  subframe;
-    float                       i_samp;
-    float                       q_samp;
-    uint32                      noutput_items;
-    uint32                      i;
-    uint32                      j;
-    uint32                      k;
-    uint32                      p;
-    uint32                      N_sfr;
-    uint32                      line_size = LINE_MAX;
-    int8                       *out       = (int8 *)output_items[0];
-    char                       *line;
-    bool                        done = false;
+    float   i_samp;
+    float   q_samp;
+    int32   act_noutput_items;
+    uint32  out_idx;
+    uint32  loop_cnt;
+    uint32  i;
+    uint32  j;
+    uint32  k;
+    uint32  p;
+    uint32  N_sfr;
+    uint32  last_prb;
+    size_t  line_size = LINE_MAX;
+    int8   *out       = (int8 *)output_items[0];
+    char   *line;
+    bool    done = false;
 
     line = (char *)malloc(line_size);
     if(need_config)
@@ -225,7 +259,7 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      ninput_items,
         if(!need_config)
         {
             // Initialize the LTE library
-            liblte_phy_init(&phy_struct, N_id_cell);
+            liblte_phy_init(&phy_struct, N_id_cell, LIBLTE_PHY_N_SC_RB_NORMAL_CP);
         }
     }
     free(line);
@@ -275,6 +309,7 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      ninput_items,
                                    &subframe,
                                    FFT_pad_size,
                                    N_rb_dl,
+                                   LIBLTE_PHY_N_SC_RB_NORMAL_CP,
                                    N_id_cell,
                                    N_ant);
 
@@ -296,6 +331,7 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      ninput_items,
                 }
 
                 // PDCCH & PDSCH
+                pdcch.N_alloc = 0;
                 if(subframe.num == 5 &&
                    (sfn % 2)    == 0)
                 {
@@ -304,77 +340,127 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      ninput_items,
                     bcch_dlsch_msg.sibs[0].sib_type = LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1;
                     memcpy(&bcch_dlsch_msg.sibs[0].sib, &sib1, sizeof(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT));
                     liblte_rrc_pack_bcch_dlsch_msg(&bcch_dlsch_msg,
-                                                   &rrc_msg);
-                    liblte_phy_get_tbs_mcs_and_n_prb_for_si(rrc_msg.N_bits,
+                                                   &pdcch.alloc[pdcch.N_alloc].msg);
+                    liblte_phy_get_tbs_mcs_and_n_prb_for_si(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
+                                                            subframe.num,
                                                             N_rb_dl,
-                                                            &pdcch.alloc[0].tbs,
-                                                            &pdcch.alloc[0].mcs,
-                                                            &pdcch.alloc[0].N_prb);
-                    pdcch.N_alloc                 = 1;
-                    pdcch.alloc[0].pre_coder_type = LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY;
-                    pdcch.alloc[0].mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
-                    pdcch.alloc[0].rv_idx         = (uint32)ceilf(1.5 * ((sfn / 2) % 4)) % 4; //36.321 section 5.3.1
-                    for(i=0; i<pdcch.alloc[0].N_prb; i++)
-                    {
-                        pdcch.alloc[0].prb[i] = i; // FIXME: Scheduler
-                    }
-                    pdcch.alloc[0].N_codewords = 1;
-                    pdcch.alloc[0].rnti        = LIBLTE_PHY_SI_RNTI;
-                    if(N_ant == 1)
-                    {
-                        pdcch.alloc[0].tx_mode = 1;
-                    }else{
-                        pdcch.alloc[0].tx_mode = 2;
-                    }
-                    liblte_phy_pdcch_channel_encode(phy_struct,
-                                                    &pcfich,
-                                                    &phich,
-                                                    &pdcch,
-                                                    N_id_cell,
-                                                    N_ant,
-                                                    LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                                                    N_rb_dl,
-                                                    phich_res,
-                                                    mib.phich_config.dur,
-                                                    &subframe);
-                    liblte_phy_pdsch_channel_encode(phy_struct,
-                                                    &pdcch,
-                                                    rrc_msg.msg,
-                                                    rrc_msg.N_bits,
-                                                    N_id_cell,
-                                                    N_ant,
-                                                    LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                                                    N_rb_dl,
-                                                    &subframe);
-                }else if(subframe.num             == (0 * si_win_len) &&
-                         (sfn % si_periodicity_T) == ((0 * si_win_len)/10)){
+                                                            &pdcch.alloc[pdcch.N_alloc].tbs,
+                                                            &pdcch.alloc[pdcch.N_alloc].mcs,
+                                                            &pdcch.alloc[pdcch.N_alloc].N_prb);
+                    pdcch.alloc[pdcch.N_alloc].pre_coder_type = LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY;
+                    pdcch.alloc[pdcch.N_alloc].mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
+                    pdcch.alloc[pdcch.N_alloc].rv_idx         = (uint32)ceilf(1.5 * ((sfn / 2) % 4)) % 4; //36.321 section 5.3.1
+                    pdcch.alloc[pdcch.N_alloc].N_codewords    = 1;
+                    pdcch.alloc[pdcch.N_alloc].rnti           = LIBLTE_PHY_SI_RNTI;
+                    pdcch.alloc[pdcch.N_alloc].tx_mode        = sib_tx_mode;
+                    pdcch.N_alloc++;
+                }
+                if(subframe.num             ==  (0 * si_win_len)%10 &&
+                   (sfn % si_periodicity_T) == ((0 * si_win_len)/10))
+                {
                     // SIs in 1st scheduling info list entry
                     bcch_dlsch_msg.N_sibs           = 1;
                     bcch_dlsch_msg.sibs[0].sib_type = LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2;
                     memcpy(&bcch_dlsch_msg.sibs[0].sib, &sib2, sizeof(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT));
+                    if(sib1.sched_info[0].N_sib_mapping_info != 0)
+                    {
+                        switch(sib1.sched_info[0].sib_mapping_info[0].sib_type)
+                        {
+                        case LIBLTE_RRC_SIB_TYPE_3:
+                            bcch_dlsch_msg.N_sibs++;
+                            bcch_dlsch_msg.sibs[1].sib_type = LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3;
+                            memcpy(&bcch_dlsch_msg.sibs[1].sib, &sib3, sizeof(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3_STRUCT));
+                            break;
+                        case LIBLTE_RRC_SIB_TYPE_4:
+                            bcch_dlsch_msg.N_sibs++;
+                            bcch_dlsch_msg.sibs[1].sib_type = LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4;
+                            memcpy(&bcch_dlsch_msg.sibs[1].sib, &sib4, sizeof(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4_STRUCT));
+                            break;
+                        case LIBLTE_RRC_SIB_TYPE_8:
+                            bcch_dlsch_msg.N_sibs++;
+                            bcch_dlsch_msg.sibs[1].sib_type = LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8;
+                            memcpy(&bcch_dlsch_msg.sibs[1].sib, &sib8, sizeof(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT));
+                            break;
+                        default:
+                            break;
+                        }
+                    }
                     liblte_rrc_pack_bcch_dlsch_msg(&bcch_dlsch_msg,
-                                                   &rrc_msg);
-                    liblte_phy_get_tbs_mcs_and_n_prb_for_si(rrc_msg.N_bits,
+                                                   &pdcch.alloc[pdcch.N_alloc].msg);
+                    liblte_phy_get_tbs_mcs_and_n_prb_for_si(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
+                                                            subframe.num,
                                                             N_rb_dl,
-                                                            &pdcch.alloc[0].tbs,
-                                                            &pdcch.alloc[0].mcs,
-                                                            &pdcch.alloc[0].N_prb);
-                    pdcch.N_alloc                 = 1;
-                    pdcch.alloc[0].pre_coder_type = LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY;
-                    pdcch.alloc[0].mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
-                    pdcch.alloc[0].rv_idx         = 0; //36.321 section 5.3.1
-                    for(i=0; i<pdcch.alloc[0].N_prb; i++)
+                                                            &pdcch.alloc[pdcch.N_alloc].tbs,
+                                                            &pdcch.alloc[pdcch.N_alloc].mcs,
+                                                            &pdcch.alloc[pdcch.N_alloc].N_prb);
+                    pdcch.alloc[pdcch.N_alloc].pre_coder_type = LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY;
+                    pdcch.alloc[pdcch.N_alloc].mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
+                    pdcch.alloc[pdcch.N_alloc].rv_idx         = 0; //36.321 section 5.3.1
+                    pdcch.alloc[pdcch.N_alloc].N_codewords    = 1;
+                    pdcch.alloc[pdcch.N_alloc].rnti           = LIBLTE_PHY_SI_RNTI;
+                    pdcch.alloc[pdcch.N_alloc].tx_mode        = sib_tx_mode;
+                    pdcch.N_alloc++;
+                }
+                for(j=1; j<sib1.N_sched_info; j++)
+                {
+                    if(subframe.num             ==  (j * si_win_len)%10 &&
+                       (sfn % si_periodicity_T) == ((j * si_win_len)/10))
                     {
-                        pdcch.alloc[0].prb[i] = i; // FIXME: Scheduler
+                        // SIs in the jth scheduling info list entry
+                        bcch_dlsch_msg.N_sibs = sib1.sched_info[j].N_sib_mapping_info;
+                        for(i=0; i<bcch_dlsch_msg.N_sibs; i++)
+                        {
+                            switch(sib1.sched_info[j].sib_mapping_info[i].sib_type)
+                            {
+                            case LIBLTE_RRC_SIB_TYPE_3:
+                                bcch_dlsch_msg.sibs[i].sib_type = LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3;
+                                memcpy(&bcch_dlsch_msg.sibs[i].sib, &sib3, sizeof(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3_STRUCT));
+                                break;
+                            case LIBLTE_RRC_SIB_TYPE_4:
+                                bcch_dlsch_msg.sibs[i].sib_type = LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4;
+                                memcpy(&bcch_dlsch_msg.sibs[i].sib, &sib4, sizeof(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4_STRUCT));
+                                break;
+                            case LIBLTE_RRC_SIB_TYPE_8:
+                                bcch_dlsch_msg.sibs[i].sib_type = LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8;
+                                memcpy(&bcch_dlsch_msg.sibs[i].sib, &sib8, sizeof(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT));
+                                break;
+                            default:
+                                break;
+                            }
+                        }
+                        if(0 != bcch_dlsch_msg.N_sibs)
+                        {
+                            liblte_rrc_pack_bcch_dlsch_msg(&bcch_dlsch_msg,
+                                                           &pdcch.alloc[pdcch.N_alloc].msg);
+                            liblte_phy_get_tbs_mcs_and_n_prb_for_si(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
+                                                                    subframe.num,
+                                                                    N_rb_dl,
+                                                                    &pdcch.alloc[pdcch.N_alloc].tbs,
+                                                                    &pdcch.alloc[pdcch.N_alloc].mcs,
+                                                                    &pdcch.alloc[pdcch.N_alloc].N_prb);
+                            pdcch.alloc[pdcch.N_alloc].pre_coder_type = LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY;
+                            pdcch.alloc[pdcch.N_alloc].mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
+                            pdcch.alloc[pdcch.N_alloc].rv_idx         = 0; //36.321 section 5.3.1
+                            pdcch.alloc[pdcch.N_alloc].N_codewords    = 1;
+                            pdcch.alloc[pdcch.N_alloc].rnti           = LIBLTE_PHY_SI_RNTI;
+                            pdcch.alloc[pdcch.N_alloc].tx_mode        = sib_tx_mode;
+                            pdcch.N_alloc++;
+                        }
                     }
-                    pdcch.alloc[0].N_codewords = 1;
-                    pdcch.alloc[0].rnti        = LIBLTE_PHY_SI_RNTI;
-                    if(N_ant == 1)
+                }
+
+                // Schedule all allocations
+                // FIXME: Scheduler
+                last_prb = 0;
+                for(i=0; i<pdcch.N_alloc; i++)
+                {
+                    for(j=0; j<pdcch.alloc[i].N_prb; j++)
                     {
-                        pdcch.alloc[0].tx_mode = 1;
-                    }else{
-                        pdcch.alloc[0].tx_mode = 2;
+                        pdcch.alloc[i].prb[j] = last_prb++;
                     }
+                }
+                if(0 != pdcch.N_alloc)
+                {
                     liblte_phy_pdcch_channel_encode(phy_struct,
                                                     &pcfich,
                                                     &phich,
@@ -388,25 +474,10 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      ninput_items,
                                                     &subframe);
                     liblte_phy_pdsch_channel_encode(phy_struct,
                                                     &pdcch,
-                                                    rrc_msg.msg,
-                                                    rrc_msg.N_bits,
                                                     N_id_cell,
                                                     N_ant,
                                                     LIBLTE_PHY_N_SC_RB_NORMAL_CP,
                                                     N_rb_dl,
-                                                    &subframe);
-                }else{
-                    pdcch.N_alloc = 0; // Nothing to schedule
-                    liblte_phy_pdcch_channel_encode(phy_struct,
-                                                    &pcfich,
-                                                    &phich,
-                                                    &pdcch,
-                                                    N_id_cell,
-                                                    N_ant,
-                                                    LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                                                    N_rb_dl,
-                                                    phich_res,
-                                                    mib.phich_config.dur,
                                                     &subframe);
                 }
 
@@ -431,30 +502,63 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      ninput_items,
     if(false == done &&
        true  == samples_ready)
     {
-        // Determine how many items to write
-        if((LTE_FDD_DL_FG_SAMP_BUF_SIZE - samp_buf_idx) < (MAX_NOUTPUT_ITEMS / 2))
+        act_noutput_items = 0;
+        out_idx           = 0;
+        if(noutput_items > 0)
         {
-            noutput_items = (LTE_FDD_DL_FG_SAMP_BUF_SIZE - samp_buf_idx)*2;
-        }else{
-            noutput_items = MAX_NOUTPUT_ITEMS;
-        }
-
-        // Convert the samples and write them out
-        for(i=0; i<noutput_items/2; i++)
-        {
-            i_samp = 0;
-            q_samp = 0;
-            for(p=0; p<N_ant; p++)
+            // Write out the first half sample if needed
+            if(true == last_samp_was_i)
             {
-                i_samp += i_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + samp_buf_idx];
-                q_samp += q_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + samp_buf_idx];
+                q_samp = 0;
+                for(p=0; p<N_ant; p++)
+                {
+                    q_samp += q_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + samp_buf_idx];
+                }
+                out[out_idx++] = (int8)(q_samp);
+                samp_buf_idx++;
+                act_noutput_items++;
             }
 
-            out[i*2+0] = (int8)(i_samp);
-            out[i*2+1] = (int8)(q_samp);
-            samp_buf_idx++;
+            // Determine how many full samples to write
+            if((LTE_FDD_DL_FG_SAMP_BUF_SIZE - samp_buf_idx) < ((noutput_items - act_noutput_items) / 2))
+            {
+                loop_cnt = (LTE_FDD_DL_FG_SAMP_BUF_SIZE - samp_buf_idx)*2;
+            }else{
+                loop_cnt = noutput_items - act_noutput_items;
+            }
+
+            // Write out the full samples
+            for(i=0; i<loop_cnt/2; i++)
+            {
+                i_samp = 0;
+                q_samp = 0;
+                for(p=0; p<N_ant; p++)
+                {
+                    i_samp += i_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + samp_buf_idx];
+                    q_samp += q_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + samp_buf_idx];
+                }
+
+                out[out_idx++] = (int8)(i_samp);
+                out[out_idx++] = (int8)(q_samp);
+                samp_buf_idx++;
+                act_noutput_items += 2;
+            }
+
+            // Write out the last half sample if needed
+            if((noutput_items - act_noutput_items) == 1)
+            {
+                i_samp = 0;
+                for(p=0; p<N_ant; p++)
+                {
+                    i_samp += i_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + samp_buf_idx];
+                }
+                out[out_idx++] = (int8)(i_samp);
+                act_noutput_items++;
+                last_samp_was_i = true;
+            }else{
+                last_samp_was_i = false;
+            }
         }
-        usleep(1); // file_sink was corrupting output file, this fixed it
 
         // Check to see if we need more samples
         if(samp_buf_idx >= LTE_FDD_DL_FG_SAMP_BUF_SIZE)
@@ -464,22 +568,93 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      ninput_items,
         }
     }else if(true == done){
         // No more samples to write to file, so mark as done
-        noutput_items = -1;
+        act_noutput_items = -1;
     }else{
         // Should never get here
-        noutput_items = 0;
-        samples_ready = false;
+        act_noutput_items = 0;
+        samples_ready     = false;
     }
 
     // Tell runtime system how many input items we consumed
-    consume_each(ninput_items);
+    consume_each(0);
 
     // Tell runtime system how many output items we produced
-    return(noutput_items);
+    return(act_noutput_items);
+}
+
+void LTE_fdd_dl_fg_samp_buf::recreate_sched_info(void)
+{
+    LIBLTE_RRC_SIB_TYPE_ENUM sib_array[20];
+    uint32                   num_sibs      = 0;
+    uint32                   sib_idx       = 0;
+    uint32                   N_sibs_to_map = 0;
+    uint32                   i;
+
+    // Determine which SIBs need to be mapped
+    if(1 == sib3_present)
+    {
+        sib_array[num_sibs++] = LIBLTE_RRC_SIB_TYPE_3;
+    }
+    if(1 == sib4_present)
+    {
+        sib_array[num_sibs++] = LIBLTE_RRC_SIB_TYPE_4;
+    }
+    if(1 == sib8_present)
+    {
+        sib_array[num_sibs++] = LIBLTE_RRC_SIB_TYPE_8;
+    }
+
+    // Initialize the scheduling info
+    sib1.N_sched_info                     = 1;
+    sib1.sched_info[0].N_sib_mapping_info = 0;
+
+    // Map the SIBs
+    while(num_sibs > 0)
+    {
+        // Determine how many SIBs can be mapped to this scheduling info
+        if(1 == sib1.N_sched_info)
+        {
+            if(0                         == sib1.sched_info[0].N_sib_mapping_info &&
+               LIBLTE_PHY_N_RB_DL_1_4MHZ != N_rb_dl)
+            {
+                N_sibs_to_map = 1;
+            }else{
+                N_sibs_to_map                                         = 2;
+                sib1.sched_info[sib1.N_sched_info].N_sib_mapping_info = 0;
+                sib1.sched_info[sib1.N_sched_info].si_periodicity     = LIBLTE_RRC_SI_PERIODICITY_RF8;
+                sib1.N_sched_info++;
+            }
+        }else{
+            if(2 > sib1.sched_info[sib1.N_sched_info-1].N_sib_mapping_info)
+            {
+                N_sibs_to_map = 2 - sib1.sched_info[sib1.N_sched_info-1].N_sib_mapping_info;
+            }else{
+                N_sibs_to_map                                         = 2;
+                sib1.sched_info[sib1.N_sched_info].N_sib_mapping_info = 0;
+                sib1.sched_info[sib1.N_sched_info].si_periodicity     = LIBLTE_RRC_SI_PERIODICITY_RF8;
+                sib1.N_sched_info++;
+            }
+        }
+
+        // Map the SIBs for this scheduling info
+        for(i=0; i<N_sibs_to_map; i++)
+        {
+            sib1.sched_info[sib1.N_sched_info-1].sib_mapping_info[sib1.sched_info[sib1.N_sched_info-1].N_sib_mapping_info].sib_type = sib_array[sib_idx++];
+            sib1.sched_info[sib1.N_sched_info-1].N_sib_mapping_info++;
+            num_sibs--;
+
+            if(0 == num_sibs)
+            {
+                break;
+            }
+        }
+    }
 }
 
 void LTE_fdd_dl_fg_samp_buf::print_config(void)
 {
+    uint32 i;
+
     printf("***System Configuration Parameters***\n");
     printf("\tType 'help' to reprint this menu\n");
     printf("\tHit enter to finish config and generate file\n");
@@ -572,6 +747,46 @@ void LTE_fdd_dl_fg_samp_buf::print_config(void)
     printf("\t%-30s = %10d, bounds = [-127, -96]\n",
            P0_NOMINAL_PUCCH_PARAM,
            sib2.rr_config_common_sib.ul_pwr_ctrl.p0_nominal_pucch);
+
+    // SIB3_PRESENT
+    printf("\t%-30s = %10d, bounds = [0, 1]\n",
+           SIB3_PRESENT_PARAM,
+           sib3_present);
+    if(sib3_present)
+    {
+        printf("\t%-30s = %10s, values = [0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24]\n",
+               Q_HYST_PARAM,
+               liblte_rrc_q_hyst_text[sib3.q_hyst]);
+    }
+
+    // SIB4_PRESENT
+    printf("\t%-30s = %10d, bounds = [0, 1]\n",
+           SIB4_PRESENT_PARAM,
+           sib4_present);
+    if(sib4_present)
+    {
+        printf("\t%-30s = %10d:",
+               NEIGH_CELL_LIST_PARAM,
+               sib4.intra_freq_neigh_cell_list_size);
+        for(i=0; i<sib4.intra_freq_neigh_cell_list_size; i++)
+        {
+            printf("%u,%s;",
+                   sib4.intra_freq_neigh_cell_list[i].phys_cell_id,
+                   liblte_rrc_q_offset_range_text[sib4.intra_freq_neigh_cell_list[i].q_offset_range]);
+        }
+        printf(" format=<list_size>:<phys_cell_id_0>,<q_offset_range_0>;...;<phys_cell_id_n>,<q_offset_range_n>\n");
+    }
+
+    // SIB8_PRESENT
+    printf("\t%-30s = %10d, bounds = [0, 1]\n",
+           SIB8_PRESENT_PARAM,
+           sib8_present);
+    if(sib8_present)
+    {
+        printf("\t%-30s = %10d, bounds = [0, 15]\n",
+               SEARCH_WIN_SIZE_PARAM,
+               sib8.search_win_size);
+    }
 }
 
 void LTE_fdd_dl_fg_samp_buf::change_config(char *line)
@@ -612,10 +827,26 @@ void LTE_fdd_dl_fg_samp_buf::change_config(char *line)
                 err = set_param(&sib1.tracking_area_code, value, 0, 65535);
             }else if(!strcasecmp(param, Q_RX_LEV_MIN_PARAM)){
                 err = set_param(&sib1.q_rx_lev_min, value, -140, -44);
+                sib3.q_rx_lev_min = sib1.q_rx_lev_min;
             }else if(!strcasecmp(param, P0_NOMINAL_PUSCH_PARAM)){
                 err = set_param(&sib2.rr_config_common_sib.ul_pwr_ctrl.p0_nominal_pusch, value, -126, 24);
             }else if(!strcasecmp(param, P0_NOMINAL_PUCCH_PARAM)){
                 err = set_param(&sib2.rr_config_common_sib.ul_pwr_ctrl.p0_nominal_pucch, value, -127, -96);
+            }else if(!strcasecmp(param, SIB3_PRESENT_PARAM)){
+                err = set_param(&sib3_present, value, 0, 1);
+                recreate_sched_info();
+            }else if(!strcasecmp(param, Q_HYST_PARAM)){
+                err = set_q_hyst(value);
+            }else if(!strcasecmp(param, SIB4_PRESENT_PARAM)){
+                err = set_param(&sib4_present, value, 0, 1);
+                recreate_sched_info();
+            }else if(!strcasecmp(param, NEIGH_CELL_LIST_PARAM)){
+                err = set_neigh_cell_list(value);
+            }else if(!strcasecmp(param, SIB8_PRESENT_PARAM)){
+                err = set_param(&sib8_present, value, 0, 1);
+                recreate_sched_info();
+            }else if(!strcasecmp(param, SEARCH_WIN_SIZE_PARAM)){
+                err = set_param(&sib8.search_win_size, value, 0, 15);
             }else{
                 printf("Invalid parameter (%s)\n", param);
             }
@@ -669,6 +900,8 @@ bool LTE_fdd_dl_fg_samp_buf::set_bandwidth(char *char_value)
         err = true;
     }
 
+    recreate_sched_info();
+
     return(err);
 }
 
@@ -684,6 +917,14 @@ bool LTE_fdd_dl_fg_samp_buf::set_n_ant(char *char_value)
     {
         N_ant = value;
         err   = false;
+
+        // Set the SIB tx_mode
+        if(1 == N_ant)
+        {
+            sib_tx_mode = 1;
+        }else{
+            sib_tx_mode = 2;
+        }
     }
 
     return(err);
@@ -745,6 +986,85 @@ bool LTE_fdd_dl_fg_samp_buf::set_mnc(char *char_value)
             sib1.plmn_id[0].id.mnc |= 0xF000;
         }
         err = false;
+    }
+
+    return(err);
+}
+
+bool LTE_fdd_dl_fg_samp_buf::set_q_hyst(char *char_value)
+{
+    uint32 i;
+    bool   err = false;
+
+    for(i=0; i<LIBLTE_RRC_Q_HYST_SIZE; i++)
+    {
+        if(!strcasecmp(char_value, liblte_rrc_q_hyst_text[i]))
+        {
+            sib3.q_hyst = (LIBLTE_RRC_Q_HYST_ENUM)i;
+            break;
+        }
+    }
+    if(LIBLTE_RRC_Q_HYST_SIZE == i)
+    {
+        err = true;
+    }
+
+    return(err);
+}
+
+bool LTE_fdd_dl_fg_samp_buf::set_neigh_cell_list(char *char_value)
+{
+    uint32  i;
+    char   *token1;
+    char   *token2;
+    bool    err = false;
+
+    token1 = strtok(char_value, ":");
+    if(NULL  != token1 &&
+       false == set_param(&sib4.intra_freq_neigh_cell_list_size, token1, 0, LIBLTE_RRC_MAX_CELL_INTRA))
+    {
+        for(i=0; i<sib4.intra_freq_neigh_cell_list_size; i++)
+        {
+            token1 = strtok(NULL, ",");
+            token2 = strtok(NULL, ";");
+            if(!(NULL  != token1                                                                      &&
+                 NULL  != token2                                                                      &&
+                 false == set_param(&sib4.intra_freq_neigh_cell_list[i].phys_cell_id, token1, 0, 503) &&
+                 false == set_q_offset_range(&sib4.intra_freq_neigh_cell_list[i].q_offset_range, token2)))
+            {
+                err = true;
+                break;
+            }
+        }
+    }else{
+        err = true;
+    }
+
+    if(true == err)
+    {
+        sib4.intra_freq_neigh_cell_list_size = 0;
+    }
+
+    return(err);
+}
+
+bool LTE_fdd_dl_fg_samp_buf::set_q_offset_range(LIBLTE_RRC_Q_OFFSET_RANGE_ENUM *q_offset_range,
+                                                char                           *char_value)
+{
+    uint32 i;
+    bool   err = false;
+
+    for(i=0; i<LIBLTE_RRC_Q_OFFSET_RANGE_SIZE; i++)
+    {
+        if(!strcasecmp(char_value, liblte_rrc_q_offset_range_text[i]))
+        {
+            *q_offset_range = (LIBLTE_RRC_Q_OFFSET_RANGE_ENUM)i;
+            break;
+        }
+    }
+    if(LIBLTE_RRC_Q_OFFSET_RANGE_SIZE == i)
+    {
+        err = true;
     }
 
     return(err);

@@ -28,6 +28,8 @@
     08/19/2012    Ben Wojtowicz    Using the latest liblte library.
     11/10/2012    Ben Wojtowicz    Added SIB2 support and changed the parameter
                                    input method to be "interactive"
+    12/26/2012    Ben Wojtowicz    Added SIB3, SIB4, and SIB8 support and fixed
+                                   a file size bug
 
 *******************************************************************************/
 #ifndef __LTE_FDD_DL_FG_SAMP_BUF_H__
@@ -61,6 +63,12 @@
 #define Q_RX_LEV_MIN_PARAM       "q_rx_lev_min"
 #define P0_NOMINAL_PUSCH_PARAM   "p0_nominal_pusch"
 #define P0_NOMINAL_PUCCH_PARAM   "p0_nominal_pucch"
+#define SIB3_PRESENT_PARAM       "sib3_present"
+#define Q_HYST_PARAM             "q_hyst"
+#define SIB4_PRESENT_PARAM       "sib4_present"
+#define NEIGH_CELL_LIST_PARAM    "neigh_cell_list"
+#define SIB8_PRESENT_PARAM       "sib8_present"
+#define SEARCH_WIN_SIZE_PARAM    "search_win_size"
 
 /*******************************************************************************
                               FORWARD DECLARATIONS
@@ -84,7 +92,7 @@ class LTE_fdd_dl_fg_samp_buf : public gr_sync_block
 public:
     ~LTE_fdd_dl_fg_samp_buf();
 
-    int32 work(int32                      ninput_items,
+    int32 work(int32                      noutput_items,
                gr_vector_const_void_star &input_items,
                gr_vector_void_star       &output_items);
 
@@ -93,36 +101,44 @@ private:
 
     LTE_fdd_dl_fg_samp_buf();
 
-    // LTE library
-    LIBLTE_PHY_STRUCT     *phy_struct;
-    LIBLTE_RRC_MSG_STRUCT  rrc_msg;
-
     // Sample buffer
     float  *i_buf;
     float  *q_buf;
     uint32  samp_buf_idx;
     bool    samples_ready;
+    bool    last_samp_was_i;
 
     // LTE parameters
-    LIBLTE_RRC_MIB_STRUCT                   mib;
-    LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT        bcch_dlsch_msg;
-    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT sib1;
-    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT sib2;
-    LIBLTE_PHY_PCFICH_STRUCT                pcfich;
-    LIBLTE_PHY_PHICH_STRUCT                 phich;
-    LIBLTE_PHY_PDCCH_STRUCT                 pdcch;
-    float                                   phich_res;
-    float                                   bandwidth;
-    uint32                                  sfn;
-    uint32                                  N_frames;
-    uint32                                  N_id_cell;
-    uint32                                  N_id_1;
-    uint32                                  N_id_2;
-    uint32                                  N_rb_dl;
-    uint32                                  FFT_pad_size;
-    uint32                                  si_periodicity_T;
-    uint32                                  si_win_len;
-    uint8                                   N_ant;
+    void recreate_sched_info(void);
+    LIBLTE_RRC_MSG_STRUCT                    rrc_msg;
+    LIBLTE_RRC_MIB_STRUCT                    mib;
+    LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT         bcch_dlsch_msg;
+    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT  sib1;
+    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT  sib2;
+    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3_STRUCT  sib3;
+    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4_STRUCT  sib4;
+    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT  sib8;
+    LIBLTE_PHY_STRUCT                       *phy_struct;
+    LIBLTE_PHY_PCFICH_STRUCT                 pcfich;
+    LIBLTE_PHY_PHICH_STRUCT                  phich;
+    LIBLTE_PHY_PDCCH_STRUCT                  pdcch;
+    LIBLTE_PHY_SUBFRAME_STRUCT               subframe;
+    float                                    phich_res;
+    float                                    bandwidth;
+    uint32                                   sfn;
+    uint32                                   N_frames;
+    uint32                                   N_id_cell;
+    uint32                                   N_id_1;
+    uint32                                   N_id_2;
+    uint32                                   N_rb_dl;
+    uint32                                   FFT_pad_size;
+    uint32                                   si_periodicity_T;
+    uint32                                   si_win_len;
+    uint32                                   sib_tx_mode;
+    uint8                                    N_ant;
+    uint8                                    sib3_present;
+    uint8                                    sib4_present;
+    uint8                                    sib8_present;
 
     // Configuration
     void print_config(void);
@@ -132,6 +148,9 @@ private:
     bool set_n_id_cell(char *char_value);
     bool set_mcc(char *char_value);
     bool set_mnc(char *char_value);
+    bool set_q_hyst(char *char_value);
+    bool set_neigh_cell_list(char *char_value);
+    bool set_q_offset_range(LIBLTE_RRC_Q_OFFSET_RANGE_ENUM *q_offset_range, char *char_value);
     bool set_param(uint32 *param, char *char_value, uint32 llimit, uint32 ulimit);
     bool set_param(uint16 *param, char *char_value, uint16 llimit, uint16 ulimit);
     bool set_param(uint8 *param, char *char_value, uint8 llimit, uint8 ulimit);

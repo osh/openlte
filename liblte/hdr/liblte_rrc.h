@@ -30,6 +30,7 @@
     08/19/2012    Ben Wojtowicz    Added functionality to support SIB2, SIB3,
                                    SIB4, and SIB8 packing and unpacking
     10/06/2012    Ben Wojtowicz    Added more decoding/encoding.
+    12/26/2012    Ben Wojtowicz    Added text versions of some enums.
 
 *******************************************************************************/
 
@@ -1656,7 +1657,16 @@ typedef enum{
     LIBLTE_RRC_Q_OFFSET_RANGE_DB_20,
     LIBLTE_RRC_Q_OFFSET_RANGE_DB_22,
     LIBLTE_RRC_Q_OFFSET_RANGE_DB_24,
+    LIBLTE_RRC_Q_OFFSET_RANGE_SIZE,
 }LIBLTE_RRC_Q_OFFSET_RANGE_ENUM;
+static const char liblte_rrc_q_offset_range_text[LIBLTE_RRC_Q_OFFSET_RANGE_SIZE][10] = {"-24", "-22", "-20", "-18",
+                                                                                        "-16", "-14", "-12", "-10",
+                                                                                         "-8",  "-6",  "-5",  "-4",
+                                                                                         "-3",  "-2",  "-1",   "0",
+                                                                                          "1",   "2",   "3",   "4",
+                                                                                          "5",   "6",   "8",  "10",
+                                                                                         "12",  "14",  "16",  "18",
+                                                                                         "20",  "22",  "24"};
 // Structs
 // Functions
 LIBLTE_ERROR_ENUM liblte_rrc_pack_q_offset_range_ie(LIBLTE_RRC_Q_OFFSET_RANGE_ENUM   q_offset_range,
@@ -3054,7 +3064,12 @@ typedef enum{
     LIBLTE_RRC_Q_HYST_DB_20,
     LIBLTE_RRC_Q_HYST_DB_22,
     LIBLTE_RRC_Q_HYST_DB_24,
+    LIBLTE_RRC_Q_HYST_SIZE,
 }LIBLTE_RRC_Q_HYST_ENUM;
+static const char liblte_rrc_q_hyst_text[LIBLTE_RRC_Q_HYST_SIZE][10] = { "0",  "1",  "2",  "3",
+                                                                         "4",  "5",  "6",  "8",
+                                                                        "10", "12", "14", "16",
+                                                                        "18", "20", "22", "24"};
 typedef enum{
     LIBLTE_RRC_SF_MEDIUM_DB_N6 = 0,
     LIBLTE_RRC_SF_MEDIUM_DB_N4,

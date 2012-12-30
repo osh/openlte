@@ -20,7 +20,7 @@ dnl  the Free Software Foundation, Inc., 51 Franklin Street,
 dnl  Boston, MA 02110-1301, USA.
 dnl 
 
-AC_INIT(openlte,0.6.4)
+AC_INIT(openlte,0.6.5)
 AC_PREREQ(2.57)
 AC_CONFIG_AUX_DIR([.])
 

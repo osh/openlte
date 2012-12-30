@@ -39,6 +39,8 @@
                                    and re-factored the coarse timing and freq
                                    search to find more than 1 eNB.
     12/01/2012    Ben Wojtowicz    Added ability to preconfigure CRS.
+    12/26/2012    Ben Wojtowicz    Started supporting N_sc_rb for normal and
+                                   extended CP and fixed several FIXMEs.
 
 *******************************************************************************/
 
@@ -180,6 +182,7 @@ typedef struct{
     float  bch_descramb_bits[1920];
     float  bch_rx_d_bits[1920];
     uint32 bch_c[1920];
+    uint32 bch_N_bits;
     uint8  bch_tx_d_bits[1920];
     uint8  bch_c_bits[40];
     uint8  bch_encode_bits[1920];
@@ -364,7 +367,8 @@ typedef struct{
 }LIBLTE_PHY_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT **phy_struct,
-                                  uint16              N_id_cell);
+                                  uint16              N_id_cell,
+                                  uint32              N_sc_rb);
 
 /*********************************************************************
     Name: liblte_phy_cleanup
@@ -392,6 +396,7 @@ LIBLTE_ERROR_ENUM liblte_phy_cleanup(LIBLTE_PHY_STRUCT *phy_struct);
 // Enums
 // Structs
 typedef struct{
+    LIBLTE_RRC_MSG_STRUCT           msg;
     LIBLTE_PHY_PRE_CODER_TYPE_ENUM  pre_coder_type;
     LIBLTE_PHY_MODULATION_TYPE_ENUM mod_type;
     uint32                          tbs;
@@ -412,8 +417,6 @@ typedef struct{
 // Functions
 LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *phy_struct,
                                                   LIBLTE_PHY_PDCCH_STRUCT    *pdcch,
-                                                  uint8                      *in_bits,
-                                                  uint32                      N_in_bits,
                                                   uint32                      N_id_cell,
                                                   uint8                       N_ant,
                                                   uint32                      N_sc_rb,
@@ -480,6 +483,8 @@ LIBLTE_ERROR_ENUM liblte_phy_bch_channel_encode(LIBLTE_PHY_STRUCT          *phy_
 LIBLTE_ERROR_ENUM liblte_phy_bch_channel_decode(LIBLTE_PHY_STRUCT          *phy_struct,
                                                 LIBLTE_PHY_SUBFRAME_STRUCT *subframe,
                                                 uint32                      N_id_cell,
+                                                uint32                      N_sc_rb,
+                                                uint32                      N_rb_dl,
                                                 uint8                      *N_ant,
                                                 uint8                      *out_bits,
                                                 uint32                     *N_out_bits,
@@ -564,6 +569,7 @@ LIBLTE_ERROR_ENUM liblte_phy_map_crs(LIBLTE_PHY_STRUCT          *phy_struct,
                                      LIBLTE_PHY_SUBFRAME_STRUCT *subframe,
                                      uint32                      FFT_pad_size,
                                      uint32                      N_rb_dl,
+                                     uint32                      N_sc_rb,
                                      uint32                      N_id_cell,
                                      uint8                       N_ant);
 
@@ -708,6 +714,7 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
                                                  uint8                       subfr_num,
                                                  uint32                      FFT_pad_size,
                                                  uint32                      N_rb_dl,
+                                                 uint32                      N_sc_rb,
                                                  uint32                      N_id_cell,
                                                  uint8                       N_ant,
                                                  LIBLTE_PHY_SUBFRAME_STRUCT *subframe);
@@ -726,6 +733,7 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
 // Structs
 // Functions
 LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_si(uint32  N_bits,
+                                                          uint32  N_subframe,
                                                           uint32  N_rb_dl,
                                                           uint32 *tbs,
                                                           uint8  *mcs,

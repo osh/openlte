@@ -34,6 +34,8 @@
     11/10/2012    Ben Wojtowicz    Using the latest libraries to decode more
                                    than 1 eNB
     12/01/2012    Ben Wojtowicz    Using the latest liblte library
+    12/26/2012    Ben Wojtowicz    Added more detail printing of RACH
+                                   configuration
 
 *******************************************************************************/
 
@@ -90,7 +92,9 @@ LTE_fdd_dl_fs_samp_buf::LTE_fdd_dl_fs_samp_buf()
     uint32 i;
 
     // Initialize the LTE library
-    liblte_phy_init(&phy_struct, LIBLTE_PHY_INIT_N_ID_CELL_UNKNOWN);
+    liblte_phy_init(&phy_struct,
+                    LIBLTE_PHY_INIT_N_ID_CELL_UNKNOWN,
+                    LIBLTE_PHY_N_SC_RB_NORMAL_CP);
 
     // Initialize the sample buffer
     i_buf           = (float *)malloc(LTE_FDD_DL_FS_SAMP_BUF_SIZE*sizeof(float));
@@ -271,12 +275,15 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                                     0,
                                                                     FFT_pad_size,
                                                                     N_rb_dl,
+                                                                    LIBLTE_PHY_N_SC_RB_NORMAL_CP,
                                                                     N_id_cell,
                                                                     4,
                                                                     &subframe) &&
                    LIBLTE_SUCCESS == liblte_phy_bch_channel_decode(phy_struct,
                                                                    &subframe,
                                                                    N_id_cell,
+                                                                   LIBLTE_PHY_N_SC_RB_NORMAL_CP,
+                                                                   N_rb_dl,
                                                                    &N_ant,
                                                                    rrc_msg.msg,
                                                                    &rrc_msg.N_bits,
@@ -352,6 +359,7 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                                     5,
                                                                     FFT_pad_size,
                                                                     N_rb_dl,
+                                                                    LIBLTE_PHY_N_SC_RB_NORMAL_CP,
                                                                     N_id_cell,
                                                                     N_ant,
                                                                     &subframe) &&
@@ -404,6 +412,7 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                                     N_sfr,
                                                                     FFT_pad_size,
                                                                     N_rb_dl,
+                                                                    LIBLTE_PHY_N_SC_RB_NORMAL_CP,
                                                                     N_id_cell,
                                                                     N_ant,
                                                                     &subframe) &&
@@ -1453,6 +1462,201 @@ void LTE_fdd_dl_fs_samp_buf::print_sib2(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT 
         }
         printf("\t\t%-40s=%20u\n", "Root Sequence Index", sib2->rr_config_common_sib.prach_cnfg.root_sequence_index);
         printf("\t\t%-40s=%20u\n", "PRACH Config Index", sib2->rr_config_common_sib.prach_cnfg.prach_cnfg_info.prach_config_index);
+        switch(sib2->rr_config_common_sib.prach_cnfg.prach_cnfg_info.prach_config_index)
+        {
+        case 0:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Even, RACH Subframe Number = 1\n");
+            break;
+        case 1:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Even, RACH Subframe Number = 4\n");
+            break;
+        case 2:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Even, RACH Subframe Number = 7\n");
+            break;
+        case 3:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Any, RACH Subframe Number = 1\n");
+            break;
+        case 4:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Any, RACH Subframe Number = 4\n");
+            break;
+        case 5:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Any, RACH Subframe Number = 7\n");
+            break;
+        case 6:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Any, RACH Subframe Number = 1,6\n");
+            break;
+        case 7:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Any, RACH Subframe Number = 2,7\n");
+            break;
+        case 8:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Any, RACH Subframe Number = 3,8\n");
+            break;
+        case 9:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Any, RACH Subframe Number = 1,4,7\n");
+            break;
+        case 10:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Any, RACH Subframe Number = 2,5,8\n");
+            break;
+        case 11:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Any, RACH Subframe Number = 3,6,9\n");
+            break;
+        case 12:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Any, RACH Subframe Number = 0,2,4,6,8\n");
+            break;
+        case 13:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Any, RACH Subframe Number = 1,3,5,7,9\n");
+            break;
+        case 14:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Any, RACH Subframe Number = 0,1,2,3,4,5,6,7,8,9\n");
+            break;
+        case 15:
+            printf("\t\t\tPreamble Format = 0, RACH SFN = Even, RACH Subframe Number = 9\n");
+            break;
+        case 16:
+            printf("\t\t\tPreamble Format = 1, RACH SFN = Even, RACH Subframe Number = 1\n");
+            break;
+        case 17:
+            printf("\t\t\tPreamble Format = 1, RACH SFN = Even, RACH Subframe Number = 4\n");
+            break;
+        case 18:
+            printf("\t\t\tPreamble Format = 1, RACH SFN = Even, RACH Subframe Number = 7\n");
+            break;
+        case 19:
+            printf("\t\t\tPreamble Format = 1, RACH SFN = Any, RACH Subframe Number = 1\n");
+            break;
+        case 20:
+            printf("\t\t\tPreamble Format = 1, RACH SFN = Any, RACH Subframe Number = 4\n");
+            break;
+        case 21:
+            printf("\t\t\tPreamble Format = 1, RACH SFN = Any, RACH Subframe Number = 7\n");
+            break;
+        case 22:
+            printf("\t\t\tPreamble Format = 1, RACH SFN = Any, RACH Subframe Number = 1,6\n");
+            break;
+        case 23:
+            printf("\t\t\tPreamble Format = 1, RACH SFN = Any, RACH Subframe Number = 2,7\n");
+            break;
+        case 24:
+            printf("\t\t\tPreamble Format = 1, RACH SFN = Any, RACH Subframe Number = 3,8\n");
+            break;
+        case 25:
+            printf("\t\t\tPreamble Format = 1, RACH SFN = Any, RACH Subframe Number = 1,4,7\n");
+            break;
+        case 26:
+            printf("\t\t\tPreamble Format = 1, RACH SFN = Any, RACH Subframe Number = 2,5,8\n");
+            break;
+        case 27:
+            printf("\t\t\tPreamble Format = 1, RACH SFN = Any, RACH Subframe Number = 3,6,9\n");
+            break;
+        case 28:
+            printf("\t\t\tPreamble Format = 1, RACH SFN = Any, RACH Subframe Number = 0,2,4,6,8\n");
+            break;
+        case 29:
+            printf("\t\t\tPreamble Format = 1, RACH SFN = Any, RACH Subframe Number = 1,3,5,7,9\n");
+            break;
+        case 30:
+            printf("\t\t\tPreamble Format = N/A, RACH SFN = N/A, RACH Subframe Number = N/A\n");
+            break;
+        case 31:
+            printf("\t\t\tPreamble Format = 1, RACH SFN = Even, RACH Subframe Number = 9\n");
+            break;
+        case 32:
+            printf("\t\t\tPreamble Format = 2, RACH SFN = Even, RACH Subframe Number = 1\n");
+            break;
+        case 33:
+            printf("\t\t\tPreamble Format = 2, RACH SFN = Even, RACH Subframe Number = 4\n");
+            break;
+        case 34:
+            printf("\t\t\tPreamble Format = 2, RACH SFN = Even, RACH Subframe Number = 7\n");
+            break;
+        case 35:
+            printf("\t\t\tPreamble Format = 2, RACH SFN = Any, RACH Subframe Number = 1\n");
+            break;
+        case 36:
+            printf("\t\t\tPreamble Format = 2, RACH SFN = Any, RACH Subframe Number = 4\n");
+            break;
+        case 37:
+            printf("\t\t\tPreamble Format = 2, RACH SFN = Any, RACH Subframe Number = 7\n");
+            break;
+        case 38:
+            printf("\t\t\tPreamble Format = 2, RACH SFN = Any, RACH Subframe Number = 1,6\n");
+            break;
+        case 39:
+            printf("\t\t\tPreamble Format = 2, RACH SFN = Any, RACH Subframe Number = 2,7\n");
+            break;
+        case 40:
+            printf("\t\t\tPreamble Format = 2, RACH SFN = Any, RACH Subframe Number = 3,8\n");
+            break;
+        case 41:
+            printf("\t\t\tPreamble Format = 2, RACH SFN = Any, RACH Subframe Number = 1,4,7\n");
+            break;
+        case 42:
+            printf("\t\t\tPreamble Format = 2, RACH SFN = Any, RACH Subframe Number = 2,5,8\n");
+            break;
+        case 43:
+            printf("\t\t\tPreamble Format = 2, RACH SFN = Any, RACH Subframe Number = 3,6,9\n");
+            break;
+        case 44:
+            printf("\t\t\tPreamble Format = 2, RACH SFN = Any, RACH Subframe Number = 0,2,4,6,8\n");
+            break;
+        case 45:
+            printf("\t\t\tPreamble Format = 2, RACH SFN = Any, RACH Subframe Number = 1,3,5,7,9\n");
+            break;
+        case 46:
+            printf("\t\t\tPreamble Format = N/A, RACH SFN = N/A, RACH Subframe Number = N/A\n");
+            break;
+        case 47:
+            printf("\t\t\tPreamble Format = 2, RACH SFN = Even, RACH Subframe Number = 9\n");
+            break;
+        case 48:
+            printf("\t\t\tPreamble Format = 3, RACH SFN = Even, RACH Subframe Number = 1\n");
+            break;
+        case 49:
+            printf("\t\t\tPreamble Format = 3, RACH SFN = Even, RACH Subframe Number = 4\n");
+            break;
+        case 50:
+            printf("\t\t\tPreamble Format = 3, RACH SFN = Even, RACH Subframe Number = 7\n");
+            break;
+        case 51:
+            printf("\t\t\tPreamble Format = 3, RACH SFN = Any, RACH Subframe Number = 1\n");
+            break;
+        case 52:
+            printf("\t\t\tPreamble Format = 3, RACH SFN = Any, RACH Subframe Number = 4\n");
+            break;
+        case 53:
+            printf("\t\t\tPreamble Format = 3, RACH SFN = Any, RACH Subframe Number = 7\n");
+            break;
+        case 54:
+            printf("\t\t\tPreamble Format = 3, RACH SFN = Any, RACH Subframe Number = 1,6\n");
+            break;
+        case 55:
+            printf("\t\t\tPreamble Format = 3, RACH SFN = Any, RACH Subframe Number = 2,7\n");
+            break;
+        case 56:
+            printf("\t\t\tPreamble Format = 3, RACH SFN = Any, RACH Subframe Number = 3,8\n");
+            break;
+        case 57:
+            printf("\t\t\tPreamble Format = 3, RACH SFN = Any, RACH Subframe Number = 1,4,7\n");
+            break;
+        case 58:
+            printf("\t\t\tPreamble Format = 3, RACH SFN = Any, RACH Subframe Number = 2,5,8\n");
+            break;
+        case 59:
+            printf("\t\t\tPreamble Format = 3, RACH SFN = Any, RACH Subframe Number = 3,6,9\n");
+            break;
+        case 60:
+            printf("\t\t\tPreamble Format = N/A, RACH SFN = N/A, RACH Subframe Number = N/A\n");
+            break;
+        case 61:
+            printf("\t\t\tPreamble Format = N/A, RACH SFN = N/A, RACH Subframe Number = N/A\n");
+            break;
+        case 62:
+            printf("\t\t\tPreamble Format = N/A, RACH SFN = N/A, RACH Subframe Number = N/A\n");
+            break;
+        case 63:
+            printf("\t\t\tPreamble Format = 3, RACH SFN = Even, RACH Subframe Number = 9\n");
+            break;
+        }
         if(true == sib2->rr_config_common_sib.prach_cnfg.prach_cnfg_info.high_speed_flag)
         {
             printf("\t\t%-40s=%20s\n", "High Speed Flag", "Restricted Set");

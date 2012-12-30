@@ -54,6 +54,9 @@
     12/01/2012    Ben Wojtowicz    Added the ability to preconfigure CRS, fixed
                                    decoding of 4 antennas, optimized prs
                                    generation.
+    12/26/2012    Ben Wojtowicz    Started supporting N_sc_rb for normal and
+                                   extended CP, fixed several FIXMEs, and fixed
+                                   an indexing error in PHICH mapping.
 
 *******************************************************************************/
 
@@ -533,6 +536,7 @@ void pre_decoder_and_matched_filter(float                          *y_re,
 void generate_crs(uint32  N_s,
                   uint32  L,
                   uint32  N_id_cell,
+                  uint32  N_sc_rb,
                   float  *crs_re,
                   float  *crs_im);
 
@@ -1346,7 +1350,8 @@ uint32 phy_bits_2_value(uint8  **bits,
     Document Reference: N/A
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT **phy_struct,
-                                  uint16              N_id_cell)
+                                  uint16              N_id_cell,
+                                  uint32              N_sc_rb)
 {
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
     uint32            i;
@@ -1361,9 +1366,9 @@ LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT **phy_struct,
             (*phy_struct)->N_id_cell_crs = N_id_cell;
             for(i=0; i<20; i++)
             {
-                generate_crs(i, 0, N_id_cell, (*phy_struct)->crs_re_storage[i][0], (*phy_struct)->crs_im_storage[i][0]);
-                generate_crs(i, 1, N_id_cell, (*phy_struct)->crs_re_storage[i][1], (*phy_struct)->crs_im_storage[i][1]);
-                generate_crs(i, 4, N_id_cell, (*phy_struct)->crs_re_storage[i][2], (*phy_struct)->crs_im_storage[i][2]);
+                generate_crs(i, 0, N_id_cell, N_sc_rb, (*phy_struct)->crs_re_storage[i][0], (*phy_struct)->crs_im_storage[i][0]);
+                generate_crs(i, 1, N_id_cell, N_sc_rb, (*phy_struct)->crs_re_storage[i][1], (*phy_struct)->crs_im_storage[i][1]);
+                generate_crs(i, 4, N_id_cell, N_sc_rb, (*phy_struct)->crs_re_storage[i][2], (*phy_struct)->crs_im_storage[i][2]);
             }
         }
 
@@ -1374,12 +1379,12 @@ LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT **phy_struct,
                                                               (*phy_struct)->s2s_in,
                                                               (*phy_struct)->s2s_out,
                                                               FFTW_BACKWARD,
-                                                              FFTW_ESTIMATE);
+                                                              FFTW_MEASURE);
         (*phy_struct)->samps_to_symbs_plan = fftw_plan_dft_1d(LIBLTE_PHY_N_SAMPS_PER_SYMB,
                                                               (*phy_struct)->s2s_in,
                                                               (*phy_struct)->s2s_out,
                                                               FFTW_FORWARD,
-                                                              FFTW_ESTIMATE);
+                                                              FFTW_MEASURE);
 
         err = LIBLTE_SUCCESS;
     }
@@ -1423,8 +1428,6 @@ LIBLTE_ERROR_ENUM liblte_phy_cleanup(LIBLTE_PHY_STRUCT *phy_struct)
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *phy_struct,
                                                   LIBLTE_PHY_PDCCH_STRUCT    *pdcch,
-                                                  uint8                      *in_bits,
-                                                  uint32                      N_in_bits,
                                                   uint32                      N_id_cell,
                                                   uint8                       N_ant,
                                                   uint32                      N_sc_rb,
@@ -1450,7 +1453,6 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *ph
 
     if(phy_struct != NULL &&
        pdcch      != NULL &&
-       in_bits    != NULL &&
        N_id_cell  >= 0    &&
        N_id_cell  <= 503  &&
        subframe   != NULL)
@@ -1492,8 +1494,8 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *ph
             }
             // Encode the PDSCH
             dlsch_channel_encode(phy_struct,
-                                 in_bits,
-                                 N_in_bits,
+                                 pdcch->alloc[alloc_idx].msg.msg,
+                                 pdcch->alloc[alloc_idx].msg.N_bits,
                                  pdcch->alloc[alloc_idx].tbs,
                                  pdcch->alloc[alloc_idx].tx_mode,
                                  pdcch->alloc[alloc_idx].rv_idx,
@@ -1809,7 +1811,6 @@ LIBLTE_ERROR_ENUM liblte_phy_bch_channel_encode(LIBLTE_PHY_STRUCT          *phy_
     uint32            p;
     uint32            offset;
     uint32            idx;
-    uint32            N_bits;
     uint32            M_symb;
     uint32            M_layer_symb;
     uint32            M_ap_symb;
@@ -1821,18 +1822,24 @@ LIBLTE_ERROR_ENUM liblte_phy_bch_channel_encode(LIBLTE_PHY_STRUCT          *phy_
        subframe   != NULL)
     {
         // Encode the bits to symbols
-        // FIXME: This is inefficient, encode once and save the bits
-        bch_channel_encode(phy_struct,
-                           in_bits,
-                           N_in_bits,
-                           N_ant,
-                           phy_struct->bch_encode_bits,
-                           &N_bits);
-        generate_prs_c(N_id_cell, N_bits, phy_struct->bch_c);
+        if(0 == phy_struct->bch_N_bits)
+        {
+            bch_channel_encode(phy_struct,
+                               in_bits,
+                               N_in_bits,
+                               N_ant,
+                               phy_struct->bch_encode_bits,
+                               &phy_struct->bch_N_bits);
+            generate_prs_c(N_id_cell, phy_struct->bch_N_bits, phy_struct->bch_c);
+        }
         for(i=0; i<480; i++)
         {
             offset                         = (sfn % 4)*480;
             phy_struct->bch_scramb_bits[i] = phy_struct->bch_encode_bits[offset+i] ^ phy_struct->bch_c[offset + i];
+        }
+        if(3 == (sfn % 4))
+        {
+            phy_struct->bch_N_bits = 0;
         }
         modulation_mapper(phy_struct->bch_scramb_bits,
                           480,
@@ -1898,6 +1905,8 @@ LIBLTE_ERROR_ENUM liblte_phy_bch_channel_encode(LIBLTE_PHY_STRUCT          *phy_
 LIBLTE_ERROR_ENUM liblte_phy_bch_channel_decode(LIBLTE_PHY_STRUCT          *phy_struct,
                                                 LIBLTE_PHY_SUBFRAME_STRUCT *subframe,
                                                 uint32                      N_id_cell,
+                                                uint32                      N_sc_rb,
+                                                uint32                      N_rb_dl,
                                                 uint8                      *N_ant,
                                                 uint8                      *out_bits,
                                                 uint32                     *N_out_bits,
@@ -1907,6 +1916,7 @@ LIBLTE_ERROR_ENUM liblte_phy_bch_channel_decode(LIBLTE_PHY_STRUCT          *phy_
     uint32            i;
     uint32            j;
     uint32            p;
+    uint32            in_idx;
     uint32            idx;
     uint32            M_layer_symb;
     uint32            M_symb;
@@ -1925,33 +1935,34 @@ LIBLTE_ERROR_ENUM liblte_phy_bch_channel_decode(LIBLTE_PHY_STRUCT          *phy_
 
         // Unmap PBCH and channel estimates from resource elements
         idx = 0;
-        for(i=0; i<72; i++) // FIXME: This is assuming 1.4MHz
+        for(i=0; i<72; i++)
         {
+            in_idx = N_sc_rb*N_rb_dl/2 - 36 + i;
             if((N_id_cell % 3) != (i % 3))
             {
-                phy_struct->bch_y_est_re[idx]    = subframe->rx_symb_re[7][i];
-                phy_struct->bch_y_est_im[idx]    = subframe->rx_symb_im[7][i];
-                phy_struct->bch_y_est_re[idx+48] = subframe->rx_symb_re[8][i];
-                phy_struct->bch_y_est_im[idx+48] = subframe->rx_symb_im[8][i];
+                phy_struct->bch_y_est_re[idx]    = subframe->rx_symb_re[7][in_idx];
+                phy_struct->bch_y_est_im[idx]    = subframe->rx_symb_im[7][in_idx];
+                phy_struct->bch_y_est_re[idx+48] = subframe->rx_symb_re[8][in_idx];
+                phy_struct->bch_y_est_im[idx+48] = subframe->rx_symb_im[8][in_idx];
                 for(p=0; p<4; p++)
                 {
-                    phy_struct->bch_c_est_re[p][idx]    = subframe->rx_ce_re[p][7][i];
-                    phy_struct->bch_c_est_im[p][idx]    = subframe->rx_ce_im[p][7][i];
-                    phy_struct->bch_c_est_re[p][idx+48] = subframe->rx_ce_re[p][8][i];
-                    phy_struct->bch_c_est_im[p][idx+48] = subframe->rx_ce_im[p][8][i];
+                    phy_struct->bch_c_est_re[p][idx]    = subframe->rx_ce_re[p][7][in_idx];
+                    phy_struct->bch_c_est_im[p][idx]    = subframe->rx_ce_im[p][7][in_idx];
+                    phy_struct->bch_c_est_re[p][idx+48] = subframe->rx_ce_re[p][8][in_idx];
+                    phy_struct->bch_c_est_im[p][idx+48] = subframe->rx_ce_im[p][8][in_idx];
                 }
                 idx++;
             }
-            phy_struct->bch_y_est_re[i+96]  = subframe->rx_symb_re[9][i];
-            phy_struct->bch_y_est_im[i+96]  = subframe->rx_symb_im[9][i];
-            phy_struct->bch_y_est_re[i+168] = subframe->rx_symb_re[10][i];
-            phy_struct->bch_y_est_im[i+168] = subframe->rx_symb_im[10][i];
+            phy_struct->bch_y_est_re[i+96]  = subframe->rx_symb_re[9][in_idx];
+            phy_struct->bch_y_est_im[i+96]  = subframe->rx_symb_im[9][in_idx];
+            phy_struct->bch_y_est_re[i+168] = subframe->rx_symb_re[10][in_idx];
+            phy_struct->bch_y_est_im[i+168] = subframe->rx_symb_im[10][in_idx];
             for(p=0; p<4; p++)
             {
-                phy_struct->bch_c_est_re[p][i+96]  = subframe->rx_ce_re[p][9][i];
-                phy_struct->bch_c_est_im[p][i+96]  = subframe->rx_ce_im[p][9][i];
-                phy_struct->bch_c_est_re[p][i+168] = subframe->rx_ce_re[p][10][i];
-                phy_struct->bch_c_est_im[p][i+168] = subframe->rx_ce_im[p][10][i];
+                phy_struct->bch_c_est_re[p][i+96]  = subframe->rx_ce_re[p][9][in_idx];
+                phy_struct->bch_c_est_im[p][i+96]  = subframe->rx_ce_im[p][9][in_idx];
+                phy_struct->bch_c_est_re[p][i+168] = subframe->rx_ce_re[p][10][in_idx];
+                phy_struct->bch_c_est_im[p][i+168] = subframe->rx_ce_im[p][10][in_idx];
             }
         }
 
@@ -2152,7 +2163,12 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
         {
             // PHICH
             // Map the symbols to resource elements, 3GPP TS 36.211 v10.1.0 section 6.9
-            N_group_phich = (uint32)ceilf((float)phich_res*((float)N_rb_dl/(float)8)); // FIXME: Only handles normal CP
+            if(LIBLTE_PHY_N_SC_RB_NORMAL_CP == N_sc_rb)
+            {
+                N_group_phich = (uint32)ceilf((float)phich_res*((float)N_rb_dl/(float)8));
+            }else{
+                N_group_phich = 2*(uint32)ceilf((float)phich_res*((float)N_rb_dl/(float)8));
+            }
             N_reg_phich   = N_group_phich*3;
             // Step 4
             m_prime = 0;
@@ -2176,7 +2192,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
                     {
                         for(j=0; j<3; j++)
                         {
-                            if(n_hat[j] > cfi_n[j])
+                            if(n_hat[j] > cfi_n[i])
                             {
                                 n_hat[j]++;
                             }
@@ -2644,7 +2660,12 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
 
         // PHICH
         // Calculate resources, 3GPP TS 36.211 v10.1.0 section 6.9
-        N_group_phich = (uint32)ceilf((float)phich_res*((float)N_rb_dl/(float)8)); // FIXME: Only handles normal CP
+        if(LIBLTE_PHY_N_SC_RB_NORMAL_CP == N_sc_rb)
+        {
+            N_group_phich = (uint32)ceilf((float)phich_res*((float)N_rb_dl/(float)8));
+        }else{
+            N_group_phich = 2*(uint32)ceilf((float)phich_res*((float)N_rb_dl/(float)8));
+        }
         N_reg_phich   = N_group_phich*3;
         // Step 4
         m_prime = 0;
@@ -3240,6 +3261,7 @@ LIBLTE_ERROR_ENUM liblte_phy_map_crs(LIBLTE_PHY_STRUCT          *phy_struct,
                                      LIBLTE_PHY_SUBFRAME_STRUCT *subframe,
                                      uint32                      FFT_pad_size,
                                      uint32                      N_rb_dl,
+                                     uint32                      N_sc_rb,
                                      uint32                      N_id_cell,
                                      uint8                       N_ant)
 {
@@ -3277,12 +3299,12 @@ LIBLTE_ERROR_ENUM liblte_phy_map_crs(LIBLTE_PHY_STRUCT          *phy_struct,
             crs_re[11] = &phy_struct->crs_re_storage[subframe->num*2+1][2][0];
             crs_im[11] = &phy_struct->crs_im_storage[subframe->num*2+1][2][0];
         }else{
-            generate_crs(subframe->num*2,   0, N_id_cell, phy_struct->crs_re[0],  phy_struct->crs_im[0]);
-            generate_crs(subframe->num*2,   1, N_id_cell, phy_struct->crs_re[1],  phy_struct->crs_im[1]);
-            generate_crs(subframe->num*2,   4, N_id_cell, phy_struct->crs_re[4],  phy_struct->crs_im[4]);
-            generate_crs(subframe->num*2+1, 0, N_id_cell, phy_struct->crs_re[7],  phy_struct->crs_im[7]);
-            generate_crs(subframe->num*2+1, 1, N_id_cell, phy_struct->crs_re[8],  phy_struct->crs_im[8]);
-            generate_crs(subframe->num*2+1, 4, N_id_cell, phy_struct->crs_re[11], phy_struct->crs_im[11]);
+            generate_crs(subframe->num*2,   0, N_id_cell, N_sc_rb, phy_struct->crs_re[0],  phy_struct->crs_im[0]);
+            generate_crs(subframe->num*2,   1, N_id_cell, N_sc_rb, phy_struct->crs_re[1],  phy_struct->crs_im[1]);
+            generate_crs(subframe->num*2,   4, N_id_cell, N_sc_rb, phy_struct->crs_re[4],  phy_struct->crs_im[4]);
+            generate_crs(subframe->num*2+1, 0, N_id_cell, N_sc_rb, phy_struct->crs_re[7],  phy_struct->crs_im[7]);
+            generate_crs(subframe->num*2+1, 1, N_id_cell, N_sc_rb, phy_struct->crs_re[8],  phy_struct->crs_im[8]);
+            generate_crs(subframe->num*2+1, 4, N_id_cell, N_sc_rb, phy_struct->crs_re[11], phy_struct->crs_im[11]);
             crs_re[0]  = &phy_struct->crs_re[0 ][0];
             crs_im[0]  = &phy_struct->crs_im[0 ][0];
             crs_re[1]  = &phy_struct->crs_re[1 ][0];
@@ -3862,7 +3884,6 @@ LIBLTE_ERROR_ENUM liblte_phy_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUC
         }
 
         // Determine the symbol start locations
-        // FIXME: Needs some work
         for(i=0; i<timing_struct->n_corr_peaks; i++)
         {
             while(abs_corr_idx[i] > 0)
@@ -3941,6 +3962,7 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
                                                  uint8                       subfr_num,
                                                  uint32                      FFT_pad_size,
                                                  uint32                      N_rb_dl,
+                                                 uint32                      N_sc_rb,
                                                  uint32                      N_id_cell,
                                                  uint8                       N_ant,
                                                  LIBLTE_PHY_SUBFRAME_STRUCT *subframe)
@@ -3992,14 +4014,14 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
         }
 
         // Generate cell specific reference signals
-        generate_crs((subfr_num*2+0)%20, 0, N_id_cell, phy_struct->ce_crs_re[0],  phy_struct->ce_crs_im[0]);
-        generate_crs((subfr_num*2+0)%20, 1, N_id_cell, phy_struct->ce_crs_re[1],  phy_struct->ce_crs_im[1]);
-        generate_crs((subfr_num*2+0)%20, 4, N_id_cell, phy_struct->ce_crs_re[4],  phy_struct->ce_crs_im[4]);
-        generate_crs((subfr_num*2+1)%20, 0, N_id_cell, phy_struct->ce_crs_re[7],  phy_struct->ce_crs_im[7]);
-        generate_crs((subfr_num*2+1)%20, 1, N_id_cell, phy_struct->ce_crs_re[8],  phy_struct->ce_crs_im[8]);
-        generate_crs((subfr_num*2+1)%20, 4, N_id_cell, phy_struct->ce_crs_re[11], phy_struct->ce_crs_im[11]);
-        generate_crs((subfr_num*2+2)%20, 0, N_id_cell, phy_struct->ce_crs_re[14], phy_struct->ce_crs_im[14]);
-        generate_crs((subfr_num*2+2)%20, 1, N_id_cell, phy_struct->ce_crs_re[15], phy_struct->ce_crs_im[15]);
+        generate_crs((subfr_num*2+0)%20, 0, N_id_cell, N_sc_rb, phy_struct->ce_crs_re[0],  phy_struct->ce_crs_im[0]);
+        generate_crs((subfr_num*2+0)%20, 1, N_id_cell, N_sc_rb, phy_struct->ce_crs_re[1],  phy_struct->ce_crs_im[1]);
+        generate_crs((subfr_num*2+0)%20, 4, N_id_cell, N_sc_rb, phy_struct->ce_crs_re[4],  phy_struct->ce_crs_im[4]);
+        generate_crs((subfr_num*2+1)%20, 0, N_id_cell, N_sc_rb, phy_struct->ce_crs_re[7],  phy_struct->ce_crs_im[7]);
+        generate_crs((subfr_num*2+1)%20, 1, N_id_cell, N_sc_rb, phy_struct->ce_crs_re[8],  phy_struct->ce_crs_im[8]);
+        generate_crs((subfr_num*2+1)%20, 4, N_id_cell, N_sc_rb, phy_struct->ce_crs_re[11], phy_struct->ce_crs_im[11]);
+        generate_crs((subfr_num*2+2)%20, 0, N_id_cell, N_sc_rb, phy_struct->ce_crs_re[14], phy_struct->ce_crs_im[14]);
+        generate_crs((subfr_num*2+2)%20, 1, N_id_cell, N_sc_rb, phy_struct->ce_crs_re[15], phy_struct->ce_crs_im[15]);
 
         // Determine channel estimates
         for(p=0; p<N_ant; p++)
@@ -4287,6 +4309,7 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
     Document Reference: 3GPP TS 36.213 v10.3.0 section 7.1.7
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_si(uint32  N_bits,
+                                                          uint32  N_subframe,
                                                           uint32  N_rb_dl,
                                                           uint32 *tbs,
                                                           uint8  *mcs,
@@ -4314,7 +4337,7 @@ LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_si(uint32  N_bits,
         }
 
         // Targetting a coding rate of 4:1
-        N_bits_per_prb = get_num_bits_in_prb(1, 3, 0, N_rb_dl, 2, LIBLTE_PHY_MODULATION_TYPE_QPSK);
+        N_bits_per_prb = get_num_bits_in_prb(N_subframe, 3, N_rb_dl/2, N_rb_dl, 2, LIBLTE_PHY_MODULATION_TYPE_QPSK);
         *N_prb         = 0;
         for(i=0; i<N_rb_dl; i++)
         {
@@ -4385,7 +4408,7 @@ void layer_mapper(float                          *d_re,
                     x_re[*M_layer_symb+i] = d_re[2*i+1];
                     x_im[*M_layer_symb+i] = d_im[2*i+1];
                 }
-            }else{
+            }else{ // N_ant == 4
                 if((M_symb % 4) == 0)
                 {
                     *M_layer_symb = M_symb/4;
@@ -4405,7 +4428,116 @@ void layer_mapper(float                          *d_re,
                 }
             }
         }else{
-            // FIXME: Currently only supporting TX Diversity
+            if(N_ant == 2)
+            {
+                if(N_codewords == 1)
+                {
+                    *M_layer_symb = M_symb/2;
+                    for(i=0; i<*M_layer_symb; i++)
+                    {
+                        x_re[i]               = d_re[2*i];
+                        x_im[i]               = d_im[2*i];
+                        x_re[*M_layer_symb+i] = d_re[2*i+1];
+                        x_im[*M_layer_symb+i] = d_im[2*i+1];
+                    }
+                }else{ // N_codewords == 2
+                    *M_layer_symb = M_symb;
+                    for(i=0; i<*M_layer_symb; i++)
+                    {
+                        x_re[i]               = d_re[i];
+                        x_im[i]               = d_im[i];
+                        x_re[*M_layer_symb+i] = d_re[M_symb+i];
+                        x_im[*M_layer_symb+i] = d_im[M_symb+i];
+                    }
+                }
+            }else if(N_ant == 3){
+                if(N_codewords == 1)
+                {
+                    *M_layer_symb = M_symb/3;
+                    for(i=0; i<*M_layer_symb; i++)
+                    {
+                        x_re[i]                   = d_re[3*i];
+                        x_im[i]                   = d_im[3*i];
+                        x_re[*M_layer_symb+i]     = d_re[3*i+1];
+                        x_im[*M_layer_symb+i]     = d_im[3*i+1];
+                        x_re[2*(*M_layer_symb)+i] = d_re[3*i+2];
+                        x_im[2*(*M_layer_symb)+i] = d_im[3*i+2];
+                    }
+                }else{ // N_codewords == 2
+                    // FIXME
+                }
+            }else if(N_ant == 4){
+                if(N_codewords == 1)
+                {
+                    *M_layer_symb = M_symb/4;
+                    for(i=0; i<*M_layer_symb; i++)
+                    {
+                        x_re[i]                   = d_re[4*i];
+                        x_im[i]                   = d_im[4*i];
+                        x_re[*M_layer_symb+i]     = d_re[4*i+1];
+                        x_im[*M_layer_symb+i]     = d_im[4*i+1];
+                        x_re[2*(*M_layer_symb)+i] = d_re[4*i+2];
+                        x_im[2*(*M_layer_symb)+i] = d_im[4*i+2];
+                        x_re[3*(*M_layer_symb)+i] = d_re[4*i+3];
+                        x_im[3*(*M_layer_symb)+i] = d_im[4*i+3];
+                    }
+                }else{ // N_codewords == 2
+                    *M_layer_symb = M_symb/2;
+                    for(i=0; i<*M_layer_symb; i++)
+                    {
+                        x_re[i]                   = d_re[2*i];
+                        x_im[i]                   = d_im[2*i];
+                        x_re[*M_layer_symb+i]     = d_re[2*i+1];
+                        x_im[*M_layer_symb+i]     = d_im[2*i+1];
+                        x_re[2*(*M_layer_symb)+i] = d_re[M_symb+2*i];
+                        x_im[2*(*M_layer_symb)+i] = d_im[M_symb+2*i];
+                        x_re[3*(*M_layer_symb)+i] = d_re[M_symb+2*i+1];
+                        x_im[3*(*M_layer_symb)+i] = d_im[M_symb+2*i+1];
+                    }
+                }
+            }else if(N_ant == 5){
+                // FIXME
+            }else if(N_ant == 6){
+                *M_layer_symb = M_symb/3;
+                for(i=0; i<*M_layer_symb; i++)
+                {
+                    x_re[i]                   = d_re[3*i];
+                    x_im[i]                   = d_im[3*i];
+                    x_re[*M_layer_symb+i]     = d_re[3*i+1];
+                    x_im[*M_layer_symb+i]     = d_im[3*i+1];
+                    x_re[2*(*M_layer_symb)+i] = d_re[3*i+2];
+                    x_im[2*(*M_layer_symb)+i] = d_im[3*i+2];
+                    x_re[3*(*M_layer_symb)+i] = d_re[M_symb+3*i];
+                    x_im[3*(*M_layer_symb)+i] = d_im[M_symb+3*i];
+                    x_re[4*(*M_layer_symb)+i] = d_re[M_symb+3*i+1];
+                    x_im[4*(*M_layer_symb)+i] = d_im[M_symb+3*i+1];
+                    x_re[5*(*M_layer_symb)+i] = d_re[M_symb+3*i+2];
+                    x_im[5*(*M_layer_symb)+i] = d_im[M_symb+3*i+2];
+                }
+            }else if(N_ant == 7){
+                // FIXME
+            }else{ // N_ant == 8
+                *M_layer_symb = M_symb/4;
+                for(i=0; i<*M_layer_symb; i++)
+                {
+                    x_re[i]                   = d_re[4*i];
+                    x_im[i]                   = d_im[4*i];
+                    x_re[*M_layer_symb+i]     = d_re[4*i+1];
+                    x_im[*M_layer_symb+i]     = d_im[4*i+1];
+                    x_re[2*(*M_layer_symb)+i] = d_re[4*i+2];
+                    x_im[2*(*M_layer_symb)+i] = d_im[4*i+2];
+                    x_re[3*(*M_layer_symb)+i] = d_re[4*i+3];
+                    x_im[3*(*M_layer_symb)+i] = d_im[4*i+3];
+                    x_re[4*(*M_layer_symb)+i] = d_re[M_symb+4*i];
+                    x_im[4*(*M_layer_symb)+i] = d_im[M_symb+4*i];
+                    x_re[5*(*M_layer_symb)+i] = d_re[M_symb+4*i+1];
+                    x_im[5*(*M_layer_symb)+i] = d_im[M_symb+4*i+1];
+                    x_re[6*(*M_layer_symb)+i] = d_re[M_symb+4*i+2];
+                    x_im[6*(*M_layer_symb)+i] = d_im[M_symb+4*i+2];
+                    x_re[7*(*M_layer_symb)+i] = d_re[M_symb+4*i+3];
+                    x_im[7*(*M_layer_symb)+i] = d_im[M_symb+4*i+3];
+                }
+            }
         }
     }
 }
@@ -4435,6 +4567,7 @@ void layer_demapper(float                          *x_re,
     uint32  i;
     uint32  p;
 
+    // FIXME: Only supports TX diversity
     // Index all arrays
     for(p=0; p<N_ant; p++)
     {
@@ -4752,15 +4885,23 @@ void pre_decoder_and_matched_filter(float                          *y_re,
 void generate_crs(uint32  N_s,
                   uint32  L,
                   uint32  N_id_cell,
+                  uint32  N_sc_rb,
                   float  *crs_re,
                   float  *crs_im)
 {
     float  one_over_sqrt_2 = 1/sqrt(2);
-    uint32 N_cp = 1; // FIXME: Only supporting normal cp
+    uint32 N_cp;
     uint32 c_init;
     uint32 len = 2*LIBLTE_PHY_N_RB_DL_MAX;
     uint32 c[2*len];
     uint32 i;
+
+    if(LIBLTE_PHY_N_SC_RB_NORMAL_CP == N_sc_rb)
+    {
+        N_cp = 1;
+    }else{
+        N_cp = 0;
+    }
 
     // Calculate c_init
     c_init = 1024 * (7 * (N_s+1) + L + 1) * (2 * N_id_cell + 1) + 2*N_id_cell + N_cp;
