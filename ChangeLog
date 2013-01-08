@@ -44,3 +44,4 @@ v00.06.04     Optimized the psuedo random sequence generator, added pre-configur
 v00.06.05     Added SIB3, SIB4, and SIB8 support to the file_gen app, fixed a bug
               in the PHICH mapping, fixed the file size bug with the file_gen app,
               and pulled in a patch for 64 bit support.
+v00.07.00     Moved from automake to cmake.

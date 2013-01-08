@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2012 Ben Wojtowicz
+    Copyright 2012-2013 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -30,16 +30,18 @@
                                    input method to be "interactive"
     12/26/2012    Ben Wojtowicz    Added SIB3, SIB4, and SIB8 support and fixed
                                    a file size bug
+    01/07/2013    Ben Wojtowicz    Moved from automake to cmake
 
 *******************************************************************************/
+
 #ifndef __LTE_FDD_DL_FG_SAMP_BUF_H__
 #define __LTE_FDD_DL_FG_SAMP_BUF_H__
-
 
 /*******************************************************************************
                               INCLUDES
 *******************************************************************************/
 
+#include "LTE_fdd_dl_fg_api.h"
 #include "gr_sync_block.h"
 #include "liblte_phy.h"
 #include "liblte_rrc.h"
@@ -86,8 +88,8 @@ typedef boost::shared_ptr<LTE_fdd_dl_fg_samp_buf> LTE_fdd_dl_fg_samp_buf_sptr;
                               CLASS DECLARATIONS
 *******************************************************************************/
 
-LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf();
-class LTE_fdd_dl_fg_samp_buf : public gr_sync_block
+LTE_FDD_DL_FG_API LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf();
+class LTE_FDD_DL_FG_API LTE_fdd_dl_fg_samp_buf : public gr_sync_block
 {
 public:
     ~LTE_fdd_dl_fg_samp_buf();
@@ -97,7 +99,7 @@ public:
                gr_vector_void_star       &output_items);
 
 private:
-    friend LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf();
+    friend LTE_FDD_DL_FG_API LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf();
 
     LTE_fdd_dl_fg_samp_buf();
 

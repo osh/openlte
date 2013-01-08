@@ -6,7 +6,7 @@ from optparse import OptionParser
 import LTE_fdd_dl_fg
 import sys
 
-class LTE_fdd_dl_file_gen (gr.top_block):
+class LTE_fdd_dl_file_gen(gr.top_block):
 
     def __init__(self):
         gr.top_block.__init__(self)

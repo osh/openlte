@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2012 Ben Wojtowicz
+    Copyright 2012-2013 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -33,6 +33,7 @@
     12/26/2012    Ben Wojtowicz    Added SIB3, SIB4, and SIB8 support, fixed a
                                    file size bug, and pulled in a 64 bit bug fix
                                    from Thomas Bertani.
+    01/07/2013    Ben Wojtowicz    Moved from automake to cmake
 
 *******************************************************************************/
 
@@ -230,21 +231,22 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                                    gr_vector_const_void_star &input_items,
                                    gr_vector_void_star       &output_items)
 {
-    float   i_samp;
-    float   q_samp;
-    int32   act_noutput_items;
-    uint32  out_idx;
-    uint32  loop_cnt;
-    uint32  i;
-    uint32  j;
-    uint32  k;
-    uint32  p;
-    uint32  N_sfr;
-    uint32  last_prb;
-    size_t  line_size = LINE_MAX;
-    int8   *out       = (int8 *)output_items[0];
-    char   *line;
-    bool    done = false;
+    float    i_samp;
+    float    q_samp;
+    int32    act_noutput_items;
+    uint32   out_idx;
+    uint32   loop_cnt;
+    uint32   i;
+    uint32   j;
+    uint32   k;
+    uint32   p;
+    uint32   N_sfr;
+    uint32   last_prb;
+    size_t   line_size = LINE_MAX;
+    ssize_t  N_line_chars;
+    int8    *out = (int8 *)output_items[0];
+    char    *line;
+    bool     done = false;
 
     line = (char *)malloc(line_size);
     if(need_config)
@@ -253,7 +255,7 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
     }
     while(need_config)
     {
-        getline(&line, &line_size, stdin);
+        N_line_chars = getline(&line, &line_size, stdin);
         line[strlen(line)-1] = '\0';
         change_config(line);
         if(!need_config)

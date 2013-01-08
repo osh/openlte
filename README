@@ -6,31 +6,32 @@ The directory structure for the project is:
 octave                Octave test code
 cmn_hdr               Common header files
 liblte                C++ library of commonly used LTE functions
-config                Contains various configuration files
+cmake                 Files needed for cmake
+build                 Cmake generated build files
 LTE_fdd_dl_file_scan  A gnu-radio LTE FDD DL file scanner application
 LTE_fdd_dl_file_gen   A gnu-radio LTE FDD DL file generator application
 
 To build the C++ and python code use the following:
 
-  $ ./bootstrap
-  $ ./configure
+  $ cd build
+  $ cmake ../
   $ make
 
 To install the C++ and python code use the following:
 
-  $ ./bootstrap
-  $ ./configure
+  $ cd build
+  $ cmake ../
   $ make
-  $ make install
+  $ sudo make install
 
 To use the installed C++ and python code for the file scanner,
 set the PYTHONPATH env variable to
 <python_install_dir>/dist-packages/gnuradio/
 for instance /usr/local/lib/python2.7/dist-packages/gnuradio/.
-Then run LTE_fdd_dl_file_scan/python/LTE_fdd_dl_file_scan.py and
-specify a recorded LTE file as the input. For example:
+Then run LTE_fdd_dl_file_scan.py and specify a recorded LTE file
+as the input. For example:
 
-  $ ./LTE_fdd_dl_file_scan/python/LTE_fdd_dl_file_scan.py lte_file.bin
+  $ LTE_fdd_dl_file_scan.py lte_file.bin
 
 The recorded LTE file currently must be interleaved 8-bit I and
 Q samples recorded at 30.72MHz.
@@ -39,10 +40,10 @@ To use the installed C++ and python code for the file generator,
 set the PYTHONPATH env variable to
 <python_install_dir>/dist-packages/gnuradio/
 for instance /usr/local/lib/python2.7/dist-packages/gnuradio/.
-Then run LTE_fdd_dl_file_gen/python/LTE_fdd_dl_file_gen.py and
-specify an output file for the LTE fdd downlink signal.  For example:
+Then run LTE_fdd_dl_file_gen.py and specify an output file for the
+LTE fdd downlink signal.  For example:
 
-  $ ./LTE_fdd_dl_file_gen/python/LTE_fdd_dl_file_gen.py lte_file.bin
+  $ LTE_fdd_dl_file_gen.py lte_file.bin
 
 The generated LTE file contains interleaved 8-bit I and Q samples
 at a sample rate of 30.72MHz.  The output file can be used as the
