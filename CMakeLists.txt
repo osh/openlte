@@ -23,7 +23,7 @@
 ########################################################################
 cmake_minimum_required(VERSION 2.6)
 project(openLTE CXX C)
-set(openLTE_version 0.7.0)
+set(openLTE_version 0.7.1)
 enable_testing()
 
 #select the release build type by default to get optimization flags
@@ -32,6 +32,7 @@ if(NOT CMAKE_BUILD_TYPE)
    message(STATUS "Build type not specified: defaulting to release.")
 endif(NOT CMAKE_BUILD_TYPE)
 set(CMAKE_BUILD_TYPE ${CMAKE_BUILD_TYPE} CACHE STRING "")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/Modules)
 

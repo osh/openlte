@@ -27,7 +27,8 @@ To install the C++ and python code use the following:
 To use the installed C++ and python code for the file scanner,
 set the PYTHONPATH env variable to
 <python_install_dir>/dist-packages/gnuradio/
-for instance /usr/local/lib/python2.7/dist-packages/gnuradio/.
+for instance /usr/local/lib/python2.7/dist-packages/gnuradio/
+and make sure that /usr/local/lib is added to /etc/ld.so.conf.
 Then run LTE_fdd_dl_file_scan.py and specify a recorded LTE file
 as the input. For example:
 
