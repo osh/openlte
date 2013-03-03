@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2012 Ben Wojtowicz
+    Copyright 2012-2013 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -36,6 +36,11 @@
     12/01/2012    Ben Wojtowicz    Using the latest liblte library
     12/26/2012    Ben Wojtowicz    Added more detail printing of RACH
                                    configuration
+    03/03/2013    Ben Wojtowicz    Added support for SIB5, SIB6, SIB7, and test
+                                   load decoding, using the latest libraries,
+                                   fixed a bug that allowed multiple decodes
+                                   of the same channel, and fixed a frequency
+                                   offset correction bug.
 
 *******************************************************************************/
 
@@ -44,15 +49,17 @@
 *******************************************************************************/
 
 #include "LTE_fdd_dl_fs_samp_buf.h"
+#include "liblte_mcc_mnc_list.h"
 #include "gr_io_signature.h"
 
 /*******************************************************************************
                               DEFINES
 *******************************************************************************/
 
-#define ONE_SUBFRAME_NUM_SAMPS               (30720)
+#define ONE_SUBFRAME_NUM_SAMPS               (LIBLTE_PHY_N_SAMPS_PER_SUBFR_30_72MHZ)
 #define ONE_FRAME_NUM_SAMPS                  (10 * ONE_SUBFRAME_NUM_SAMPS)
-#define COARSE_TIMING_SEARCH_NUM_SAMPS       (12 * ONE_SUBFRAME_NUM_SAMPS)
+#define COARSE_TIMING_N_SLOTS                (20)
+#define COARSE_TIMING_SEARCH_NUM_SAMPS       (((COARSE_TIMING_N_SLOTS/2)+2) * ONE_SUBFRAME_NUM_SAMPS)
 #define PSS_AND_FINE_TIMING_SEARCH_NUM_SAMPS (COARSE_TIMING_SEARCH_NUM_SAMPS)
 #define SSS_SEARCH_NUM_SAMPS                 (COARSE_TIMING_SEARCH_NUM_SAMPS)
 #define BCH_DECODE_NUM_SAMPS                 (2 * ONE_FRAME_NUM_SAMPS)
@@ -93,8 +100,12 @@ LTE_fdd_dl_fs_samp_buf::LTE_fdd_dl_fs_samp_buf()
 
     // Initialize the LTE library
     liblte_phy_init(&phy_struct,
+                    LIBLTE_PHY_FS_30_72MHZ,
                     LIBLTE_PHY_INIT_N_ID_CELL_UNKNOWN,
-                    LIBLTE_PHY_N_SC_RB_NORMAL_CP);
+                    4,
+                    LIBLTE_PHY_N_RB_DL_20MHZ,
+                    LIBLTE_PHY_N_SC_RB_NORMAL_CP,
+                    liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1]);
 
     // Initialize the sample buffer
     i_buf           = (float *)malloc(LTE_FDD_DL_FS_SAMP_BUF_SIZE*sizeof(float));
@@ -105,7 +116,8 @@ LTE_fdd_dl_fs_samp_buf::LTE_fdd_dl_fs_samp_buf()
 
     // Variables
     init();
-    corr_peak_idx = 0;
+    N_decoded_chans = 0;
+    corr_peak_idx   = 0;
     for(i=0; i<LIBLTE_PHY_N_MAX_ROUGH_CORR_SEARCH_PEAKS; i++)
     {
         timing_struct.freq_offset[i] = 0;
@@ -131,11 +143,14 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
     LIBLTE_PHY_PDCCH_STRUCT     pdcch;
     const int8                 *in  = (const int8 *)input_items[0];
     float                       pss_thresh;
+    float                       freq_offset;
+    int32                       done_flag = 0;
     uint32                      i;
     uint32                      pss_symb;
     uint32                      frame_start_idx;
     uint32                      num_samps_needed = COARSE_TIMING_SEARCH_NUM_SAMPS;
     uint32                      samps_to_copy;
+    uint32                      N_rb_dl;
     uint8                       sfn_offset;
     bool                        process_samples = false;
     bool                        copy_input      = false;
@@ -194,6 +209,9 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                sib2_printed == true          &&
                sib3_printed == sib3_expected &&
                sib4_printed == sib4_expected &&
+               sib5_printed == sib5_expected &&
+               sib6_printed == sib6_expected &&
+               sib7_printed == sib7_expected &&
                sib8_printed == sib8_expected)
             {
                 corr_peak_idx++;
@@ -206,15 +224,21 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                 if(LIBLTE_SUCCESS == liblte_phy_find_coarse_timing_and_freq_offset(phy_struct,
                                                                                    i_buf,
                                                                                    q_buf,
-                                                                                   &timing_struct) &&
-                   corr_peak_idx < timing_struct.n_corr_peaks)
+                                                                                   COARSE_TIMING_N_SLOTS,
+                                                                                   &timing_struct))
                 {
-                    // Correct frequency error
-                    freq_shift(0, LTE_FDD_DL_FS_SAMP_BUF_SIZE, timing_struct.freq_offset[corr_peak_idx]);
+                    if(corr_peak_idx < timing_struct.n_corr_peaks)
+                    {
+                        // Correct frequency error
+                        freq_shift(0, LTE_FDD_DL_FS_SAMP_BUF_SIZE, timing_struct.freq_offset[corr_peak_idx]);
 
-                    // Search for PSS and fine timing
-                    state            = LTE_FDD_DL_FS_SAMP_BUF_STATE_PSS_AND_FINE_TIMING_SEARCH;
-                    num_samps_needed = PSS_AND_FINE_TIMING_SEARCH_NUM_SAMPS;
+                        // Search for PSS and fine timing
+                        state            = LTE_FDD_DL_FS_SAMP_BUF_STATE_PSS_AND_FINE_TIMING_SEARCH;
+                        num_samps_needed = PSS_AND_FINE_TIMING_SEARCH_NUM_SAMPS;
+                    }else{
+                        // No more peaks, so signal that we are done
+                        done_flag = -1;
+                    }
                 }else{
                     // Stay in coarse timing search
                     samp_buf_r_idx   += COARSE_TIMING_SEARCH_NUM_SAMPS;
@@ -228,7 +252,8 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                                          timing_struct.symb_starts[corr_peak_idx],
                                                                          &N_id_2,
                                                                          &pss_symb,
-                                                                         &pss_thresh))
+                                                                         &pss_thresh,
+                                                                         &freq_offset))
                 {
                     // Search for SSS
                     state            = LTE_FDD_DL_FS_SAMP_BUF_STATE_SSS_SEARCH;
@@ -252,14 +277,29 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                 {
                     N_id_cell = 3*N_id_1 + N_id_2;
 
-                    // Decode BCH
-                    state            = LTE_FDD_DL_FS_SAMP_BUF_STATE_BCH_DECODE;
-                    while(frame_start_idx < samp_buf_r_idx)
+                    for(i=0; i<N_decoded_chans; i++)
                     {
-                        frame_start_idx += ONE_FRAME_NUM_SAMPS;
+                        if(N_id_cell == decoded_chans[i])
+                        {
+                            break;
+                        }
                     }
-                    samp_buf_r_idx   = frame_start_idx;
-                    num_samps_needed = BCH_DECODE_NUM_SAMPS;
+                    if(i != N_decoded_chans)
+                    {
+                        // Go back to coarse timing search
+                        state = LTE_FDD_DL_FS_SAMP_BUF_STATE_COARSE_TIMING_SEARCH;
+                        corr_peak_idx++;
+                        init();
+                    }else{
+                        // Decode BCH
+                        state = LTE_FDD_DL_FS_SAMP_BUF_STATE_BCH_DECODE;
+                        while(frame_start_idx < samp_buf_r_idx)
+                        {
+                            frame_start_idx += ONE_FRAME_NUM_SAMPS;
+                        }
+                        samp_buf_r_idx   = frame_start_idx;
+                        num_samps_needed = BCH_DECODE_NUM_SAMPS;
+                    }
                 }else{
                     // Go back to coarse timing search
                     state             = LTE_FDD_DL_FS_SAMP_BUF_STATE_COARSE_TIMING_SEARCH;
@@ -273,17 +313,12 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                                     q_buf,
                                                                     samp_buf_r_idx,
                                                                     0,
-                                                                    FFT_pad_size,
-                                                                    N_rb_dl,
-                                                                    LIBLTE_PHY_N_SC_RB_NORMAL_CP,
                                                                     N_id_cell,
                                                                     4,
                                                                     &subframe) &&
                    LIBLTE_SUCCESS == liblte_phy_bch_channel_decode(phy_struct,
                                                                    &subframe,
                                                                    N_id_cell,
-                                                                   LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                                                                   N_rb_dl,
                                                                    &N_ant,
                                                                    rrc_msg.msg,
                                                                    &rrc_msg.N_bits,
@@ -294,47 +329,35 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                     switch(mib.dl_bw)
                     {
                     case LIBLTE_RRC_DL_BANDWIDTH_6:
-                        N_rb_dl      = LIBLTE_PHY_N_RB_DL_1_4MHZ;
-                        FFT_pad_size = LIBLTE_PHY_FFT_PAD_SIZE_1_4MHZ;
+                        N_rb_dl = LIBLTE_PHY_N_RB_DL_1_4MHZ;
                         break;
                     case LIBLTE_RRC_DL_BANDWIDTH_15:
-                        N_rb_dl      = LIBLTE_PHY_N_RB_DL_3MHZ;
-                        FFT_pad_size = LIBLTE_PHY_FFT_PAD_SIZE_3MHZ;
+                        N_rb_dl = LIBLTE_PHY_N_RB_DL_3MHZ;
                         break;
                     case LIBLTE_RRC_DL_BANDWIDTH_25:
-                        N_rb_dl      = LIBLTE_PHY_N_RB_DL_5MHZ;
-                        FFT_pad_size = LIBLTE_PHY_FFT_PAD_SIZE_5MHZ;
+                        N_rb_dl = LIBLTE_PHY_N_RB_DL_5MHZ;
                         break;
                     case LIBLTE_RRC_DL_BANDWIDTH_50:
-                        N_rb_dl      = LIBLTE_PHY_N_RB_DL_10MHZ;
-                        FFT_pad_size = LIBLTE_PHY_FFT_PAD_SIZE_10MHZ;
+                        N_rb_dl = LIBLTE_PHY_N_RB_DL_10MHZ;
                         break;
                     case LIBLTE_RRC_DL_BANDWIDTH_75:
-                        N_rb_dl      = LIBLTE_PHY_N_RB_DL_15MHZ;
-                        FFT_pad_size = LIBLTE_PHY_FFT_PAD_SIZE_15MHZ;
+                        N_rb_dl = LIBLTE_PHY_N_RB_DL_15MHZ;
                         break;
                     case LIBLTE_RRC_DL_BANDWIDTH_100:
-                        N_rb_dl      = LIBLTE_PHY_N_RB_DL_20MHZ;
-                        FFT_pad_size = LIBLTE_PHY_FFT_PAD_SIZE_20MHZ;
+                        N_rb_dl = LIBLTE_PHY_N_RB_DL_20MHZ;
                         break;
                     }
-                    sfn = (mib.sfn_div_4 << 2) + sfn_offset;
-                    switch(mib.phich_config.res)
-                    {
-                    case LIBLTE_RRC_PHICH_RESOURCE_1_6:
-                        phich_res = 1/6;
-                        break;
-                    case LIBLTE_RRC_PHICH_RESOURCE_1_2:
-                        phich_res = 1/2;
-                        break;
-                    case LIBLTE_RRC_PHICH_RESOURCE_1:
-                        phich_res = 1;
-                        break;
-                    case LIBLTE_RRC_PHICH_RESOURCE_2:
-                        phich_res = 2;
-                        break;
-                    }
+                    liblte_phy_update_n_rb_dl(phy_struct, N_rb_dl);
+                    sfn       = (mib.sfn_div_4 << 2) + sfn_offset;
+                    phich_res = liblte_rrc_phich_resource_num[mib.phich_config.res];
                     print_mib(&mib);
+
+                    // Add this channel to the list of decoded channels
+                    decoded_chans[N_decoded_chans++] = N_id_cell;
+                    if(LTE_FDD_DL_FS_SAMP_BUF_N_DECODED_CHANS_MAX == N_decoded_chans)
+                    {
+                        done_flag = -1;
+                    }
 
                     // Decode PDSCH for SIB1
                     state = LTE_FDD_DL_FS_SAMP_BUF_STATE_PDSCH_DECODE_SIB1;
@@ -357,9 +380,6 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                                     q_buf,
                                                                     samp_buf_r_idx,
                                                                     5,
-                                                                    FFT_pad_size,
-                                                                    N_rb_dl,
-                                                                    LIBLTE_PHY_N_SC_RB_NORMAL_CP,
                                                                     N_id_cell,
                                                                     N_ant,
                                                                     &subframe) &&
@@ -367,8 +387,6 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                                      &subframe,
                                                                      N_id_cell,
                                                                      N_ant,
-                                                                     LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                                                                     N_rb_dl,
                                                                      phich_res,
                                                                      mib.phich_config.dur,
                                                                      &pcfich,
@@ -380,8 +398,6 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                                      pdcch.N_symbs,
                                                                      N_id_cell,
                                                                      N_ant,
-                                                                     LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                                                                     N_rb_dl,
                                                                      rrc_msg.msg,
                                                                      &rrc_msg.N_bits) &&
                    LIBLTE_SUCCESS == liblte_rrc_unpack_bcch_dlsch_msg(&rrc_msg,
@@ -410,9 +426,6 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                                     q_buf,
                                                                     samp_buf_r_idx,
                                                                     N_sfr,
-                                                                    FFT_pad_size,
-                                                                    N_rb_dl,
-                                                                    LIBLTE_PHY_N_SC_RB_NORMAL_CP,
                                                                     N_id_cell,
                                                                     N_ant,
                                                                     &subframe) &&
@@ -420,8 +433,6 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                                      &subframe,
                                                                      N_id_cell,
                                                                      N_ant,
-                                                                     LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                                                                     N_rb_dl,
                                                                      phich_res,
                                                                      mib.phich_config.dur,
                                                                      &pcfich,
@@ -433,36 +444,72 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                                      pdcch.N_symbs,
                                                                      N_id_cell,
                                                                      N_ant,
-                                                                     LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                                                                     N_rb_dl,
                                                                      rrc_msg.msg,
-                                                                     &rrc_msg.N_bits) &&
-                   LIBLTE_SUCCESS == liblte_rrc_unpack_bcch_dlsch_msg(&rrc_msg,
-                                                                      &bcch_dlsch_msg))
+                                                                     &rrc_msg.N_bits))
                 {
-                    for(i=0; i<bcch_dlsch_msg.N_sibs; i++)
+                    if(LIBLTE_PHY_SI_RNTI == pdcch.alloc[0].rnti &&
+                       LIBLTE_SUCCESS     == liblte_rrc_unpack_bcch_dlsch_msg(&rrc_msg,
+                                                                              &bcch_dlsch_msg))
                     {
-                        switch(bcch_dlsch_msg.sibs[i].sib_type)
+                        for(i=0; i<bcch_dlsch_msg.N_sibs; i++)
                         {
-                        case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1:
-                            print_sib1((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *)&bcch_dlsch_msg.sibs[i].sib);
-                            break;
-                        case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2:
-                            print_sib2((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT *)&bcch_dlsch_msg.sibs[i].sib);
-                            break;
-                        case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3:
-                            print_sib3((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3_STRUCT *)&bcch_dlsch_msg.sibs[i].sib);
-                            break;
-                        case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4:
-                            print_sib4((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4_STRUCT *)&bcch_dlsch_msg.sibs[i].sib);
-                            break;
-                        case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8:
-                            print_sib8((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT *)&bcch_dlsch_msg.sibs[i].sib);
-                            break;
-                        default:
-                            printf("Not handling SIB %u\n", bcch_dlsch_msg.sibs[i].sib_type);
-                            break;
+                            switch(bcch_dlsch_msg.sibs[i].sib_type)
+                            {
+                            case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1:
+                                print_sib1((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *)&bcch_dlsch_msg.sibs[i].sib);
+                                break;
+                            case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2:
+                                print_sib2((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT *)&bcch_dlsch_msg.sibs[i].sib);
+                                break;
+                            case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3:
+                                print_sib3((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3_STRUCT *)&bcch_dlsch_msg.sibs[i].sib);
+                                break;
+                            case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4:
+                                print_sib4((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4_STRUCT *)&bcch_dlsch_msg.sibs[i].sib);
+                                break;
+                            case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_5:
+                                print_sib5((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_5_STRUCT *)&bcch_dlsch_msg.sibs[i].sib);
+                                break;
+                            case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_6:
+                                print_sib6((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_6_STRUCT *)&bcch_dlsch_msg.sibs[i].sib);
+                                break;
+                            case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7:
+                                print_sib7((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7_STRUCT *)&bcch_dlsch_msg.sibs[i].sib);
+                                break;
+                            case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8:
+                                print_sib8((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT *)&bcch_dlsch_msg.sibs[i].sib);
+                                break;
+                            default:
+                                printf("Not handling SIB %u\n", bcch_dlsch_msg.sibs[i].sib_type);
+                                break;
+                            }
                         }
+                    }else if(LIBLTE_PHY_P_RNTI == pdcch.alloc[0].rnti){
+                        for(i=0; i<8; i++)
+                        {
+                            if(rrc_msg.msg[i] != liblte_rrc_test_fill[i])
+                            {
+                                break;
+                            }
+                        }
+                        if(i == 16)
+                        {
+                            printf("TEST FILL RECEIVED\n");
+                        }else{
+                            printf("PAGING MESSAGE RECEIVED: ");
+                            for(i=0; i<rrc_msg.N_bits; i++)
+                            {
+                                printf("%u", rrc_msg.msg[i]);
+                            }
+                            printf("\n");
+                        }
+                    }else{
+                        printf("MESSAGE RECEIVED FOR RNTI=%04X: ", pdcch.alloc[0].rnti);
+                        for(i=0; i<rrc_msg.N_bits; i++)
+                        {
+                            printf("%u", rrc_msg.msg[i]);
+                        }
+                        printf("\n");
                     }
                 }
 
@@ -476,6 +523,11 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                     sfn++;
                     samp_buf_r_idx += PDSCH_DECODE_SI_GENERIC_NUM_SAMPS;
                 }
+                break;
+            }
+
+            if(-1 == done_flag)
+            {
                 break;
             }
         }
@@ -502,15 +554,13 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
     consume_each(ninput_items);
 
     // Tell runtime system how many output items we produced.
-    return(0);
+    return(done_flag);
 }
 
 void LTE_fdd_dl_fs_samp_buf::init(void)
 {
     state                   = LTE_FDD_DL_FS_SAMP_BUF_STATE_COARSE_TIMING_SEARCH;
     phich_res               = 0;
-    N_rb_dl                 = LIBLTE_PHY_N_RB_DL_1_4MHZ;
-    FFT_pad_size            = LIBLTE_PHY_FFT_PAD_SIZE_1_4MHZ;
     sfn                     = 0;
     N_sfr                   = 0;
     N_ant                   = 0;
@@ -526,6 +576,12 @@ void LTE_fdd_dl_fs_samp_buf::init(void)
     sib3_expected           = false;
     sib4_printed            = false;
     sib4_expected           = false;
+    sib5_printed            = false;
+    sib5_expected           = false;
+    sib6_printed            = false;
+    sib6_expected           = false;
+    sib7_printed            = false;
+    sib7_expected           = false;
     sib8_printed            = false;
     sib8_expected           = false;
 }
@@ -568,8 +624,8 @@ void LTE_fdd_dl_fs_samp_buf::freq_shift(uint32 start_idx, uint32 num_samps, floa
 
     for(i=start_idx; i<(start_idx+num_samps); i++)
     {
-        f_samp_re = cosf((i+1)*(-freq_offset)*2*M_PI*(0.0005/15360));
-        f_samp_im = sinf((i+1)*(-freq_offset)*2*M_PI*(0.0005/15360));
+        f_samp_re = cosf((i+1)*(freq_offset)*2*M_PI*(0.0005/15360));
+        f_samp_im = sinf((i+1)*(freq_offset)*2*M_PI*(0.0005/15360));
         tmp_i     = i_buf[i];
         tmp_q     = q_buf[i];
         i_buf[i]  = tmp_i*f_samp_re + tmp_q*f_samp_im;
@@ -587,48 +643,9 @@ void LTE_fdd_dl_fs_samp_buf::print_mib(LIBLTE_RRC_MIB_STRUCT *mib)
         printf("\t\t%-40s=%20u\n", "System Frame Number", sfn);
         printf("\t\t%-40s=%20u\n", "Physical Cell ID", N_id_cell);
         printf("\t\t%-40s=%20u\n", "Number of TX Antennas", N_ant);
-        switch(mib->dl_bw)
-        {
-        case LIBLTE_RRC_DL_BANDWIDTH_6:
-            printf("\t\t%-40s=%20s\n", "Bandwidth", "1.4MHz");
-            break;
-        case LIBLTE_RRC_DL_BANDWIDTH_15:
-            printf("\t\t%-40s=%20s\n", "Bandwidth", "3MHz");
-            break;
-        case LIBLTE_RRC_DL_BANDWIDTH_25:
-            printf("\t\t%-40s=%20s\n", "Bandwidth", "5MHz");
-            break;
-        case LIBLTE_RRC_DL_BANDWIDTH_50:
-            printf("\t\t%-40s=%20s\n", "Bandwidth", "10MHz");
-            break;
-        case LIBLTE_RRC_DL_BANDWIDTH_75:
-            printf("\t\t%-40s=%20s\n", "Bandwidth", "15MHz");
-            break;
-        case LIBLTE_RRC_DL_BANDWIDTH_100:
-            printf("\t\t%-40s=%20s\n", "Bandwidth", "20MHz");
-            break;
-        }
-        if(mib->phich_config.dur == LIBLTE_RRC_PHICH_DURATION_NORMAL)
-        {
-            printf("\t\t%-40s=%20s\n", "PHICH Duration", "Normal");
-        }else{
-            printf("\t\t%-40s=%20s\n", "PHICH Duration", "Extended");
-        }
-        switch(mib->phich_config.res)
-        {
-        case LIBLTE_RRC_PHICH_RESOURCE_1_6:
-            printf("\t\t%-40s=%20s\n", "PHICH Resource", "1/6");
-            break;
-        case LIBLTE_RRC_PHICH_RESOURCE_1_2:
-            printf("\t\t%-40s=%20s\n", "PHICH Resource", "1/2");
-            break;
-        case LIBLTE_RRC_PHICH_RESOURCE_1:
-            printf("\t\t%-40s=%20u\n", "PHICH Resource", 1);
-            break;
-        case LIBLTE_RRC_PHICH_RESOURCE_2:
-            printf("\t\t%-40s=%20u\n", "PHICH Resource", 2);
-            break;
-        }
+        printf("\t\t%-40s=%17sMHz\n", "Bandwidth", liblte_rrc_dl_bandwidth_text[mib->dl_bw]);
+        printf("\t\t%-40s=%20s\n", "PHICH Duration", liblte_rrc_phich_duration_text[mib->phich_config.dur]);
+        printf("\t\t%-40s=%20s\n", "PHICH Resource", liblte_rrc_phich_resource_text[mib->phich_config.res]);
 
         mib_printed = true;
     }
@@ -640,6 +657,7 @@ void LTE_fdd_dl_fs_samp_buf::print_sib1(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT 
     uint32 j;
     uint32 si_win_len;
     uint32 si_periodicity_T;
+    uint16 mnc;
 
     if(true              == prev_si_value_tag_valid &&
        prev_si_value_tag != sib1->system_info_value_tag)
@@ -649,6 +667,9 @@ void LTE_fdd_dl_fs_samp_buf::print_sib1(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT 
         sib2_printed = false;
         sib3_printed = false;
         sib4_printed = false;
+        sib5_printed = false;
+        sib6_printed = false;
+        sib7_printed = false;
         sib8_printed = false;
     }
 
@@ -661,9 +682,20 @@ void LTE_fdd_dl_fs_samp_buf::print_sib1(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT 
             printf("\t\t\t%03X-", sib1->plmn_id[i].id.mcc & 0x0FFF);
             if((sib1->plmn_id[i].id.mnc & 0xFF00) == 0xFF00)
             {
-                printf("%02X, ", sib1->plmn_id[i].id.mnc & 0x00FF);
+                mnc = sib1->plmn_id[i].id.mnc & 0x00FF;
+                printf("%02X, ", mnc);
             }else{
-                printf("%03X, ", sib1->plmn_id[i].id.mnc & 0x0FFF);
+                mnc = sib1->plmn_id[i].id.mnc & 0x0FFF;
+                printf("%03X, ", mnc);
+            }
+            for(j=0; j<LIBLTE_MCC_MNC_LIST_N_ITEMS; j++)
+            {
+                if(liblte_mcc_mnc_list[j].mcc == (sib1->plmn_id[i].id.mcc & 0x0FFF) &&
+                   liblte_mcc_mnc_list[j].mnc == mnc)
+                {
+                    printf("%s, ", liblte_mcc_mnc_list[j].net_name);
+                    break;
+                }
             }
             if(LIBLTE_RRC_RESV_FOR_OPER == sib1->plmn_id[i].resv_for_oper)
             {
@@ -709,71 +741,13 @@ void LTE_fdd_dl_fs_samp_buf::print_sib1(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT 
             printf("\t\t%-40s=%17ddBm\n", "P Max", sib1->p_max);
         }
         printf("\t\t%-40s=%20u\n", "Frequency Band", sib1->freq_band_indicator);
-        switch(sib1->si_window_length)
-        {
-        case LIBLTE_RRC_SI_WINDOW_LENGTH_MS1:
-            si_win_len = 1;
-            printf("\t\t%-40s=%20s\n", "SI Window Length", "1ms");
-            break;
-        case LIBLTE_RRC_SI_WINDOW_LENGTH_MS2:
-            si_win_len = 2;
-            printf("\t\t%-40s=%20s\n", "SI Window Length", "2ms");
-            break;
-        case LIBLTE_RRC_SI_WINDOW_LENGTH_MS5:
-            si_win_len = 5;
-            printf("\t\t%-40s=%20s\n", "SI Window Length", "5ms");
-            break;
-        case LIBLTE_RRC_SI_WINDOW_LENGTH_MS10:
-            si_win_len = 10;
-            printf("\t\t%-40s=%20s\n", "SI Window Length", "10ms");
-            break;
-        case LIBLTE_RRC_SI_WINDOW_LENGTH_MS15:
-            si_win_len = 15;
-            printf("\t\t%-40s=%20s\n", "SI Window Length", "15ms");
-            break;
-        case LIBLTE_RRC_SI_WINDOW_LENGTH_MS20:
-            si_win_len = 20;
-            printf("\t\t%-40s=%20s\n", "SI Window Length", "20ms");
-            break;
-        case LIBLTE_RRC_SI_WINDOW_LENGTH_MS40:
-            si_win_len = 40;
-            printf("\t\t%-40s=%20s\n", "SI Window Length", "40ms");
-            break;
-        }
+        printf("\t\t%-40s=%18sms\n", "SI Window Length", liblte_rrc_si_window_length_text[sib1->si_window_length]);
+        si_win_len = liblte_rrc_si_window_length_num[sib1->si_window_length];
         printf("\t\t%-40s\n", "Scheduling Info List:");
         for(i=0; i<sib1->N_sched_info; i++)
         {
-            switch(sib1->sched_info[i].si_periodicity)
-            {
-            case LIBLTE_RRC_SI_PERIODICITY_RF8:
-                si_periodicity_T = 8;
-                printf("\t\t\t%s = %s\n", "SI Periodcity", "8 frames");
-                break;
-            case LIBLTE_RRC_SI_PERIODICITY_RF16:
-                si_periodicity_T = 16;
-                printf("\t\t\t%s = %s\n", "SI Periodcity", "16 frames");
-                break;
-            case LIBLTE_RRC_SI_PERIODICITY_RF32:
-                si_periodicity_T = 32;
-                printf("\t\t\t%s = %s\n", "SI Periodcity", "32 frames");
-                break;
-            case LIBLTE_RRC_SI_PERIODICITY_RF64:
-                si_periodicity_T = 64;
-                printf("\t\t\t%s = %s\n", "SI Periodcity", "64 frames");
-                break;
-            case LIBLTE_RRC_SI_PERIODICITY_RF128:
-                si_periodicity_T = 128;
-                printf("\t\t\t%s = %s\n", "SI Periodcity", "128 frames");
-                break;
-            case LIBLTE_RRC_SI_PERIODICITY_RF256:
-                si_periodicity_T = 256;
-                printf("\t\t\t%s = %s\n", "SI Periodcity", "256 frames");
-                break;
-            case LIBLTE_RRC_SI_PERIODICITY_RF512:
-                si_periodicity_T = 512;
-                printf("\t\t\t%s = %s\n", "SI Periodcity", "512 frames");
-                break;
-            }
+            printf("\t\t\t%s = %s frames\n", "SI Periodicity", liblte_rrc_si_periodicity_text[sib1->sched_info[i].si_periodicity]);
+            si_periodicity_T = liblte_rrc_si_periodicity_num[sib1->sched_info[i].si_periodicity];
             printf("\t\t\tSI Window Starts at N_subframe = %u, SFN mod %u = %u\n", (i * si_win_len) % 10, si_periodicity_T, (i * si_win_len)/10);
             if(0 == i)
             {
@@ -781,58 +755,26 @@ void LTE_fdd_dl_fs_samp_buf::print_sib1(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT 
             }
             for(j=0; j<sib1->sched_info[i].N_sib_mapping_info; j++)
             {
+                printf("\t\t\t\t%s = %u\n", "SIB Type", liblte_rrc_sib_type_num[sib1->sched_info[i].sib_mapping_info[j].sib_type]);
                 switch(sib1->sched_info[i].sib_mapping_info[j].sib_type)
                 {
                 case LIBLTE_RRC_SIB_TYPE_3:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "3");
                     sib3_expected = true;
                     break;
                 case LIBLTE_RRC_SIB_TYPE_4:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "4");
                     sib4_expected = true;
                     break;
                 case LIBLTE_RRC_SIB_TYPE_5:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "5");
+                    sib5_expected = true;
                     break;
                 case LIBLTE_RRC_SIB_TYPE_6:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "6");
+                    sib6_expected = true;
                     break;
                 case LIBLTE_RRC_SIB_TYPE_7:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "7");
+                    sib7_expected = true;
                     break;
                 case LIBLTE_RRC_SIB_TYPE_8:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "8");
                     sib8_expected = true;
-                    break;
-                case LIBLTE_RRC_SIB_TYPE_9:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "9");
-                    break;
-                case LIBLTE_RRC_SIB_TYPE_10:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "10");
-                    break;
-                case LIBLTE_RRC_SIB_TYPE_11:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "11");
-                    break;
-                case LIBLTE_RRC_SIB_TYPE_12_v920:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "12-v920");
-                    break;
-                case LIBLTE_RRC_SIB_TYPE_13_v920:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "13-v920");
-                    break;
-                case LIBLTE_RRC_SIB_TYPE_SPARE_5:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "SPARE5");
-                    break;
-                case LIBLTE_RRC_SIB_TYPE_SPARE_4:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "SPARE4");
-                    break;
-                case LIBLTE_RRC_SIB_TYPE_SPARE_3:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "SPARE3");
-                    break;
-                case LIBLTE_RRC_SIB_TYPE_SPARE_2:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "SPARE2");
-                    break;
-                case LIBLTE_RRC_SIB_TYPE_SPARE_1:
-                    printf("\t\t\t\t%s = %s\n", "SIB Type", "SPARE1");
                     break;
                 }
             }
@@ -842,60 +784,8 @@ void LTE_fdd_dl_fs_samp_buf::print_sib1(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT 
             printf("\t\t%-40s=%20s\n", "Duplexing Mode", "FDD");
         }else{
             printf("\t\t%-40s=%20s\n", "Duplexing Mode", "TDD");
-            switch(sib1->sf_assignment)
-            {
-            case LIBLTE_RRC_SUBFRAME_ASSIGNMENT_0:
-                printf("\t\t%-40s=%20s\n", "Subframe Assignment", "SA0");
-                break;
-            case LIBLTE_RRC_SUBFRAME_ASSIGNMENT_1:
-                printf("\t\t%-40s=%20s\n", "Subframe Assignment", "SA1");
-                break;
-            case LIBLTE_RRC_SUBFRAME_ASSIGNMENT_2:
-                printf("\t\t%-40s=%20s\n", "Subframe Assignment", "SA2");
-                break;
-            case LIBLTE_RRC_SUBFRAME_ASSIGNMENT_3:
-                printf("\t\t%-40s=%20s\n", "Subframe Assignment", "SA3");
-                break;
-            case LIBLTE_RRC_SUBFRAME_ASSIGNMENT_4:
-                printf("\t\t%-40s=%20s\n", "Subframe Assignment", "SA4");
-                break;
-            case LIBLTE_RRC_SUBFRAME_ASSIGNMENT_5:
-                printf("\t\t%-40s=%20s\n", "Subframe Assignment", "SA5");
-                break;
-            case LIBLTE_RRC_SUBFRAME_ASSIGNMENT_6:
-                printf("\t\t%-40s=%20s\n", "Subframe Assignment", "SA6");
-                break;
-            }
-            switch(sib1->special_sf_patterns)
-            {
-            case LIBLTE_RRC_SPECIAL_SUBFRAME_PATTERNS_0:
-                printf("\t\t%-40s=%20s\n", "Special Subframe Patterns", "SSP0");
-                break;
-            case LIBLTE_RRC_SPECIAL_SUBFRAME_PATTERNS_1:
-                printf("\t\t%-40s=%20s\n", "Special Subframe Patterns", "SSP1");
-                break;
-            case LIBLTE_RRC_SPECIAL_SUBFRAME_PATTERNS_2:
-                printf("\t\t%-40s=%20s\n", "Special Subframe Patterns", "SSP2");
-                break;
-            case LIBLTE_RRC_SPECIAL_SUBFRAME_PATTERNS_3:
-                printf("\t\t%-40s=%20s\n", "Special Subframe Patterns", "SSP3");
-                break;
-            case LIBLTE_RRC_SPECIAL_SUBFRAME_PATTERNS_4:
-                printf("\t\t%-40s=%20s\n", "Special Subframe Patterns", "SSP4");
-                break;
-            case LIBLTE_RRC_SPECIAL_SUBFRAME_PATTERNS_5:
-                printf("\t\t%-40s=%20s\n", "Special Subframe Patterns", "SSP5");
-                break;
-            case LIBLTE_RRC_SPECIAL_SUBFRAME_PATTERNS_6:
-                printf("\t\t%-40s=%20s\n", "Special Subframe Patterns", "SSP6");
-                break;
-            case LIBLTE_RRC_SPECIAL_SUBFRAME_PATTERNS_7:
-                printf("\t\t%-40s=%20s\n", "Special Subframe Patterns", "SSP7");
-                break;
-            case LIBLTE_RRC_SPECIAL_SUBFRAME_PATTERNS_8:
-                printf("\t\t%-40s=%20s\n", "Special Subframe Patterns", "SSP8");
-                break;
-            }
+            printf("\t\t%-40s=%20s\n", "Subframe Assignment", liblte_rrc_subframe_assignment_text[sib1->sf_assignment]);
+            printf("\t\t%-40s=%20s\n", "Special Subframe Patterns", liblte_rrc_special_subframe_patterns_text[sib1->special_sf_patterns]);
         }
         printf("\t\t%-40s=%20u\n", "SI Value Tag", sib1->system_info_value_tag);
         prev_si_value_tag       = sib1->system_info_value_tag;
@@ -925,84 +815,8 @@ void LTE_fdd_dl_fs_samp_buf::print_sib2(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT 
             if(true == sib2->ac_barring_for_mo_signalling.enabled)
             {
                 printf("\t\t%-40s=%20s\n", "AC Barring for MO Signalling", "Barred");
-                switch(sib2->ac_barring_for_mo_signalling.factor)
-                {
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P00:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.00");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P05:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.05");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P10:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.10");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P15:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.15");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P20:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.20");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P25:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.25");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P30:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.30");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P40:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.40");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P50:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.50");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P60:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.60");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P70:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.70");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P75:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.75");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P80:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.80");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P85:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.85");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P90:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.90");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P95:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.95");
-                    break;
-                }
-                switch(sib2->ac_barring_for_mo_signalling.time)
-                {
-                case LIBLTE_RRC_AC_BARRING_TIME_S4:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "4s");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_TIME_S8:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "8s");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_TIME_S16:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "16s");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_TIME_S32:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "32s");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_TIME_S64:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "64s");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_TIME_S128:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "128s");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_TIME_S256:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "256s");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_TIME_S512:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "512s");
-                    break;
-                }
+                printf("\t\t\t%-40s=%20s\n", "Factor", liblte_rrc_ac_barring_factor_text[sib2->ac_barring_for_mo_signalling.factor]);
+                printf("\t\t\t%-40s=%19ss\n", "Time", liblte_rrc_ac_barring_time_text[sib2->ac_barring_for_mo_signalling.time]);
                 printf("\t\t\t%-40s=%20u\n", "Special AC", sib2->ac_barring_for_mo_signalling.for_special_ac);
             }else{
                 printf("\t\t%-40s=%20s\n", "AC Barring for MO Signalling", "Not Barred");
@@ -1010,456 +824,32 @@ void LTE_fdd_dl_fs_samp_buf::print_sib2(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT 
             if(true == sib2->ac_barring_for_mo_data.enabled)
             {
                 printf("\t\t%-40s=%20s\n", "AC Barring for MO Data", "Barred");
-                switch(sib2->ac_barring_for_mo_data.factor)
-                {
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P00:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.00");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P05:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.05");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P10:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.10");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P15:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.15");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P20:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.20");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P25:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.25");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P30:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.30");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P40:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.40");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P50:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.50");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P60:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.60");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P70:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.70");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P75:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.75");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P80:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.80");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P85:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.85");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P90:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.90");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_FACTOR_P95:
-                    printf("\t\t\t%-40s=%20s\n", "Factor", "0.95");
-                    break;
-                }
-                switch(sib2->ac_barring_for_mo_data.time)
-                {
-                case LIBLTE_RRC_AC_BARRING_TIME_S4:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "4s");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_TIME_S8:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "8s");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_TIME_S16:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "16s");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_TIME_S32:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "32s");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_TIME_S64:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "64s");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_TIME_S128:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "128s");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_TIME_S256:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "256s");
-                    break;
-                case LIBLTE_RRC_AC_BARRING_TIME_S512:
-                    printf("\t\t\t%-40s=%20s\n", "Time", "512s");
-                    break;
-                }
+                printf("\t\t\t%-40s=%20s\n", "Factor", liblte_rrc_ac_barring_factor_text[sib2->ac_barring_for_mo_data.factor]);
+                printf("\t\t\t%-40s=%19ss\n", "Time", liblte_rrc_ac_barring_time_text[sib2->ac_barring_for_mo_data.time]);
                 printf("\t\t\t%-40s=%20u\n", "Special AC", sib2->ac_barring_for_mo_data.for_special_ac);
             }else{
                 printf("\t\t%-40s=%20s\n", "AC Barring for MO Data", "Not Barred");
             }
         }
-        switch(sib2->rr_config_common_sib.rach_cnfg.num_ra_preambles)
-        {
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N4:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "4");
-            break;
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N8:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "8");
-            break;
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N12:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "12");
-            break;
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N16:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "16");
-            break;
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N20:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "20");
-            break;
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N24:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "24");
-            break;
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N28:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "28");
-            break;
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N32:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "32");
-            break;
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N36:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "36");
-            break;
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N40:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "40");
-            break;
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N44:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "44");
-            break;
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N48:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "48");
-            break;
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N52:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "52");
-            break;
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N56:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "56");
-            break;
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N60:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "60");
-            break;
-        case LIBLTE_RRC_NUMBER_OF_RA_PREAMBLES_N64:
-            printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", "64");
-            break;
-        }
+        printf("\t\t%-40s=%20s\n", "Number of RACH Preambles", liblte_rrc_number_of_ra_preambles_text[sib2->rr_config_common_sib.rach_cnfg.num_ra_preambles]);
         if(true == sib2->rr_config_common_sib.rach_cnfg.preambles_group_a_cnfg.present)
         {
-            switch(sib2->rr_config_common_sib.rach_cnfg.preambles_group_a_cnfg.size_of_ra)
-            {
-            case LIBLTE_RRC_SIZE_OF_RA_PREAMBLES_GROUP_A_N4:
-                printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", "4");
-                break;
-            case LIBLTE_RRC_SIZE_OF_RA_PREAMBLES_GROUP_A_N8:
-                printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", "8");
-                break;
-            case LIBLTE_RRC_SIZE_OF_RA_PREAMBLES_GROUP_A_N12:
-                printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", "12");
-                break;
-            case LIBLTE_RRC_SIZE_OF_RA_PREAMBLES_GROUP_A_N16:
-                printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", "16");
-                break;
-            case LIBLTE_RRC_SIZE_OF_RA_PREAMBLES_GROUP_A_N20:
-                printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", "20");
-                break;
-            case LIBLTE_RRC_SIZE_OF_RA_PREAMBLES_GROUP_A_N24:
-                printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", "24");
-                break;
-            case LIBLTE_RRC_SIZE_OF_RA_PREAMBLES_GROUP_A_N28:
-                printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", "28");
-                break;
-            case LIBLTE_RRC_SIZE_OF_RA_PREAMBLES_GROUP_A_N32:
-                printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", "32");
-                break;
-            case LIBLTE_RRC_SIZE_OF_RA_PREAMBLES_GROUP_A_N36:
-                printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", "36");
-                break;
-            case LIBLTE_RRC_SIZE_OF_RA_PREAMBLES_GROUP_A_N40:
-                printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", "40");
-                break;
-            case LIBLTE_RRC_SIZE_OF_RA_PREAMBLES_GROUP_A_N44:
-                printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", "44");
-                break;
-            case LIBLTE_RRC_SIZE_OF_RA_PREAMBLES_GROUP_A_N48:
-                printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", "48");
-                break;
-            case LIBLTE_RRC_SIZE_OF_RA_PREAMBLES_GROUP_A_N52:
-                printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", "52");
-                break;
-            case LIBLTE_RRC_SIZE_OF_RA_PREAMBLES_GROUP_A_N56:
-                printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", "56");
-                break;
-            case LIBLTE_RRC_SIZE_OF_RA_PREAMBLES_GROUP_A_N60:
-                printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", "60");
-                break;
-            }
-            switch(sib2->rr_config_common_sib.rach_cnfg.preambles_group_a_cnfg.msg_size)
-            {
-            case LIBLTE_RRC_MESSAGE_SIZE_GROUP_A_B56:
-                printf("\t\t%-40s=%20s\n", "Message Size Group A", "56 bits");
-                break;
-            case LIBLTE_RRC_MESSAGE_SIZE_GROUP_A_B144:
-                printf("\t\t%-40s=%20s\n", "Message Size Group A", "144 bits");
-                break;
-            case LIBLTE_RRC_MESSAGE_SIZE_GROUP_A_B208:
-                printf("\t\t%-40s=%20s\n", "Message Size Group A", "208 bits");
-                break;
-            case LIBLTE_RRC_MESSAGE_SIZE_GROUP_A_B256:
-                printf("\t\t%-40s=%20s\n", "Message Size Group A", "256 bits");
-                break;
-            }
-            switch(sib2->rr_config_common_sib.rach_cnfg.preambles_group_a_cnfg.msg_pwr_offset_group_b)
-            {
-            case LIBLTE_RRC_MESSAGE_POWER_OFFSET_GROUP_B_MINUS_INFINITY:
-                printf("\t\t%-40s=%20s\n", "Message Power Offset Group B", "-Infinity dB");
-                break;
-            case LIBLTE_RRC_MESSAGE_POWER_OFFSET_GROUP_B_DB0:
-                printf("\t\t%-40s=%20s\n", "Message Power Offset Group B", "0dB");
-                break;
-            case LIBLTE_RRC_MESSAGE_POWER_OFFSET_GROUP_B_DB5:
-                printf("\t\t%-40s=%20s\n", "Message Power Offset Group B", "5dB");
-                break;
-            case LIBLTE_RRC_MESSAGE_POWER_OFFSET_GROUP_B_DB8:
-                printf("\t\t%-40s=%20s\n", "Message Power Offset Group B", "8dB");
-                break;
-            case LIBLTE_RRC_MESSAGE_POWER_OFFSET_GROUP_B_DB10:
-                printf("\t\t%-40s=%20s\n", "Message Power Offset Group B", "10dB");
-                break;
-            case LIBLTE_RRC_MESSAGE_POWER_OFFSET_GROUP_B_DB12:
-                printf("\t\t%-40s=%20s\n", "Message Power Offset Group B", "12dB");
-                break;
-            case LIBLTE_RRC_MESSAGE_POWER_OFFSET_GROUP_B_DB15:
-                printf("\t\t%-40s=%20s\n", "Message Power Offset Group B", "15dB");
-                break;
-            case LIBLTE_RRC_MESSAGE_POWER_OFFSET_GROUP_B_DB18:
-                printf("\t\t%-40s=%20s\n", "Message Power Offset Group B", "18dB");
-                break;
-            }
+            printf("\t\t%-40s=%20s\n", "Size of RACH Preambles Group A", liblte_rrc_size_of_ra_preambles_group_a_text[sib2->rr_config_common_sib.rach_cnfg.preambles_group_a_cnfg.size_of_ra]);
+            printf("\t\t%-40s=%15s bits\n", "Message Size Group A", liblte_rrc_message_size_group_a_text[sib2->rr_config_common_sib.rach_cnfg.preambles_group_a_cnfg.msg_size]);
+            printf("\t\t%-40s=%18sdB\n", "Message Power Offset Group B", liblte_rrc_message_power_offset_group_b_text[sib2->rr_config_common_sib.rach_cnfg.preambles_group_a_cnfg.msg_pwr_offset_group_b]);
         }
-        switch(sib2->rr_config_common_sib.rach_cnfg.pwr_ramping_step)
-        {
-        case LIBLTE_RRC_POWER_RAMPING_STEP_DB0:
-            printf("\t\t%-40s=%20s\n", "Power Ramping Step", "0dB");
-            break;
-        case LIBLTE_RRC_POWER_RAMPING_STEP_DB2:
-            printf("\t\t%-40s=%20s\n", "Power Ramping Step", "2dB");
-            break;
-        case LIBLTE_RRC_POWER_RAMPING_STEP_DB4:
-            printf("\t\t%-40s=%20s\n", "Power Ramping Step", "4dB");
-            break;
-        case LIBLTE_RRC_POWER_RAMPING_STEP_DB6:
-            printf("\t\t%-40s=%20s\n", "Power Ramping Step", "6dB");
-            break;
-        }
-        switch(sib2->rr_config_common_sib.rach_cnfg.preamble_init_rx_target_pwr)
-        {
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N120:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-120dBm");
-            break;
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N118:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-118dBm");
-            break;
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N116:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-116dBm");
-            break;
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N114:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-114dBm");
-            break;
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N112:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-112dBm");
-            break;
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N110:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-110dBm");
-            break;
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N108:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-108dBm");
-            break;
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N106:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-106dBm");
-            break;
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N104:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-104dBm");
-            break;
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N102:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-102dBm");
-            break;
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N100:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-100dBm");
-            break;
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N98:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-98dBm");
-            break;
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N96:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-96dBm");
-            break;
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N94:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-94dBm");
-            break;
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N92:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-92dBm");
-            break;
-        case LIBLTE_RRC_PREAMBLE_INITIAL_RECEIVED_TARGET_POWER_DBM_N90:
-            printf("\t\t%-40s=%20s\n", "Preamble init target RX power", "-90dBm");
-            break;
-        }
-        switch(sib2->rr_config_common_sib.rach_cnfg.preamble_trans_max)
-        {
-        case LIBLTE_RRC_PREAMBLE_TRANS_MAX_N3:
-            printf("\t\t%-40s=%20s\n", "Preamble TX Max", "3");
-            break;
-        case LIBLTE_RRC_PREAMBLE_TRANS_MAX_N4:
-            printf("\t\t%-40s=%20s\n", "Preamble TX Max", "4");
-            break;
-        case LIBLTE_RRC_PREAMBLE_TRANS_MAX_N5:
-            printf("\t\t%-40s=%20s\n", "Preamble TX Max", "5");
-            break;
-        case LIBLTE_RRC_PREAMBLE_TRANS_MAX_N6:
-            printf("\t\t%-40s=%20s\n", "Preamble TX Max", "6");
-            break;
-        case LIBLTE_RRC_PREAMBLE_TRANS_MAX_N7:
-            printf("\t\t%-40s=%20s\n", "Preamble TX Max", "7");
-            break;
-        case LIBLTE_RRC_PREAMBLE_TRANS_MAX_N8:
-            printf("\t\t%-40s=%20s\n", "Preamble TX Max", "8");
-            break;
-        case LIBLTE_RRC_PREAMBLE_TRANS_MAX_N10:
-            printf("\t\t%-40s=%20s\n", "Preamble TX Max", "10");
-            break;
-        case LIBLTE_RRC_PREAMBLE_TRANS_MAX_N20:
-            printf("\t\t%-40s=%20s\n", "Preamble TX Max", "20");
-            break;
-        case LIBLTE_RRC_PREAMBLE_TRANS_MAX_N50:
-            printf("\t\t%-40s=%20s\n", "Preamble TX Max", "50");
-            break;
-        case LIBLTE_RRC_PREAMBLE_TRANS_MAX_N100:
-            printf("\t\t%-40s=%20s\n", "Preamble TX Max", "100");
-            break;
-        case LIBLTE_RRC_PREAMBLE_TRANS_MAX_N200:
-            printf("\t\t%-40s=%20s\n", "Preamble TX Max", "200");
-            break;
-        }
-        switch(sib2->rr_config_common_sib.rach_cnfg.ra_resp_win_size)
-        {
-        case LIBLTE_RRC_RA_RESPONSE_WINDOW_SIZE_SF2:
-            printf("\t\t%-40s=%20s\n", "RA Response Window Size", "2 Subframes");
-            break;
-        case LIBLTE_RRC_RA_RESPONSE_WINDOW_SIZE_SF3:
-            printf("\t\t%-40s=%20s\n", "RA Response Window Size", "3 Subframes");
-            break;
-        case LIBLTE_RRC_RA_RESPONSE_WINDOW_SIZE_SF4:
-            printf("\t\t%-40s=%20s\n", "RA Response Window Size", "4 Subframes");
-            break;
-        case LIBLTE_RRC_RA_RESPONSE_WINDOW_SIZE_SF5:
-            printf("\t\t%-40s=%20s\n", "RA Response Window Size", "5 Subframes");
-            break;
-        case LIBLTE_RRC_RA_RESPONSE_WINDOW_SIZE_SF6:
-            printf("\t\t%-40s=%20s\n", "RA Response Window Size", "6 Subframes");
-            break;
-        case LIBLTE_RRC_RA_RESPONSE_WINDOW_SIZE_SF7:
-            printf("\t\t%-40s=%20s\n", "RA Response Window Size", "7 Subframes");
-            break;
-        case LIBLTE_RRC_RA_RESPONSE_WINDOW_SIZE_SF8:
-            printf("\t\t%-40s=%20s\n", "RA Response Window Size", "8 Subframes");
-            break;
-        case LIBLTE_RRC_RA_RESPONSE_WINDOW_SIZE_SF10:
-            printf("\t\t%-40s=%20s\n", "RA Response Window Size", "10 Subframes");
-            break;
-        }
-        switch(sib2->rr_config_common_sib.rach_cnfg.mac_con_res_timer)
-        {
-        case LIBLTE_RRC_MAC_CONTENTION_RESOLUTION_TIMER_SF8:
-            printf("\t\t%-40s=%20s\n", "MAC Contention Resolution Timer", "8 Subframes");
-            break;
-        case LIBLTE_RRC_MAC_CONTENTION_RESOLUTION_TIMER_SF16:
-            printf("\t\t%-40s=%20s\n", "MAC Contention Resolution Timer", "16 Subframes");
-            break;
-        case LIBLTE_RRC_MAC_CONTENTION_RESOLUTION_TIMER_SF24:
-            printf("\t\t%-40s=%20s\n", "MAC Contention Resolution Timer", "24 Subframes");
-            break;
-        case LIBLTE_RRC_MAC_CONTENTION_RESOLUTION_TIMER_SF32:
-            printf("\t\t%-40s=%20s\n", "MAC Contention Resolution Timer", "32 Subframes");
-            break;
-        case LIBLTE_RRC_MAC_CONTENTION_RESOLUTION_TIMER_SF40:
-            printf("\t\t%-40s=%20s\n", "MAC Contention Resolution Timer", "40 Subframes");
-            break;
-        case LIBLTE_RRC_MAC_CONTENTION_RESOLUTION_TIMER_SF48:
-            printf("\t\t%-40s=%20s\n", "MAC Contention Resolution Timer", "48 Subframes");
-            break;
-        case LIBLTE_RRC_MAC_CONTENTION_RESOLUTION_TIMER_SF56:
-            printf("\t\t%-40s=%20s\n", "MAC Contention Resolution Timer", "56 Subframes");
-            break;
-        case LIBLTE_RRC_MAC_CONTENTION_RESOLUTION_TIMER_SF64:
-            printf("\t\t%-40s=%20s\n", "MAC Contention Resolution Timer", "64 Subframes");
-            break;
-        }
+        printf("\t\t%-40s=%18sdB\n", "Power Ramping Step", liblte_rrc_power_ramping_step_text[sib2->rr_config_common_sib.rach_cnfg.pwr_ramping_step]);
+        printf("\t\t%-40s=%17sdBm\n", "Preamble init target RX power", liblte_rrc_preamble_initial_received_target_power_text[sib2->rr_config_common_sib.rach_cnfg.preamble_init_rx_target_pwr]);
+        printf("\t\t%-40s=%20s\n", "Preamble TX Max", liblte_rrc_preamble_trans_max_text[sib2->rr_config_common_sib.rach_cnfg.preamble_trans_max]);
+        printf("\t\t%-40s=%10s Subframes\n", "RA Response Window Size", liblte_rrc_ra_response_window_size_text[sib2->rr_config_common_sib.rach_cnfg.ra_resp_win_size]);
+        printf("\t\t%-40s=%10s Subframes\n", "MAC Contention Resolution Timer", liblte_rrc_mac_contention_resolution_timer_text[sib2->rr_config_common_sib.rach_cnfg.mac_con_res_timer]);
         printf("\t\t%-40s=%20u\n", "Max num HARQ TX for Message 3", sib2->rr_config_common_sib.rach_cnfg.max_harq_msg3_tx);
-        switch(sib2->rr_config_common_sib.bcch_cnfg.modification_period_coeff)
-        {
-        case LIBLTE_RRC_MODIFICATION_PERIOD_COEFF_N2:
-            printf("\t\t%-40s=%20s\n", "Modification Period Coeff", "2");
-            coeff = 2;
-            break;
-        case LIBLTE_RRC_MODIFICATION_PERIOD_COEFF_N4:
-            printf("\t\t%-40s=%20s\n", "Modification Period Coeff", "4");
-            coeff = 4;
-            break;
-        case LIBLTE_RRC_MODIFICATION_PERIOD_COEFF_N8:
-            printf("\t\t%-40s=%20s\n", "Modification Period Coeff", "8");
-            coeff = 8;
-            break;
-        case LIBLTE_RRC_MODIFICATION_PERIOD_COEFF_N16:
-            printf("\t\t%-40s=%20s\n", "Modification Period Coeff", "16");
-            coeff = 16;
-            break;
-        }
-        switch(sib2->rr_config_common_sib.pcch_cnfg.default_paging_cycle)
-        {
-        case LIBLTE_RRC_DEFAULT_PAGING_CYCLE_RF32:
-            printf("\t\t%-40s=%20s\n", "Default Paging Cycle", "32 Frames");
-            T = 32;
-            break;
-        case LIBLTE_RRC_DEFAULT_PAGING_CYCLE_RF64:
-            printf("\t\t%-40s=%20s\n", "Default Paging Cycle", "64 Frames");
-            T = 64;
-            break;
-        case LIBLTE_RRC_DEFAULT_PAGING_CYCLE_RF128:
-            printf("\t\t%-40s=%20s\n", "Default Paging Cycle", "128 Frames");
-            T = 128;
-            break;
-        case LIBLTE_RRC_DEFAULT_PAGING_CYCLE_RF256:
-            printf("\t\t%-40s=%20s\n", "Default Paging Cycle", "256 Frames");
-            T = 256;
-            break;
-        }
+        printf("\t\t%-40s=%20s\n", "Modification Period Coeff", liblte_rrc_modification_period_coeff_text[sib2->rr_config_common_sib.bcch_cnfg.modification_period_coeff]);
+        coeff = liblte_rrc_modification_period_coeff_num[sib2->rr_config_common_sib.bcch_cnfg.modification_period_coeff];
+        printf("\t\t%-40s=%13s Frames\n", "Default Paging Cycle", liblte_rrc_default_paging_cycle_text[sib2->rr_config_common_sib.pcch_cnfg.default_paging_cycle]);
+        T = liblte_rrc_default_paging_cycle_num[sib2->rr_config_common_sib.pcch_cnfg.default_paging_cycle];
         printf("\t\t%-40s=%13u Frames\n", "Modification Period", coeff * T);
-        switch(sib2->rr_config_common_sib.pcch_cnfg.nB)
-        {
-        case LIBLTE_RRC_NB_FOUR_T:
-            printf("\t\t%-40s=%13u Frames\n", "nB", 4*T);
-            break;
-        case LIBLTE_RRC_NB_TWO_T:
-            printf("\t\t%-40s=%13u Frames\n", "nB", 2*T);
-            break;
-        case LIBLTE_RRC_NB_ONE_T:
-            printf("\t\t%-40s=%13u Frames\n", "nB", T);
-            break;
-        case LIBLTE_RRC_NB_HALF_T:
-            printf("\t\t%-40s=%13u Frames\n", "nB", T/2);
-            break;
-        case LIBLTE_RRC_NB_QUARTER_T:
-            printf("\t\t%-40s=%13u Frames\n", "nB", T/4);
-            break;
-        case LIBLTE_RRC_NB_ONE_EIGHTH_T:
-            printf("\t\t%-40s=%13u Frames\n", "nB", T/8);
-            break;
-        case LIBLTE_RRC_NB_ONE_SIXTEENTH_T:
-            printf("\t\t%-40s=%13u Frames\n", "nB", T/16);
-            break;
-        case LIBLTE_RRC_NB_ONE_THIRTY_SECOND_T:
-            printf("\t\t%-40s=%13u Frames\n", "nB", T/32);
-            break;
-        }
+        printf("\t\t%-40s=%13u Frames\n", "nB", (uint32)(T * liblte_rrc_nb_num[sib2->rr_config_common_sib.pcch_cnfg.nB]));
         printf("\t\t%-40s=%20u\n", "Root Sequence Index", sib2->rr_config_common_sib.prach_cnfg.root_sequence_index);
         printf("\t\t%-40s=%20u\n", "PRACH Config Index", sib2->rr_config_common_sib.prach_cnfg.prach_cnfg_info.prach_config_index);
         switch(sib2->rr_config_common_sib.prach_cnfg.prach_cnfg_info.prach_config_index)
@@ -1698,101 +1088,14 @@ void LTE_fdd_dl_fs_samp_buf::print_sib2(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT 
             printf("\t\t%-40s=%20s\n", "Sequence Hopping", "Disabled");
         }
         printf("\t\t%-40s=%20u\n", "Cyclic Shift", sib2->rr_config_common_sib.pusch_cnfg.ul_rs.cyclic_shift);
-        switch(sib2->rr_config_common_sib.pucch_cnfg.delta_pucch_shift)
-        {
-        case LIBLTE_RRC_DELTA_PUCCH_SHIFT_DS1:
-            printf("\t\t%-40s=%20s\n", "Delta PUCCH Shift", "1");
-            break;
-        case LIBLTE_RRC_DELTA_PUCCH_SHIFT_DS2:
-            printf("\t\t%-40s=%20s\n", "Delta PUCCH Shift", "2");
-            break;
-        case LIBLTE_RRC_DELTA_PUCCH_SHIFT_DS3:
-            printf("\t\t%-40s=%20s\n", "Delta PUCCH Shift", "3");
-            break;
-        }
+        printf("\t\t%-40s=%20s\n", "Delta PUCCH Shift", liblte_rrc_delta_pucch_shift_text[sib2->rr_config_common_sib.pucch_cnfg.delta_pucch_shift]);
         printf("\t\t%-40s=%20u\n", "N_rb_cqi", sib2->rr_config_common_sib.pucch_cnfg.n_rb_cqi);
         printf("\t\t%-40s=%20u\n", "N_cs_an", sib2->rr_config_common_sib.pucch_cnfg.n_cs_an);
         printf("\t\t%-40s=%20u\n", "N1 PUCCH AN", sib2->rr_config_common_sib.pucch_cnfg.n1_pucch_an);
         if(true == sib2->rr_config_common_sib.srs_ul_cnfg.present)
         {
-            switch(sib2->rr_config_common_sib.srs_ul_cnfg.bw_cnfg)
-            {
-            case LIBLTE_RRC_SRS_BW_CONFIG_0:
-                printf("\t\t%-40s=%20s\n", "SRS Bandwidth Config", "0");
-                break;
-            case LIBLTE_RRC_SRS_BW_CONFIG_1:
-                printf("\t\t%-40s=%20s\n", "SRS Bandwidth Config", "1");
-                break;
-            case LIBLTE_RRC_SRS_BW_CONFIG_2:
-                printf("\t\t%-40s=%20s\n", "SRS Bandwidth Config", "2");
-                break;
-            case LIBLTE_RRC_SRS_BW_CONFIG_3:
-                printf("\t\t%-40s=%20s\n", "SRS Bandwidth Config", "3");
-                break;
-            case LIBLTE_RRC_SRS_BW_CONFIG_4:
-                printf("\t\t%-40s=%20s\n", "SRS Bandwidth Config", "4");
-                break;
-            case LIBLTE_RRC_SRS_BW_CONFIG_5:
-                printf("\t\t%-40s=%20s\n", "SRS Bandwidth Config", "5");
-                break;
-            case LIBLTE_RRC_SRS_BW_CONFIG_6:
-                printf("\t\t%-40s=%20s\n", "SRS Bandwidth Config", "6");
-                break;
-            case LIBLTE_RRC_SRS_BW_CONFIG_7:
-                printf("\t\t%-40s=%20s\n", "SRS Bandwidth Config", "7");
-                break;
-            }
-            switch(sib2->rr_config_common_sib.srs_ul_cnfg.subfr_cnfg)
-            {
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_0:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "0");
-                break;
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_1:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "1");
-                break;
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_2:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "2");
-                break;
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_3:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "3");
-                break;
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_4:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "4");
-                break;
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_5:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "5");
-                break;
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_6:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "6");
-                break;
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_7:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "7");
-                break;
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_8:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "8");
-                break;
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_9:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "9");
-                break;
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_10:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "10");
-                break;
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_11:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "11");
-                break;
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_12:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "12");
-                break;
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_13:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "13");
-                break;
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_14:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "14");
-                break;
-            case LIBLTE_RRC_SRS_SUBFR_CONFIG_15:
-                printf("\t\t%-40s=%20s\n", "SRS Subframe Config", "15");
-                break;
-            }
+            printf("\t\t%-40s=%20s\n", "SRS Bandwidth Config", liblte_rrc_srs_bw_config_text[sib2->rr_config_common_sib.srs_ul_cnfg.bw_cnfg]);
+            printf("\t\t%-40s=%20s\n", "SRS Subframe Config", liblte_rrc_srs_subfr_config_text[sib2->rr_config_common_sib.srs_ul_cnfg.subfr_cnfg]);
             if(true == sib2->rr_config_common_sib.srs_ul_cnfg.ack_nack_simul_tx)
             {
                 printf("\t\t%-40s=%20s\n", "Simultaneous AN and SRS", "True");
@@ -1807,97 +1110,13 @@ void LTE_fdd_dl_fs_samp_buf::print_sib2(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT 
             }
         }
         printf("\t\t%-40s=%17ddBm\n", "P0 Nominal PUSCH", sib2->rr_config_common_sib.ul_pwr_ctrl.p0_nominal_pusch);
-        switch(sib2->rr_config_common_sib.ul_pwr_ctrl.alpha)
-        {
-        case LIBLTE_RRC_UL_POWER_CONTROL_ALPHA_0:
-            printf("\t\t%-40s=%20s\n", "Alpha", "0");
-            break;
-        case LIBLTE_RRC_UL_POWER_CONTROL_ALPHA_04:
-            printf("\t\t%-40s=%20s\n", "Alpha", "0.4");
-            break;
-        case LIBLTE_RRC_UL_POWER_CONTROL_ALPHA_05:
-            printf("\t\t%-40s=%20s\n", "Alpha", "0.5");
-            break;
-        case LIBLTE_RRC_UL_POWER_CONTROL_ALPHA_06:
-            printf("\t\t%-40s=%20s\n", "Alpha", "0.6");
-            break;
-        case LIBLTE_RRC_UL_POWER_CONTROL_ALPHA_07:
-            printf("\t\t%-40s=%20s\n", "Alpha", "0.7");
-            break;
-        case LIBLTE_RRC_UL_POWER_CONTROL_ALPHA_08:
-            printf("\t\t%-40s=%20s\n", "Alpha", "0.8");
-            break;
-        case LIBLTE_RRC_UL_POWER_CONTROL_ALPHA_09:
-            printf("\t\t%-40s=%20s\n", "Alpha", "0.9");
-            break;
-        case LIBLTE_RRC_UL_POWER_CONTROL_ALPHA_1:
-            printf("\t\t%-40s=%20s\n", "Alpha", "1");
-            break;
-        }
+        printf("\t\t%-40s=%20s\n", "Alpha", liblte_rrc_ul_power_control_alpha_text[sib2->rr_config_common_sib.ul_pwr_ctrl.alpha]);
         printf("\t\t%-40s=%17ddBm\n", "P0 Nominal PUCCH", sib2->rr_config_common_sib.ul_pwr_ctrl.p0_nominal_pucch);
-        switch(sib2->rr_config_common_sib.ul_pwr_ctrl.delta_flist_pucch.format_1)
-        {
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_1_NEG_2:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 1", "-2dB");
-            break;
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_1_0:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 1", "0dB");
-            break;
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_1_2:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 1", "2dB");
-            break;
-        }
-        switch(sib2->rr_config_common_sib.ul_pwr_ctrl.delta_flist_pucch.format_1b)
-        {
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_1B_1:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 1B", "1dB");
-            break;
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_1B_3:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 1B", "3dB");
-            break;
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_1B_5:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 1B", "5dB");
-            break;
-        }
-        switch(sib2->rr_config_common_sib.ul_pwr_ctrl.delta_flist_pucch.format_2)
-        {
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_2_NEG_2:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 2", "-2dB");
-            break;
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_2_0:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 2", "0dB");
-            break;
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_2_1:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 2", "1dB");
-            break;
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_2_2:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 2", "2dB");
-            break;
-        }
-        switch(sib2->rr_config_common_sib.ul_pwr_ctrl.delta_flist_pucch.format_2a)
-        {
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_2A_NEG_2:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 2A", "-2dB");
-            break;
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_2A_0:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 2A", "0dB");
-            break;
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_2A_2:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 2A", "2dB");
-            break;
-        }
-        switch(sib2->rr_config_common_sib.ul_pwr_ctrl.delta_flist_pucch.format_2b)
-        {
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_2B_NEG_2:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 2B", "-2dB");
-            break;
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_2B_0:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 2B", "0dB");
-            break;
-        case LIBLTE_RRC_DELTA_F_PUCCH_FORMAT_2B_2:
-            printf("\t\t%-40s=%20s\n", "Delta F PUCCH Format 2B", "2dB");
-            break;
-        }
+        printf("\t\t%-40s=%18sdB\n", "Delta F PUCCH Format 1", liblte_rrc_delta_f_pucch_format_1_text[sib2->rr_config_common_sib.ul_pwr_ctrl.delta_flist_pucch.format_1]);
+        printf("\t\t%-40s=%18sdB\n", "Delta F PUCCH Format 1B", liblte_rrc_delta_f_pucch_format_1b_text[sib2->rr_config_common_sib.ul_pwr_ctrl.delta_flist_pucch.format_1b]);
+        printf("\t\t%-40s=%18sdB\n", "Delta F PUCCH Format 2", liblte_rrc_delta_f_pucch_format_2_text[sib2->rr_config_common_sib.ul_pwr_ctrl.delta_flist_pucch.format_2]);
+        printf("\t\t%-40s=%18sdB\n", "Delta F PUCCH Format 2A", liblte_rrc_delta_f_pucch_format_2a_text[sib2->rr_config_common_sib.ul_pwr_ctrl.delta_flist_pucch.format_2a]);
+        printf("\t\t%-40s=%18sdB\n", "Delta F PUCCH Format 2B", liblte_rrc_delta_f_pucch_format_2b_text[sib2->rr_config_common_sib.ul_pwr_ctrl.delta_flist_pucch.format_2b]);
         printf("\t\t%-40s=%18ddB\n", "Delta Preamble Message 3", sib2->rr_config_common_sib.ul_pwr_ctrl.delta_preamble_msg3);
         switch(sib2->rr_config_common_sib.ul_cp_length)
         {
@@ -1908,189 +1127,19 @@ void LTE_fdd_dl_fs_samp_buf::print_sib2(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT 
             printf("\t\t%-40s=%20s\n", "UL CP Length", "Extended");
             break;
         }
-        switch(sib2->ue_timers_and_constants.t300)
-        {
-        case LIBLTE_RRC_T300_MS100:
-            printf("\t\t%-40s=%20s\n", "T300", "100ms");
-            break;
-        case LIBLTE_RRC_T300_MS200:
-            printf("\t\t%-40s=%20s\n", "T300", "200ms");
-            break;
-        case LIBLTE_RRC_T300_MS300:
-            printf("\t\t%-40s=%20s\n", "T300", "300ms");
-            break;
-        case LIBLTE_RRC_T300_MS400:
-            printf("\t\t%-40s=%20s\n", "T300", "400ms");
-            break;
-        case LIBLTE_RRC_T300_MS600:
-            printf("\t\t%-40s=%20s\n", "T300", "600ms");
-            break;
-        case LIBLTE_RRC_T300_MS1000:
-            printf("\t\t%-40s=%20s\n", "T300", "1000ms");
-            break;
-        case LIBLTE_RRC_T300_MS1500:
-            printf("\t\t%-40s=%20s\n", "T300", "1500ms");
-            break;
-        case LIBLTE_RRC_T300_MS2000:
-            printf("\t\t%-40s=%20s\n", "T300", "2000ms");
-            break;
-        }
-        switch(sib2->ue_timers_and_constants.t301)
-        {
-        case LIBLTE_RRC_T301_MS100:
-            printf("\t\t%-40s=%20s\n", "T301", "100ms");
-            break;
-        case LIBLTE_RRC_T301_MS200:
-            printf("\t\t%-40s=%20s\n", "T301", "200ms");
-            break;
-        case LIBLTE_RRC_T301_MS300:
-            printf("\t\t%-40s=%20s\n", "T301", "300ms");
-            break;
-        case LIBLTE_RRC_T301_MS400:
-            printf("\t\t%-40s=%20s\n", "T301", "400ms");
-            break;
-        case LIBLTE_RRC_T301_MS600:
-            printf("\t\t%-40s=%20s\n", "T301", "600ms");
-            break;
-        case LIBLTE_RRC_T301_MS1000:
-            printf("\t\t%-40s=%20s\n", "T301", "1000ms");
-            break;
-        case LIBLTE_RRC_T301_MS1500:
-            printf("\t\t%-40s=%20s\n", "T301", "1500ms");
-            break;
-        case LIBLTE_RRC_T301_MS2000:
-            printf("\t\t%-40s=%20s\n", "T301", "2000ms");
-            break;
-        }
-        switch(sib2->ue_timers_and_constants.t310)
-        {
-        case LIBLTE_RRC_T310_MS0:
-            printf("\t\t%-40s=%20s\n", "T310", "0ms");
-            break;
-        case LIBLTE_RRC_T310_MS50:
-            printf("\t\t%-40s=%20s\n", "T310", "50ms");
-            break;
-        case LIBLTE_RRC_T310_MS100:
-            printf("\t\t%-40s=%20s\n", "T310", "100ms");
-            break;
-        case LIBLTE_RRC_T310_MS200:
-            printf("\t\t%-40s=%20s\n", "T310", "200ms");
-            break;
-        case LIBLTE_RRC_T310_MS500:
-            printf("\t\t%-40s=%20s\n", "T310", "500ms");
-            break;
-        case LIBLTE_RRC_T310_MS1000:
-            printf("\t\t%-40s=%20s\n", "T310", "1000ms");
-            break;
-        case LIBLTE_RRC_T310_MS2000:
-            printf("\t\t%-40s=%20s\n", "T310", "2000ms");
-            break;
-        }
-        switch(sib2->ue_timers_and_constants.n310)
-        {
-        case LIBLTE_RRC_N310_N1:
-            printf("\t\t%-40s=%20s\n", "N310", "1");
-            break;
-        case LIBLTE_RRC_N310_N2:
-            printf("\t\t%-40s=%20s\n", "N310", "2");
-            break;
-        case LIBLTE_RRC_N310_N3:
-            printf("\t\t%-40s=%20s\n", "N310", "3");
-            break;
-        case LIBLTE_RRC_N310_N4:
-            printf("\t\t%-40s=%20s\n", "N310", "4");
-            break;
-        case LIBLTE_RRC_N310_N6:
-            printf("\t\t%-40s=%20s\n", "N310", "6");
-            break;
-        case LIBLTE_RRC_N310_N8:
-            printf("\t\t%-40s=%20s\n", "N310", "8");
-            break;
-        case LIBLTE_RRC_N310_N10:
-            printf("\t\t%-40s=%20s\n", "N310", "10");
-            break;
-        case LIBLTE_RRC_N310_N20:
-            printf("\t\t%-40s=%20s\n", "N310", "20");
-            break;
-        }
-        switch(sib2->ue_timers_and_constants.t311)
-        {
-        case LIBLTE_RRC_T311_MS1000:
-            printf("\t\t%-40s=%20s\n", "T311", "1000ms");
-            break;
-        case LIBLTE_RRC_T311_MS3000:
-            printf("\t\t%-40s=%20s\n", "T311", "3000ms");
-            break;
-        case LIBLTE_RRC_T311_MS5000:
-            printf("\t\t%-40s=%20s\n", "T311", "5000ms");
-            break;
-        case LIBLTE_RRC_T311_MS10000:
-            printf("\t\t%-40s=%20s\n", "T311", "10000ms");
-            break;
-        case LIBLTE_RRC_T311_MS15000:
-            printf("\t\t%-40s=%20s\n", "T311", "15000ms");
-            break;
-        case LIBLTE_RRC_T311_MS20000:
-            printf("\t\t%-40s=%20s\n", "T311", "20000ms");
-            break;
-        case LIBLTE_RRC_T311_MS30000:
-            printf("\t\t%-40s=%20s\n", "T311", "30000ms");
-            break;
-        }
-        switch(sib2->ue_timers_and_constants.n311)
-        {
-        case LIBLTE_RRC_N311_N1:
-            printf("\t\t%-40s=%20s\n", "N311", "1");
-            break;
-        case LIBLTE_RRC_N311_N2:
-            printf("\t\t%-40s=%20s\n", "N311", "2");
-            break;
-        case LIBLTE_RRC_N311_N3:
-            printf("\t\t%-40s=%20s\n", "N311", "3");
-            break;
-        case LIBLTE_RRC_N311_N4:
-            printf("\t\t%-40s=%20s\n", "N311", "4");
-            break;
-        case LIBLTE_RRC_N311_N5:
-            printf("\t\t%-40s=%20s\n", "N311", "5");
-            break;
-        case LIBLTE_RRC_N311_N6:
-            printf("\t\t%-40s=%20s\n", "N311", "6");
-            break;
-        case LIBLTE_RRC_N311_N8:
-            printf("\t\t%-40s=%20s\n", "N311", "8");
-            break;
-        case LIBLTE_RRC_N311_N10:
-            printf("\t\t%-40s=%20s\n", "N311", "10");
-            break;
-        }
+        printf("\t\t%-40s=%18sms\n", "T300", liblte_rrc_t300_text[sib2->ue_timers_and_constants.t300]);
+        printf("\t\t%-40s=%18sms\n", "T301", liblte_rrc_t301_text[sib2->ue_timers_and_constants.t301]);
+        printf("\t\t%-40s=%18sms\n", "T310", liblte_rrc_t310_text[sib2->ue_timers_and_constants.t310]);
+        printf("\t\t%-40s=%20s\n", "N310", liblte_rrc_n310_text[sib2->ue_timers_and_constants.n310]);
+        printf("\t\t%-40s=%18sms\n", "T311", liblte_rrc_t311_text[sib2->ue_timers_and_constants.t311]);
+        printf("\t\t%-40s=%20s\n", "N311", liblte_rrc_n311_text[sib2->ue_timers_and_constants.n311]);
         if(true == sib2->arfcn_value_eutra.present)
         {
             printf("\t\t%-40s=%20u\n", "UL ARFCN", sib2->arfcn_value_eutra.value);
         }
         if(true == sib2->ul_bw.present)
         {
-            switch(sib2->ul_bw.bw)
-            {
-            case LIBLTE_RRC_UL_BW_N6:
-                printf("\t\t%-40s=%20s\n", "UL Bandwidth", "1.6MHz");
-                break;
-            case LIBLTE_RRC_UL_BW_N15:
-                printf("\t\t%-40s=%20s\n", "UL Bandwidth", "3MHz");
-                break;
-            case LIBLTE_RRC_UL_BW_N25:
-                printf("\t\t%-40s=%20s\n", "UL Bandwidth", "5MHz");
-                break;
-            case LIBLTE_RRC_UL_BW_N50:
-                printf("\t\t%-40s=%20s\n", "UL Bandwidth", "10MHz");
-                break;
-            case LIBLTE_RRC_UL_BW_N75:
-                printf("\t\t%-40s=%20s\n", "UL Bandwidth", "15MHz");
-                break;
-            case LIBLTE_RRC_UL_BW_N100:
-                printf("\t\t%-40s=%20s\n", "UL Bandwidth", "20MHz");
-                break;
-            }
+            printf("\t\t%-40s=%17sMHz\n", "UL Bandwidth", liblte_rrc_ul_bw_text[sib2->ul_bw.bw]);
         }
         printf("\t\t%-40s=%20u\n", "Additional Spectrum Emission", sib2->additional_spectrum_emission);
         if(0 != sib2->mbsfn_subfr_cnfg_list_size)
@@ -2099,62 +1148,11 @@ void LTE_fdd_dl_fs_samp_buf::print_sib2(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT 
         }
         for(i=0; i<sib2->mbsfn_subfr_cnfg_list_size; i++)
         {
-            switch(sib2->mbsfn_subfr_cnfg[i].radio_fr_alloc_period)
-            {
-            case LIBLTE_RRC_RADIO_FRAME_ALLOCATION_PERIOD_N1:
-                printf("\t\t\t%-40s=%20s\n", "Radio Frame Alloc Period", "1");
-                break;
-            case LIBLTE_RRC_RADIO_FRAME_ALLOCATION_PERIOD_N2:
-                printf("\t\t\t%-40s=%20s\n", "Radio Frame Alloc Period", "2");
-                break;
-            case LIBLTE_RRC_RADIO_FRAME_ALLOCATION_PERIOD_N4:
-                printf("\t\t\t%-40s=%20s\n", "Radio Frame Alloc Period", "4");
-                break;
-            case LIBLTE_RRC_RADIO_FRAME_ALLOCATION_PERIOD_N8:
-                printf("\t\t\t%-40s=%20s\n", "Radio Frame Alloc Period", "8");
-                break;
-            case LIBLTE_RRC_RADIO_FRAME_ALLOCATION_PERIOD_N16:
-                printf("\t\t\t%-40s=%20s\n", "Radio Frame Alloc Period", "16");
-                break;
-            case LIBLTE_RRC_RADIO_FRAME_ALLOCATION_PERIOD_N32:
-                printf("\t\t\t%-40s=%20s\n", "Radio Frame Alloc Period", "32");
-                break;
-            }
+            printf("\t\t\t%-40s=%20s\n", "Radio Frame Alloc Period", liblte_rrc_radio_frame_allocation_period_text[sib2->mbsfn_subfr_cnfg[i].radio_fr_alloc_period]);
             printf("\t\t\t%-40s=%20u\n", "Radio Frame Alloc Offset", sib2->mbsfn_subfr_cnfg[i].subfr_alloc);
-            if(LIBLTE_RRC_SUBFRAME_ALLOCATION_NUM_FRAMES_ONE == sib2->mbsfn_subfr_cnfg[i].subfr_alloc_num_frames)
-            {
-                printf("\t\t\t%-40s=%20u\n", "Subframe Alloc ONE FRAME", sib2->mbsfn_subfr_cnfg[i].subfr_alloc);
-            }else{
-                printf("\t\t\t%-40s=%20u\n", "Subframe Alloc FOUR FRAMES", sib2->mbsfn_subfr_cnfg[i].subfr_alloc);
-            }
+            printf("\t\t\tSubframe Alloc%-26s=%20u\n", liblte_rrc_subframe_allocation_num_frames_text[sib2->mbsfn_subfr_cnfg[i].subfr_alloc_num_frames], sib2->mbsfn_subfr_cnfg[i].subfr_alloc);
         }
-        switch(sib2->time_alignment_timer)
-        {
-        case LIBLTE_RRC_TIME_ALIGNMENT_TIMER_SF500:
-            printf("\t\t%-40s=%20s\n", "Time Alignment Timer", "500 Subframes");
-            break;
-        case LIBLTE_RRC_TIME_ALIGNMENT_TIMER_SF750:
-            printf("\t\t%-40s=%20s\n", "Time Alignment Timer", "750 Subframes");
-            break;
-        case LIBLTE_RRC_TIME_ALIGNMENT_TIMER_SF1280:
-            printf("\t\t%-40s=%20s\n", "Time Alignment Timer", "1280 Subframes");
-            break;
-        case LIBLTE_RRC_TIME_ALIGNMENT_TIMER_SF1920:
-            printf("\t\t%-40s=%20s\n", "Time Alignment Timer", "1920 Subframes");
-            break;
-        case LIBLTE_RRC_TIME_ALIGNMENT_TIMER_SF2560:
-            printf("\t\t%-40s=%20s\n", "Time Alignment Timer", "2560 Subframes");
-            break;
-        case LIBLTE_RRC_TIME_ALIGNMENT_TIMER_SF5120:
-            printf("\t\t%-40s=%20s\n", "Time Alignment Timer", "5120 Subframes");
-            break;
-        case LIBLTE_RRC_TIME_ALIGNMENT_TIMER_SF10240:
-            printf("\t\t%-40s=%20s\n", "Time Alignment Timer", "10240 Subframes");
-            break;
-        case LIBLTE_RRC_TIME_ALIGNMENT_TIMER_INFINITY:
-            printf("\t\t%-40s=%20s\n", "Time Alignment Timer", "Infinity");
-            break;
-        }
+        printf("\t\t%-40s=%10s Subframes\n", "Time Alignment Timer", liblte_rrc_time_alignment_timer_text[sib2->time_alignment_timer]);
 
         sib2_printed = true;
     }
@@ -2165,133 +1163,15 @@ void LTE_fdd_dl_fs_samp_buf::print_sib3(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3_STRUCT 
     if(false == sib3_printed)
     {
         printf("\tSIB3 Decoded:\n");
-        switch(sib3->q_hyst)
-        {
-        case LIBLTE_RRC_Q_HYST_DB_0:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "0dB");
-            break;
-        case LIBLTE_RRC_Q_HYST_DB_1:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "1dB");
-            break;
-        case LIBLTE_RRC_Q_HYST_DB_2:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "2dB");
-            break;
-        case LIBLTE_RRC_Q_HYST_DB_3:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "3dB");
-            break;
-        case LIBLTE_RRC_Q_HYST_DB_4:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "4dB");
-            break;
-        case LIBLTE_RRC_Q_HYST_DB_5:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "5dB");
-            break;
-        case LIBLTE_RRC_Q_HYST_DB_6:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "6dB");
-            break;
-        case LIBLTE_RRC_Q_HYST_DB_8:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "8dB");
-            break;
-        case LIBLTE_RRC_Q_HYST_DB_10:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "10dB");
-            break;
-        case LIBLTE_RRC_Q_HYST_DB_12:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "12dB");
-            break;
-        case LIBLTE_RRC_Q_HYST_DB_14:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "14dB");
-            break;
-        case LIBLTE_RRC_Q_HYST_DB_16:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "16dB");
-            break;
-        case LIBLTE_RRC_Q_HYST_DB_18:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "18dB");
-            break;
-        case LIBLTE_RRC_Q_HYST_DB_20:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "20dB");
-            break;
-        case LIBLTE_RRC_Q_HYST_DB_22:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "22dB");
-            break;
-        case LIBLTE_RRC_Q_HYST_DB_24:
-            printf("\t\t%-40s=%20s\n", "Q-Hyst", "24dB");
-            break;
-        }
+        printf("\t\t%-40s=%18sdB\n", "Q-Hyst", liblte_rrc_q_hyst_text[sib3->q_hyst]);
         if(true == sib3->speed_state_resel_params.present)
         {
-            switch(sib3->speed_state_resel_params.mobility_state_params.t_eval)
-            {
-            case LIBLTE_RRC_T_EVALUATION_S30:
-                printf("\t\t%-40s=%20s\n", "T-Evaluation", "30s");
-                break;
-            case LIBLTE_RRC_T_EVALUATION_S60:
-                printf("\t\t%-40s=%20s\n", "T-Evaluation", "60s");
-                break;
-            case LIBLTE_RRC_T_EVALUATION_S120:
-                printf("\t\t%-40s=%20s\n", "T-Evaluation", "120s");
-                break;
-            case LIBLTE_RRC_T_EVALUATION_S180:
-                printf("\t\t%-40s=%20s\n", "T-Evaluation", "180s");
-                break;
-            case LIBLTE_RRC_T_EVALUATION_S240:
-                printf("\t\t%-40s=%20s\n", "T-Evaluation", "240s");
-                break;
-            default:
-                printf("\t\t%-40s=%20s\n", "T-Evaluation", "Invalid");
-                break;
-            }
-            switch(sib3->speed_state_resel_params.mobility_state_params.t_hyst_normal)
-            {
-            case LIBLTE_RRC_T_HYST_NORMAL_S30:
-                printf("\t\t%-40s=%20s\n", "T-Hyst Normal", "30s");
-                break;
-            case LIBLTE_RRC_T_HYST_NORMAL_S60:
-                printf("\t\t%-40s=%20s\n", "T-Hyst Normal", "60s");
-                break;
-            case LIBLTE_RRC_T_HYST_NORMAL_S120:
-                printf("\t\t%-40s=%20s\n", "T-Hyst Normal", "120s");
-                break;
-            case LIBLTE_RRC_T_HYST_NORMAL_S180:
-                printf("\t\t%-40s=%20s\n", "T-Hyst Normal", "180s");
-                break;
-            case LIBLTE_RRC_T_HYST_NORMAL_S240:
-                printf("\t\t%-40s=%20s\n", "T-Hyst Normal", "240s");
-                break;
-            default:
-                printf("\t\t%-40s=%20s\n", "T-Hyst Normal", "Invalid");
-                break;
-            }
+            printf("\t\t%-40s=%19ss\n", "T-Evaluation", liblte_rrc_t_evaluation_text[sib3->speed_state_resel_params.mobility_state_params.t_eval]);
+            printf("\t\t%-40s=%19ss\n", "T-Hyst Normal", liblte_rrc_t_hyst_normal_text[sib3->speed_state_resel_params.mobility_state_params.t_hyst_normal]);
             printf("\t\t%-40s=%20u\n", "N-Cell Change Medium", sib3->speed_state_resel_params.mobility_state_params.n_cell_change_medium);
             printf("\t\t%-40s=%20u\n", "N-Cell Change High", sib3->speed_state_resel_params.mobility_state_params.n_cell_change_high);
-            switch(sib3->speed_state_resel_params.q_hyst_sf.medium)
-            {
-            case LIBLTE_RRC_SF_MEDIUM_DB_N6:
-                printf("\t\t%-40s=%20s\n", "Q-Hyst SF Medium", "-6dB");
-                break;
-            case LIBLTE_RRC_SF_MEDIUM_DB_N4:
-                printf("\t\t%-40s=%20s\n", "Q-Hyst SF Medium", "-4dB");
-                break;
-            case LIBLTE_RRC_SF_MEDIUM_DB_N2:
-                printf("\t\t%-40s=%20s\n", "Q-Hyst SF Medium", "-2dB");
-                break;
-            case LIBLTE_RRC_SF_MEDIUM_DB_0:
-                printf("\t\t%-40s=%20s\n", "Q-Hyst SF Medium", "0dB");
-                break;
-            }
-            switch(sib3->speed_state_resel_params.q_hyst_sf.high)
-            {
-            case LIBLTE_RRC_SF_HIGH_DB_N6:
-                printf("\t\t%-40s=%20s\n", "Q-Hyst SF High", "-6dB");
-                break;
-            case LIBLTE_RRC_SF_HIGH_DB_N4:
-                printf("\t\t%-40s=%20s\n", "Q-Hyst SF High", "-4dB");
-                break;
-            case LIBLTE_RRC_SF_HIGH_DB_N2:
-                printf("\t\t%-40s=%20s\n", "Q-Hyst SF High", "-2dB");
-                break;
-            case LIBLTE_RRC_SF_HIGH_DB_0:
-                printf("\t\t%-40s=%20s\n", "Q-Hyst SF High", "0dB");
-                break;
-            }
+            printf("\t\t%-40s=%18sdB\n", "Q-Hyst SF Medium", liblte_rrc_sf_medium_text[sib3->speed_state_resel_params.q_hyst_sf.medium]);
+            printf("\t\t%-40s=%18sdB\n", "Q-Hyst SF High", liblte_rrc_sf_high_text[sib3->speed_state_resel_params.q_hyst_sf.high]);
         }
         if(true == sib3->s_non_intra_search_present)
         {
@@ -2310,27 +1190,7 @@ void LTE_fdd_dl_fs_samp_buf::print_sib3(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3_STRUCT 
         }
         if(true == sib3->allowed_meas_bw_present)
         {
-            switch(sib3->allowed_meas_bw)
-            {
-            case LIBLTE_RRC_ALLOWED_MEAS_BANDWIDTH_MBW6:
-                printf("\t\t%-40s=%20s\n", "Allowed Meas Bandwidth", "1.6MHz");
-                break;
-            case LIBLTE_RRC_ALLOWED_MEAS_BANDWIDTH_MBW15:
-                printf("\t\t%-40s=%20s\n", "Allowed Meas Bandwidth", "3MHz");
-                break;
-            case LIBLTE_RRC_ALLOWED_MEAS_BANDWIDTH_MBW25:
-                printf("\t\t%-40s=%20s\n", "Allowed Meas Bandwidth", "5MHz");
-                break;
-            case LIBLTE_RRC_ALLOWED_MEAS_BANDWIDTH_MBW50:
-                printf("\t\t%-40s=%20s\n", "Allowed Meas Bandwidth", "10MHz");
-                break;
-            case LIBLTE_RRC_ALLOWED_MEAS_BANDWIDTH_MBW75:
-                printf("\t\t%-40s=%20s\n", "Allowed Meas Bandwidth", "15MHz");
-                break;
-            case LIBLTE_RRC_ALLOWED_MEAS_BANDWIDTH_MBW100:
-                printf("\t\t%-40s=%20s\n", "Allowed Meas Bandwidth", "20MHz");
-                break;
-            }
+            printf("\t\t%-40s=%17sMHz\n", "Allowed Meas Bandwidth", liblte_rrc_allowed_meas_bandwidth_text[sib3->allowed_meas_bw]);
         }
         if(true == sib3->presence_ant_port_1)
         {
@@ -2356,36 +1216,8 @@ void LTE_fdd_dl_fs_samp_buf::print_sib3(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3_STRUCT 
         printf("\t\t%-40s=%19us\n", "T-Reselection EUTRA", sib3->t_resel_eutra);
         if(true == sib3->t_resel_eutra_sf_present)
         {
-            switch(sib3->t_resel_eutra_sf.sf_medium)
-            {
-            case LIBLTE_RRC_SSSF_MEDIUM_0DOT25:
-                printf("\t\t%-40s=%20s\n", "T-Reselection EUTRA SF Medium", "0.25");
-                break;
-            case LIBLTE_RRC_SSSF_MEDIUM_0DOT5:
-                printf("\t\t%-40s=%20s\n", "T-Reselection EUTRA SF Medium", "0.5");
-                break;
-            case LIBLTE_RRC_SSSF_MEDIUM_0DOT75:
-                printf("\t\t%-40s=%20s\n", "T-Reselection EUTRA SF Medium", "0.75");
-                break;
-            case LIBLTE_RRC_SSSF_MEDIUM_1DOT0:
-                printf("\t\t%-40s=%20s\n", "T-Reselection EUTRA SF Medium", "1.0");
-                break;
-            }
-            switch(sib3->t_resel_eutra_sf.sf_high)
-            {
-            case LIBLTE_RRC_SSSF_HIGH_0DOT25:
-                printf("\t\t%-40s=%20s\n", "T-Reselection EUTRA SF High", "0.25");
-                break;
-            case LIBLTE_RRC_SSSF_HIGH_0DOT5:
-                printf("\t\t%-40s=%20s\n", "T-Reselection EUTRA SF High", "0.5");
-                break;
-            case LIBLTE_RRC_SSSF_HIGH_0DOT75:
-                printf("\t\t%-40s=%20s\n", "T-Reselection EUTRA SF High", "0.75");
-                break;
-            case LIBLTE_RRC_SSSF_HIGH_1DOT0:
-                printf("\t\t%-40s=%20s\n", "T-Reselection EUTRA SF High", "1.0");
-                break;
-            }
+            printf("\t\t%-40s=%20s\n", "T-Reselection EUTRA SF Medium", liblte_rrc_sssf_medium_text[sib3->t_resel_eutra_sf.sf_medium]);
+            printf("\t\t%-40s=%20s\n", "T-Reselection EUTRA SF High", liblte_rrc_sssf_high_text[sib3->t_resel_eutra_sf.sf_high]);
         }
 
         sib3_printed = true;
@@ -2407,102 +1239,7 @@ void LTE_fdd_dl_fs_samp_buf::print_sib4(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4_STRUCT 
         for(i=0; i<sib4->intra_freq_neigh_cell_list_size; i++)
         {
             printf("\t\t\t%s = %u\n", "Physical Cell ID", sib4->intra_freq_neigh_cell_list[i].phys_cell_id);
-            switch(sib4->intra_freq_neigh_cell_list[i].q_offset_range)
-            {
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_N24:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "-24dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_N22:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "-22dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_N20:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "-20dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_N18:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "-18dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_N16:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "-16dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_N14:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "-14dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_N12:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "-12dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_N10:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "-10dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_N8:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "-8dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_N6:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "-6dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_N5:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "-5dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_N4:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "-4dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_N3:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "-3dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_N2:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "-2dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_N1:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "-1dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_0:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "0dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_1:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "1dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_2:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "2dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_3:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "3dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_4:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "4dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_5:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "5dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_6:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "6dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_8:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "8dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_10:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "10dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_12:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "12dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_14:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "14dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_16:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "16dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_18:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "18dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_20:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "20dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_22:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "22dB");
-                break;
-            case LIBLTE_RRC_Q_OFFSET_RANGE_DB_24:
-                printf("\t\t\t\t%s = %s\n", "Q Offset Range", "24dB");
-                break;
-            }
+            printf("\t\t\t\t%s = %sdB\n", "Q Offset Range", liblte_rrc_q_offset_range_text[sib4->intra_freq_neigh_cell_list[i].q_offset_range]);
         }
         if(0 != sib4->intra_freq_black_cell_list_size)
         {
@@ -2510,118 +1247,195 @@ void LTE_fdd_dl_fs_samp_buf::print_sib4(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4_STRUCT 
         }
         for(i=0; i<sib4->intra_freq_black_cell_list_size; i++)
         {
-            stop = sib4->intra_freq_black_cell_list[i].start;
-            switch(sib4->intra_freq_black_cell_list[i].range)
-            {
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N4:
-                stop += 4;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N8:
-                stop += 8;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N12:
-                stop += 12;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N16:
-                stop += 16;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N24:
-                stop += 24;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N32:
-                stop += 32;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N48:
-                stop += 48;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N64:
-                stop += 64;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N84:
-                stop += 84;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N96:
-                stop += 96;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N128:
-                stop += 128;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N168:
-                stop += 168;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N252:
-                stop += 252;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N504:
-                stop += 504;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_SPARE2:
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_SPARE1:
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N1:
-                break;
-            }
-            printf("\t\t\t%u - %u\n", sib4->intra_freq_black_cell_list[i].start, stop);
+            printf("\t\t\t%u - %u\n", sib4->intra_freq_black_cell_list[i].start, sib4->intra_freq_black_cell_list[i].start + liblte_rrc_phys_cell_id_range_num[sib4->intra_freq_black_cell_list[i].range]);
         }
         if(true == sib4->csg_phys_cell_id_range_present)
         {
-            stop = sib4->csg_phys_cell_id_range.start;
-            switch(sib4->csg_phys_cell_id_range.range)
-            {
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N4:
-                stop += 4;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N8:
-                stop += 8;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N12:
-                stop += 12;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N16:
-                stop += 16;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N24:
-                stop += 24;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N32:
-                stop += 32;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N48:
-                stop += 48;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N64:
-                stop += 64;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N84:
-                stop += 84;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N96:
-                stop += 96;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N128:
-                stop += 128;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N168:
-                stop += 168;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N252:
-                stop += 252;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N504:
-                stop += 504;
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_SPARE2:
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_SPARE1:
-                break;
-            case LIBLTE_RRC_PHYS_CELL_ID_RANGE_N1:
-                break;
-            }
-            printf("\t\t%-40s= %u - %u\n", "CSG Phys Cell ID Range", sib4->csg_phys_cell_id_range.start, stop);
+            printf("\t\t%-40s= %u - %u\n", "CSG Phys Cell ID Range", sib4->csg_phys_cell_id_range.start, sib4->csg_phys_cell_id_range.start + liblte_rrc_phys_cell_id_range_num[sib4->csg_phys_cell_id_range.range]);
         }
 
         sib4_printed = true;
+    }
+}
+
+void LTE_fdd_dl_fs_samp_buf::print_sib5(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_5_STRUCT *sib5)
+{
+    uint32 i;
+    uint32 j;
+    uint16 stop;
+
+    if(false == sib5_printed)
+    {
+        printf("\tSIB5 Decoded:\n");
+        printf("\t\tList of inter-frequency neighboring cells:\n");
+        for(i=0; i<sib5->inter_freq_carrier_freq_list_size; i++)
+        {
+            printf("\t\t\t%-40s=%20u\n", "ARFCN", sib5->inter_freq_carrier_freq_list[i].dl_carrier_freq);
+            printf("\t\t\t%-40s=%17ddBm\n", "Q Rx Lev Min", sib5->inter_freq_carrier_freq_list[i].q_rx_lev_min);
+            if(true == sib5->inter_freq_carrier_freq_list[i].p_max_present)
+            {
+                printf("\t\t\t%-40s=%17ddBm\n", "P Max", sib5->inter_freq_carrier_freq_list[i].p_max);
+            }
+            printf("\t\t\t%-40s=%19us\n", "T-Reselection EUTRA", sib5->inter_freq_carrier_freq_list[i].t_resel_eutra);
+            if(true == sib5->inter_freq_carrier_freq_list[i].t_resel_eutra_sf_present)
+            {
+                printf("\t\t\t%-40s=%20s\n", "T-Reselection EUTRA SF Medium", liblte_rrc_sssf_medium_text[sib5->inter_freq_carrier_freq_list[i].t_resel_eutra_sf.sf_medium]);
+                printf("\t\t\t%-40s=%20s\n", "T-Reselection EUTRA SF High", liblte_rrc_sssf_high_text[sib5->inter_freq_carrier_freq_list[i].t_resel_eutra_sf.sf_high]);
+            }
+            printf("\t\t\t%-40s=%20u\n", "Threshold X High", sib5->inter_freq_carrier_freq_list[i].threshx_high);
+            printf("\t\t\t%-40s=%20u\n", "Threshold X Low", sib5->inter_freq_carrier_freq_list[i].threshx_low);
+            printf("\t\t\t%-40s=%17sMHz\n", "Allowed Meas Bandwidth", liblte_rrc_allowed_meas_bandwidth_text[sib5->inter_freq_carrier_freq_list[i].allowed_meas_bw]);
+            if(true == sib5->inter_freq_carrier_freq_list[i].presence_ant_port_1)
+            {
+                printf("\t\t\t%-40s=%20s\n", "Presence Antenna Port 1", "True");
+            }else{
+                printf("\t\t\t%-40s=%20s\n", "Presence Antenna Port 1", "False");
+            }
+            if(true == sib5->inter_freq_carrier_freq_list[i].cell_resel_prio_present)
+            {
+                printf("\t\t\t%-40s=%20u\n", "Cell Reselection Priority", sib5->inter_freq_carrier_freq_list[i].cell_resel_prio);
+            }
+            switch(sib5->inter_freq_carrier_freq_list[i].neigh_cell_cnfg)
+            {
+            case 0:
+                printf("\t\t\t%-40s= %s\n", "Neighbor Cell Config", "Not all neighbor cells have the same MBSFN alloc");
+                break;
+            case 1:
+                printf("\t\t\t%-40s= %s\n", "Neighbor Cell Config", "MBSFN allocs are identical for all neighbor cells");
+                break;
+            case 2:
+                printf("\t\t\t%-40s= %s\n", "Neighbor Cell Config", "No MBSFN allocs are present in neighbor cells");
+                break;
+            case 3:
+                printf("\t\t\t%-40s= %s\n", "Neighbor Cell Config", "Different UL/DL allocs in neighbor cells for TDD");
+                break;
+            }
+            printf("\t\t\t%-40s=%18sdB\n", "Q Offset Freq", liblte_rrc_q_offset_range_text[sib5->inter_freq_carrier_freq_list[i].q_offset_freq]);
+            if(0 != sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list_size)
+            {
+                printf("\t\t\tList of inter-frequency neighboring cells with specific cell reselection parameters:\n");
+                for(j=0; j<sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list_size; j++)
+                {
+                    printf("\t\t\t\t%-40s=%20u\n", "Physical Cell ID", sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list[j].phys_cell_id);
+                    printf("\t\t\t\t%-40s=%18sdB\n", "Q Offset Cell", liblte_rrc_q_offset_range_text[sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list[j].q_offset_cell]);
+                }
+            }
+            if(0 != sib5->inter_freq_carrier_freq_list[i].inter_freq_black_cell_list_size)
+            {
+                printf("\t\t\tList of blacklisted inter-frequency neighboring cells\n");
+                for(j=0; j<sib5->inter_freq_carrier_freq_list[i].inter_freq_black_cell_list_size; j++)
+                {
+                    printf("\t\t\t\t%u - %u\n", sib5->inter_freq_carrier_freq_list[i].inter_freq_black_cell_list[j].start, sib5->inter_freq_carrier_freq_list[i].inter_freq_black_cell_list[j].start + liblte_rrc_phys_cell_id_range_num[sib5->inter_freq_carrier_freq_list[i].inter_freq_black_cell_list[j].range]);
+                }
+            }
+        }
+
+        sib5_printed = true;
+    }
+}
+
+void LTE_fdd_dl_fs_samp_buf::print_sib6(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_6_STRUCT *sib6)
+{
+    uint32 i;
+
+    if(false == sib6_printed)
+    {
+        printf("\tSIB6 Decoded:\n");
+        if(0 != sib6->carrier_freq_list_utra_fdd_size)
+        {
+            printf("\t\t%s:\n", "Carrier Freq List UTRA FDD");
+        }
+        for(i=0; i<sib6->carrier_freq_list_utra_fdd_size; i++)
+        {
+            printf("\t\t\t%-40s=%20u\n", "ARFCN", sib6->carrier_freq_list_utra_fdd[i].carrier_freq);
+            if(true == sib6->carrier_freq_list_utra_fdd[i].cell_resel_prio_present)
+            {
+                printf("\t\t\t%-40s=%20u\n", "Cell Reselection Priority", sib6->carrier_freq_list_utra_fdd[i].cell_resel_prio);
+            }
+            printf("\t\t\t%-40s=%20u\n", "Threshold X High", sib6->carrier_freq_list_utra_fdd[i].threshx_high);
+            printf("\t\t\t%-40s=%20u\n", "Threshold X Low", sib6->carrier_freq_list_utra_fdd[i].threshx_low);
+            printf("\t\t\t%-40s=%17ddBm\n", "Q Rx Lev Min", sib6->carrier_freq_list_utra_fdd[i].q_rx_lev_min);
+            printf("\t\t\t%-40s=%17ddBm\n", "P Max UTRA", sib6->carrier_freq_list_utra_fdd[i].p_max_utra);
+            printf("\t\t\t%-40s=%18dB\n", "Q Qual Min", sib6->carrier_freq_list_utra_fdd[i].q_qual_min);
+        }
+        if(0 != sib6->carrier_freq_list_utra_tdd_size)
+        {
+            printf("\t\t%s:\n", "Carrier Freq List UTRA TDD");
+        }
+        for(i=0; i<sib6->carrier_freq_list_utra_tdd_size; i++)
+        {
+            printf("\t\t\t%-40s=%20u\n", "ARFCN", sib6->carrier_freq_list_utra_tdd[i].carrier_freq);
+            if(true == sib6->carrier_freq_list_utra_tdd[i].cell_resel_prio_present)
+            {
+                printf("\t\t\t%-40s=%20u\n", "Cell Reselection Priority", sib6->carrier_freq_list_utra_tdd[i].cell_resel_prio);
+            }
+            printf("\t\t\t%-40s=%20u\n", "Threshold X High", sib6->carrier_freq_list_utra_tdd[i].threshx_high);
+            printf("\t\t\t%-40s=%20u\n", "Threshold X Low", sib6->carrier_freq_list_utra_tdd[i].threshx_low);
+            printf("\t\t\t%-40s=%17ddBm\n", "Q Rx Lev Min", sib6->carrier_freq_list_utra_tdd[i].q_rx_lev_min);
+            printf("\t\t\t%-40s=%17ddBm\n", "P Max UTRA", sib6->carrier_freq_list_utra_tdd[i].p_max_utra);
+        }
+        printf("\t\t%-40s=%19us\n", "T-Reselection UTRA", sib6->t_resel_utra);
+        if(true == sib6->t_resel_utra_sf_present)
+        {
+            printf("\t\t%-40s=%20s\n", "T-Reselection UTRA SF Medium", liblte_rrc_sssf_medium_text[sib6->t_resel_utra_sf.sf_medium]);
+            printf("\t\t%-40s=%20s\n", "T-Reselection UTRA SF High", liblte_rrc_sssf_high_text[sib6->t_resel_utra_sf.sf_high]);
+        }
+
+        sib6_printed = true;
+    }
+}
+
+void LTE_fdd_dl_fs_samp_buf::print_sib7(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7_STRUCT *sib7)
+{
+    uint32 i;
+    uint32 j;
+
+    if(false == sib7_printed)
+    {
+        printf("\tSIB7 Decoded:\n");
+        printf("\t\t%-40s=%19us\n", "T-Reselection GERAN", sib7->t_resel_geran);
+        if(true == sib7->t_resel_geran_sf_present)
+        {
+            printf("\t\t%-40s=%20s\n", "T-Reselection GERAN SF Medium", liblte_rrc_sssf_medium_text[sib7->t_resel_geran_sf.sf_medium]);
+            printf("\t\t%-40s=%20s\n", "T-Reselection GERAN SF High", liblte_rrc_sssf_high_text[sib7->t_resel_geran_sf.sf_high]);
+        }
+        if(0 != sib7->carrier_freqs_info_list_size)
+        {
+            printf("\t\tList of neighboring GERAN carrier frequencies\n");
+        }
+        for(i=0; i<sib7->carrier_freqs_info_list_size; i++)
+        {
+            printf("\t\t\t%-40s=%20u\n", "Starting ARFCN", sib7->carrier_freqs_info_list[i].carrier_freqs.starting_arfcn);
+            printf("\t\t\t%-40s=%20s\n", "Band Indicator", liblte_rrc_band_indicator_geran_text[sib7->carrier_freqs_info_list[i].carrier_freqs.band_indicator]);
+            if(LIBLTE_RRC_FOLLOWING_ARFCNS_EXPLICIT_LIST == sib7->carrier_freqs_info_list[i].carrier_freqs.following_arfcns)
+            {
+                printf("\t\t\tFollowing ARFCNs Explicit List\n");
+                for(j=0; j<sib7->carrier_freqs_info_list[i].carrier_freqs.explicit_list_of_arfcns_size; j++)
+                {
+                    printf("\t\t\t\t%u\n", sib7->carrier_freqs_info_list[i].carrier_freqs.explicit_list_of_arfcns[j]);
+                }
+            }else if(LIBLTE_RRC_FOLLOWING_ARFCNS_EQUALLY_SPACED == sib7->carrier_freqs_info_list[i].carrier_freqs.following_arfcns){
+                printf("\t\t\tFollowing ARFCNs Equally Spaced\n");
+                printf("\t\t\t\t%u, %u\n", sib7->carrier_freqs_info_list[i].carrier_freqs.equally_spaced_arfcns.arfcn_spacing, sib7->carrier_freqs_info_list[i].carrier_freqs.equally_spaced_arfcns.number_of_arfcns);
+            }else{
+                printf("\t\t\tFollowing ARFCNs Variable Bit Map\n");
+                printf("\t\t\t\t%02X\n", sib7->carrier_freqs_info_list[i].carrier_freqs.variable_bit_map_of_arfcns);
+            }
+            if(true == sib7->carrier_freqs_info_list[i].cell_resel_prio_present)
+            {
+                printf("\t\t\t%-40s=%20u\n", "Cell Reselection Priority", sib7->carrier_freqs_info_list[i].cell_resel_prio);
+            }
+            printf("\t\t\t%-40s=%20u\n", "NCC Permitted", sib7->carrier_freqs_info_list[i].ncc_permitted);
+            printf("\t\t\t%-40s=%17ddBm\n", "Q Rx Lev Min", sib7->carrier_freqs_info_list[i].q_rx_lev_min);
+            if(true == sib7->carrier_freqs_info_list[i].p_max_geran_present)
+            {
+                printf("\t\t\t%-40s=%17udBm\n", "P Max GERAN", sib7->carrier_freqs_info_list[i].p_max_geran);
+            }
+            printf("\t\t\t%-40s=%20u\n", "Threshold X High", sib7->carrier_freqs_info_list[i].threshx_high);
+            printf("\t\t\t%-40s=%20u\n", "Threshold X Low", sib7->carrier_freqs_info_list[i].threshx_low);
+        }
+
+        sib7_printed = true;
     }
 }
 
@@ -2678,66 +1492,7 @@ void LTE_fdd_dl_fs_samp_buf::print_sib8(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT 
                 printf("\t\tBand Class List:\n");
                 for(i=0; i<sib8->cell_resel_params_hrpd.band_class_list_size; i++)
                 {
-                    switch(sib8->cell_resel_params_hrpd.band_class_list[i].band_class)
-                    {
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC0:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "0");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC1:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "1");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC2:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "2");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC3:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "3");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC4:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "4");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC5:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "5");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC6:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "6");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC7:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "7");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC8:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "8");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC9:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "9");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC10:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "10");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC11:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "11");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC12:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "12");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC13:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "13");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC14:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "14");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC15:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "15");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC16:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "16");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC17:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "17");
-                        break;
-                    default:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "Invalid");
-                        break;
-                    }
+                    printf("\t\t\t%-40s=%20s\n", "Band Class", liblte_rrc_band_class_cdma2000_text[sib8->cell_resel_params_hrpd.band_class_list[i].band_class]);
                     if(true == sib8->cell_resel_params_hrpd.band_class_list[i].cell_resel_prio_present)
                     {
                         printf("\t\t\t%-40s=%20u\n", "Cell Reselection Priority", sib8->cell_resel_params_hrpd.band_class_list[i].cell_resel_prio);
@@ -2748,66 +1503,7 @@ void LTE_fdd_dl_fs_samp_buf::print_sib8(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT 
                 printf("\t\tNeighbor Cell List:\n");
                 for(i=0; i<sib8->cell_resel_params_hrpd.neigh_cell_list_size; i++)
                 {
-                    switch(sib8->cell_resel_params_hrpd.neigh_cell_list[i].band_class)
-                    {
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC0:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "0");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC1:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "1");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC2:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "2");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC3:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "3");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC4:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "4");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC5:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "5");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC6:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "6");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC7:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "7");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC8:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "8");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC9:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "9");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC10:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "10");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC11:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "11");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC12:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "12");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC13:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "13");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC14:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "14");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC15:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "15");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC16:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "16");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC17:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "17");
-                        break;
-                    default:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "Invalid");
-                        break;
-                    }
+                    printf("\t\t\t%-40s=%20s\n", "Band Class", liblte_rrc_band_class_cdma2000_text[sib8->cell_resel_params_hrpd.neigh_cell_list[i].band_class]);
                     printf("\t\t\tNeighbor Cells Per Frequency List\n");
                     for(j=0; j<sib8->cell_resel_params_hrpd.neigh_cell_list[i].neigh_cells_per_freq_list_size; j++)
                     {
@@ -2822,36 +1518,8 @@ void LTE_fdd_dl_fs_samp_buf::print_sib8(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT 
                 printf("\t\t%-40s=%19us\n", "T Reselection", sib8->cell_resel_params_hrpd.t_resel_cdma2000);
                 if(true == sib8->cell_resel_params_hrpd.t_resel_cdma2000_sf_present)
                 {
-                    switch(sib8->cell_resel_params_hrpd.t_resel_cdma2000_sf.sf_medium)
-                    {
-                    case LIBLTE_RRC_SSSF_MEDIUM_0DOT25:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor Medium", "0.25");
-                        break;
-                    case LIBLTE_RRC_SSSF_MEDIUM_0DOT5:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor Medium", "0.5");
-                        break;
-                    case LIBLTE_RRC_SSSF_MEDIUM_0DOT75:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor Medium", "0.75");
-                        break;
-                    case LIBLTE_RRC_SSSF_MEDIUM_1DOT0:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor Medium", "1.0");
-                        break;
-                    }
-                    switch(sib8->cell_resel_params_hrpd.t_resel_cdma2000_sf.sf_high)
-                    {
-                    case LIBLTE_RRC_SSSF_HIGH_0DOT25:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor High", "0.25");
-                        break;
-                    case LIBLTE_RRC_SSSF_HIGH_0DOT5:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor High", "0.5");
-                        break;
-                    case LIBLTE_RRC_SSSF_HIGH_0DOT75:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor High", "0.75");
-                        break;
-                    case LIBLTE_RRC_SSSF_HIGH_1DOT0:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor High", "1.0");
-                        break;
-                    }
+                    printf("\t\t%-40s=%20s\n", "T-Reselection Scale Factor Medium", liblte_rrc_sssf_medium_text[sib8->cell_resel_params_hrpd.t_resel_cdma2000_sf.sf_medium]);
+                    printf("\t\t%-40s=%20s\n", "T-Reselection Scale Factor High", liblte_rrc_sssf_high_text[sib8->cell_resel_params_hrpd.t_resel_cdma2000_sf.sf_high]);
                 }
             }
         }
@@ -2918,66 +1586,7 @@ void LTE_fdd_dl_fs_samp_buf::print_sib8(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT 
                 printf("\t\tBand Class List:\n");
                 for(i=0; i<sib8->cell_resel_params_1xrtt.band_class_list_size; i++)
                 {
-                    switch(sib8->cell_resel_params_1xrtt.band_class_list[i].band_class)
-                    {
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC0:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "0");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC1:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "1");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC2:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "2");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC3:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "3");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC4:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "4");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC5:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "5");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC6:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "6");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC7:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "7");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC8:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "8");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC9:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "9");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC10:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "10");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC11:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "11");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC12:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "12");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC13:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "13");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC14:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "14");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC15:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "15");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC16:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "16");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC17:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "17");
-                        break;
-                    default:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "Invalid");
-                        break;
-                    }
+                    printf("\t\t\t%-40s=%20s\n", "Band Class", liblte_rrc_band_class_cdma2000_text[sib8->cell_resel_params_1xrtt.band_class_list[i].band_class]);
                     if(true == sib8->cell_resel_params_1xrtt.band_class_list[i].cell_resel_prio_present)
                     {
                         printf("\t\t\t%-40s=%20u\n", "Cell Reselection Priority", sib8->cell_resel_params_1xrtt.band_class_list[i].cell_resel_prio);
@@ -2988,66 +1597,7 @@ void LTE_fdd_dl_fs_samp_buf::print_sib8(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT 
                 printf("\t\tNeighbor Cell List:\n");
                 for(i=0; i<sib8->cell_resel_params_1xrtt.neigh_cell_list_size; i++)
                 {
-                    switch(sib8->cell_resel_params_1xrtt.neigh_cell_list[i].band_class)
-                    {
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC0:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "0");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC1:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "1");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC2:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "2");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC3:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "3");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC4:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "4");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC5:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "5");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC6:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "6");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC7:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "7");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC8:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "8");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC9:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "9");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC10:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "10");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC11:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "11");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC12:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "12");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC13:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "13");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC14:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "14");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC15:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "15");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC16:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "16");
-                        break;
-                    case LIBLTE_RRC_BAND_CLASS_CDMA2000_BC17:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "17");
-                        break;
-                    default:
-                        printf("\t\t\t%-40s=%20s\n", "Band Class", "Invalid");
-                        break;
-                    }
+                    printf("\t\t\t%-40s=%20s\n", "Band Class", liblte_rrc_band_class_cdma2000_text[sib8->cell_resel_params_1xrtt.neigh_cell_list[i].band_class]);
                     printf("\t\t\tNeighbor Cells Per Frequency List\n");
                     for(j=0; j<sib8->cell_resel_params_1xrtt.neigh_cell_list[i].neigh_cells_per_freq_list_size; j++)
                     {
@@ -3062,36 +1612,8 @@ void LTE_fdd_dl_fs_samp_buf::print_sib8(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT 
                 printf("\t\t%-40s=%19us\n", "T Reselection", sib8->cell_resel_params_1xrtt.t_resel_cdma2000);
                 if(true == sib8->cell_resel_params_1xrtt.t_resel_cdma2000_sf_present)
                 {
-                    switch(sib8->cell_resel_params_1xrtt.t_resel_cdma2000_sf.sf_medium)
-                    {
-                    case LIBLTE_RRC_SSSF_MEDIUM_0DOT25:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor Medium", "0.25");
-                        break;
-                    case LIBLTE_RRC_SSSF_MEDIUM_0DOT5:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor Medium", "0.5");
-                        break;
-                    case LIBLTE_RRC_SSSF_MEDIUM_0DOT75:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor Medium", "0.75");
-                        break;
-                    case LIBLTE_RRC_SSSF_MEDIUM_1DOT0:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor Medium", "1.0");
-                        break;
-                    }
-                    switch(sib8->cell_resel_params_1xrtt.t_resel_cdma2000_sf.sf_high)
-                    {
-                    case LIBLTE_RRC_SSSF_HIGH_0DOT25:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor High", "0.25");
-                        break;
-                    case LIBLTE_RRC_SSSF_HIGH_0DOT5:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor High", "0.5");
-                        break;
-                    case LIBLTE_RRC_SSSF_HIGH_0DOT75:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor High", "0.75");
-                        break;
-                    case LIBLTE_RRC_SSSF_HIGH_1DOT0:
-                        printf("\t\t%-40s=%20s\n", "T Reselection Scale Factor High", "1.0");
-                        break;
-                    }
+                    printf("\t\t%-40s=%20s\n", "T-Reselection Scale Factor Medium", liblte_rrc_sssf_medium_text[sib8->cell_resel_params_1xrtt.t_resel_cdma2000_sf.sf_medium]);
+                    printf("\t\t%-40s=%20s\n", "T-Reselection Scale Factor High", liblte_rrc_sssf_high_text[sib8->cell_resel_params_1xrtt.t_resel_cdma2000_sf.sf_high]);
                 }
             }
         }

@@ -31,6 +31,7 @@
     12/26/2012    Ben Wojtowicz    Added SIB3, SIB4, and SIB8 support and fixed
                                    a file size bug
     01/07/2013    Ben Wojtowicz    Moved from automake to cmake
+    03/03/2013    Ben Wojtowicz    Added support for a test load.
 
 *******************************************************************************/
 
@@ -71,6 +72,7 @@
 #define NEIGH_CELL_LIST_PARAM    "neigh_cell_list"
 #define SIB8_PRESENT_PARAM       "sib8_present"
 #define SEARCH_WIN_SIZE_PARAM    "search_win_size"
+#define PERCENT_LOAD_PARAM       "percent_load"
 
 /*******************************************************************************
                               FORWARD DECLARATIONS
@@ -133,10 +135,10 @@ private:
     uint32                                   N_id_1;
     uint32                                   N_id_2;
     uint32                                   N_rb_dl;
-    uint32                                   FFT_pad_size;
     uint32                                   si_periodicity_T;
     uint32                                   si_win_len;
     uint32                                   sib_tx_mode;
+    uint32                                   percent_load;
     uint8                                    N_ant;
     uint8                                    sib3_present;
     uint8                                    sib4_present;

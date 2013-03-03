@@ -23,7 +23,7 @@
 ########################################################################
 cmake_minimum_required(VERSION 2.6)
 project(openLTE CXX C)
-set(openLTE_version 0.7.1)
+set(openLTE_version 0.8.0)
 enable_testing()
 
 #select the release build type by default to get optimization flags
@@ -87,6 +87,8 @@ set(GRC_BLOCKS_DIR      ${GR_PKG_DATA_DIR}/grc/blocks)
 ########################################################################
 find_package(Gruel)
 find_package(GnuradioCore)
+find_package(GnuradioOsmosdr)
+find_package(Rtlsdr)
 
 if(NOT GRUEL_FOUND)
     message(FATAL_ERROR "Gruel required to compile openLTE")
@@ -96,6 +98,14 @@ if(NOT GNURADIO_CORE_FOUND)
     message(FATAL_ERROR "GnuRadio Core required to compile openLTE")
 endif()
 
+if(NOT GNURADIO_OSMOSDR_FOUND)
+    message(FATAL_ERROR "GnuRadio Osmosdr required to compile openLTE")
+endif()
+
+if(NOT RTLSDR_FOUND)
+    message(FATAL_ERROR "Rtlsdr required to compile openLTE")
+endif()
+
 ########################################################################
 # Setup the include and linker paths
 ########################################################################
@@ -103,12 +113,14 @@ include_directories(
     ${Boost_INCLUDE_DIRS}
     ${GRUEL_INCLUDE_DIRS}
     ${GNURADIO_CORE_INCLUDE_DIRS}
+    ${GNURADIO_OSMOSDR_INCLUDE_DIRS}
 )
 
 link_directories(
     ${Boost_LIBRARY_DIRS}
     ${GRUEL_LIBRARY_DIRS}
     ${GNURADIO_CORE_LIBRARY_DIRS}
+    ${GNURADIO_OSMOSDR_LIBRARY_DIRS}
 )
 
 ########################################################################
@@ -127,5 +139,7 @@ add_custom_target(uninstall
 # Add subdirectories
 ########################################################################
 add_subdirectory(liblte)
+add_subdirectory(libtools)
 add_subdirectory(LTE_fdd_dl_file_gen)
 add_subdirectory(LTE_fdd_dl_file_scan)
+add_subdirectory(LTE_fdd_dl_scan)

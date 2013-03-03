@@ -10,6 +10,8 @@ cmake                 Files needed for cmake
 build                 Cmake generated build files
 LTE_fdd_dl_file_scan  A gnu-radio LTE FDD DL file scanner application
 LTE_fdd_dl_file_gen   A gnu-radio LTE FDD DL file generator application
+LTE_fdd_dl_scan       A gnu-radio LTE FDD DL scanner application that
+                      currently supports rtl-sdr hardware
 
 To build the C++ and python code use the following:
 
@@ -24,6 +26,9 @@ To install the C++ and python code use the following:
   $ make
   $ sudo make install
 
+##################
+#  FILE SCANNER  #
+##################
 To use the installed C++ and python code for the file scanner,
 set the PYTHONPATH env variable to
 <python_install_dir>/dist-packages/gnuradio/
@@ -37,6 +42,9 @@ as the input. For example:
 The recorded LTE file currently must be interleaved 8-bit I and
 Q samples recorded at 30.72MHz.
 
+####################
+#  FILE GENERATOR  #
+####################
 To use the installed C++ and python code for the file generator,
 set the PYTHONPATH env variable to
 <python_install_dir>/dist-packages/gnuradio/
@@ -50,6 +58,18 @@ The generated LTE file contains interleaved 8-bit I and Q samples
 at a sample rate of 30.72MHz.  The output file can be used as the
 input for the LTE_fdd_dl_file_scan application.
 
+#############
+#  SCANNER  #
+#############
+To use the installed C++ live scanner, plug in rtl-sdr hardware,
+run LTE_fdd_dl_scan, and connect (via telnet, nc, etc) to the
+control port at port number 20000.  Scan parameters can be changed
+and scan results can be observed on the control port.  For a list
+of parameters simply type help on the control port.
+
+############
+#  OCTAVE  #
+############
 To use the octave code, run the top level octave .m files:
 lte_fdd_dl_transmit.m and lte_fdd_dl_receive.m.  If multiple
 transmit antennas are used, the outputs need to be combined

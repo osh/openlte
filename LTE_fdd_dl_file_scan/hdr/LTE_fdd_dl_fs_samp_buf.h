@@ -30,6 +30,10 @@
     11/10/2012    Ben Wojtowicz    Using the latest libraries to decode more
                                    than 1 eNB
     01/07/2013    Ben Wojtowicz    Moved from automake to cmake
+    03/03/2013    Ben Wojtowicz    Added support for paging channel, SIB5, SIB6,
+                                   and SIB7 decoding, using the latest
+                                   libraries, and fixed a bug that allowed
+                                   multiple decodes of the same channel.
 
 *******************************************************************************/
 
@@ -50,6 +54,8 @@
 *******************************************************************************/
 
 #define LTE_FDD_DL_FS_SAMP_BUF_SIZE (307200*10)
+
+#define LTE_FDD_DL_FS_SAMP_BUF_N_DECODED_CHANS_MAX 10
 
 /*******************************************************************************
                               FORWARD DECLARATIONS
@@ -97,6 +103,7 @@ private:
     LIBLTE_RRC_MSG_STRUCT             rrc_msg;
     LIBLTE_RRC_MIB_STRUCT             mib;
     LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT  bcch_dlsch_msg;
+    LIBLTE_RRC_PCCH_MSG_STRUCT        pcch_msg;
 
     // Sample buffer
     float  *i_buf;
@@ -107,16 +114,15 @@ private:
 
     // Variables
     LTE_FDD_DL_FS_SAMP_BUF_STATE_ENUM state;
-    float                             freq_offset;
     float                             phich_res;
-    uint32                            N_rb_dl;
-    uint32                            FFT_pad_size;
     uint32                            sfn;
     uint32                            N_sfr;
     uint32                            N_id_cell;
     uint32                            N_id_1;
     uint32                            N_id_2;
     uint32                            corr_peak_idx;
+    uint32                            decoded_chans[LTE_FDD_DL_FS_SAMP_BUF_N_DECODED_CHANS_MAX];
+    uint32                            N_decoded_chans;
     uint8                             N_ant;
     uint8                             prev_si_value_tag;
     bool                              prev_si_value_tag_valid;
@@ -127,6 +133,12 @@ private:
     bool                              sib3_expected;
     bool                              sib4_printed;
     bool                              sib4_expected;
+    bool                              sib5_printed;
+    bool                              sib5_expected;
+    bool                              sib6_printed;
+    bool                              sib6_expected;
+    bool                              sib7_printed;
+    bool                              sib7_expected;
     bool                              sib8_printed;
     bool                              sib8_expected;
 
@@ -139,6 +151,9 @@ private:
     void print_sib2(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT *sib2);
     void print_sib3(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3_STRUCT *sib3);
     void print_sib4(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4_STRUCT *sib4);
+    void print_sib5(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_5_STRUCT *sib5);
+    void print_sib6(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_6_STRUCT *sib6);
+    void print_sib7(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7_STRUCT *sib7);
     void print_sib8(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT *sib8);
 };
 

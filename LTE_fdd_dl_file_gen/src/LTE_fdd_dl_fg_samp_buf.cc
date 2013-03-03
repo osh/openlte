@@ -34,6 +34,8 @@
                                    file size bug, and pulled in a 64 bit bug fix
                                    from Thomas Bertani.
     01/07/2013    Ben Wojtowicz    Moved from automake to cmake
+    03/03/2013    Ben Wojtowicz    Added support for a test load and using the
+                                   latest libraries.
 
 *******************************************************************************/
 
@@ -83,13 +85,14 @@ LTE_fdd_dl_fg_samp_buf::LTE_fdd_dl_fg_samp_buf()
     // General
     bandwidth    = 10;
     N_rb_dl      = LIBLTE_PHY_N_RB_DL_10MHZ;
-    FFT_pad_size = LIBLTE_PHY_FFT_PAD_SIZE_10MHZ;
     sfn          = 0;
     N_frames     = 30;
     N_ant        = 1;
     N_id_cell    = 0;
     N_id_2       = (N_id_cell % 3);
     N_id_1       = (N_id_cell - N_id_2)/3;
+    sib_tx_mode  = 1;
+    percent_load = 0;
     // MIB
     mib.dl_bw            = LIBLTE_RRC_DL_BANDWIDTH_50;
     mib.phich_config.dur = LIBLTE_RRC_PHICH_DURATION_NORMAL;
@@ -242,6 +245,7 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
     uint32   p;
     uint32   N_sfr;
     uint32   last_prb;
+    uint32   max_N_prb;
     size_t   line_size = LINE_MAX;
     ssize_t  N_line_chars;
     int8    *out = (int8 *)output_items[0];
@@ -261,7 +265,13 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
         if(!need_config)
         {
             // Initialize the LTE library
-            liblte_phy_init(&phy_struct, N_id_cell, LIBLTE_PHY_N_SC_RB_NORMAL_CP);
+            liblte_phy_init(&phy_struct,
+                            LIBLTE_PHY_FS_30_72MHZ,
+                            N_id_cell,
+                            N_ant,
+                            N_rb_dl,
+                            LIBLTE_PHY_N_SC_RB_NORMAL_CP,
+                            phich_res);
         }
     }
     free(line);
@@ -294,24 +304,17 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                     liblte_phy_map_pss(phy_struct,
                                        &subframe,
                                        N_id_2,
-                                       N_ant,
-                                       N_rb_dl,
-                                       LIBLTE_PHY_N_SC_RB_NORMAL_CP);
+                                       N_ant);
                     liblte_phy_map_sss(phy_struct,
                                        &subframe,
                                        N_id_1,
                                        N_id_2,
-                                       N_ant,
-                                       N_rb_dl,
-                                       LIBLTE_PHY_N_SC_RB_NORMAL_CP);
+                                       N_ant);
                 }
 
                 // CRS
                 liblte_phy_map_crs(phy_struct,
                                    &subframe,
-                                   FFT_pad_size,
-                                   N_rb_dl,
-                                   LIBLTE_PHY_N_SC_RB_NORMAL_CP,
                                    N_id_cell,
                                    N_ant);
 
@@ -326,8 +329,6 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                                                   rrc_msg.N_bits,
                                                   N_id_cell,
                                                   N_ant,
-                                                  N_rb_dl,
-                                                  LIBLTE_PHY_N_SC_RB_NORMAL_CP,
                                                   &subframe,
                                                   sfn);
                 }
@@ -450,6 +451,41 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                         }
                     }
                 }
+                // Add test load
+                if(0 == pdcch.N_alloc)
+                {
+                    pdcch.alloc[0].msg.N_bits = 0;
+                    pdcch.alloc[0].N_prb      = 0;
+                    liblte_phy_get_tbs_mcs_and_n_prb_for_si(1480,
+                                                            subframe.num,
+                                                            N_rb_dl,
+                                                            &pdcch.alloc[0].tbs,
+                                                            &pdcch.alloc[0].mcs,
+                                                            &max_N_prb);
+                    while(pdcch.alloc[0].N_prb < (uint32)((float)(max_N_prb*percent_load)/100.0))
+                    {
+                        pdcch.alloc[0].msg.N_bits += 8;
+                        liblte_phy_get_tbs_mcs_and_n_prb_for_si(pdcch.alloc[0].msg.N_bits,
+                                                                subframe.num,
+                                                                N_rb_dl,
+                                                                &pdcch.alloc[0].tbs,
+                                                                &pdcch.alloc[0].mcs,
+                                                                &pdcch.alloc[0].N_prb);
+                    }
+                    for(i=0; i<pdcch.alloc[0].msg.N_bits; i++)
+                    {
+                        pdcch.alloc[0].msg.msg[i] = liblte_rrc_test_fill[i%8];
+                    }
+                    if(0 != pdcch.alloc[0].N_prb)
+                    {
+                        pdcch.alloc[0].pre_coder_type = LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY;
+                        pdcch.alloc[0].mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
+                        pdcch.alloc[0].N_codewords    = 1;
+                        pdcch.alloc[0].rnti           = LIBLTE_PHY_P_RNTI;
+                        pdcch.alloc[0].tx_mode        = sib_tx_mode;
+                        pdcch.N_alloc++;
+                    }
+                }
 
                 // Schedule all allocations
                 // FIXME: Scheduler
@@ -469,8 +505,6 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                                                     &pdcch,
                                                     N_id_cell,
                                                     N_ant,
-                                                    LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                                                    N_rb_dl,
                                                     phich_res,
                                                     mib.phich_config.dur,
                                                     &subframe);
@@ -478,8 +512,6 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                                                     &pdcch,
                                                     N_id_cell,
                                                     N_ant,
-                                                    LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                                                    N_rb_dl,
                                                     &subframe);
                 }
 
@@ -488,7 +520,6 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                 {
                     liblte_phy_create_subframe(phy_struct,
                                                &subframe,
-                                               FFT_pad_size,
                                                p,
                                                &i_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + (subframe.num*30720)],
                                                &q_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + (subframe.num*30720)]);
@@ -789,6 +820,11 @@ void LTE_fdd_dl_fg_samp_buf::print_config(void)
                SEARCH_WIN_SIZE_PARAM,
                sib8.search_win_size);
     }
+
+    // PERCENT_LOAD
+    printf("\t%-30s = %10u, bounds = [0, 66]\n",
+           PERCENT_LOAD_PARAM,
+           percent_load);
 }
 
 void LTE_fdd_dl_fg_samp_buf::change_config(char *line)
@@ -849,6 +885,8 @@ void LTE_fdd_dl_fg_samp_buf::change_config(char *line)
                 recreate_sched_info();
             }else if(!strcasecmp(param, SEARCH_WIN_SIZE_PARAM)){
                 err = set_param(&sib8.search_win_size, value, 0, 15);
+            }else if(!strcasecmp(param, PERCENT_LOAD_PARAM)){
+                err = set_param(&percent_load, value, 0, 66); // FIXME: Decode issues if load is greater than 66%
             }else{
                 printf("Invalid parameter (%s)\n", param);
             }
@@ -869,35 +907,29 @@ bool LTE_fdd_dl_fg_samp_buf::set_bandwidth(char *char_value)
 
     if(!strcasecmp(char_value, "1.4"))
     {
-        bandwidth    = 1.4;
-        N_rb_dl      = LIBLTE_PHY_N_RB_DL_1_4MHZ;
-        FFT_pad_size = LIBLTE_PHY_FFT_PAD_SIZE_1_4MHZ;
-        mib.dl_bw    = LIBLTE_RRC_DL_BANDWIDTH_6;
+        bandwidth = 1.4;
+        N_rb_dl   = LIBLTE_PHY_N_RB_DL_1_4MHZ;
+        mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_6;
     }else if(!strcasecmp(char_value, "3")){
-        bandwidth    = 3;
-        N_rb_dl      = LIBLTE_PHY_N_RB_DL_3MHZ;
-        FFT_pad_size = LIBLTE_PHY_FFT_PAD_SIZE_3MHZ;
-        mib.dl_bw    = LIBLTE_RRC_DL_BANDWIDTH_15;
+        bandwidth = 3;
+        N_rb_dl   = LIBLTE_PHY_N_RB_DL_3MHZ;
+        mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_15;
     }else if(!strcasecmp(char_value, "5")){
-        bandwidth    = 5;
-        N_rb_dl      = LIBLTE_PHY_N_RB_DL_5MHZ;
-        FFT_pad_size = LIBLTE_PHY_FFT_PAD_SIZE_5MHZ;
-        mib.dl_bw    = LIBLTE_RRC_DL_BANDWIDTH_25;
+        bandwidth = 5;
+        N_rb_dl   = LIBLTE_PHY_N_RB_DL_5MHZ;
+        mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_25;
     }else if(!strcasecmp(char_value, "10")){
-        bandwidth    = 10;
-        N_rb_dl      = LIBLTE_PHY_N_RB_DL_10MHZ;
-        FFT_pad_size = LIBLTE_PHY_FFT_PAD_SIZE_10MHZ;
-        mib.dl_bw    = LIBLTE_RRC_DL_BANDWIDTH_50;
+        bandwidth = 10;
+        N_rb_dl   = LIBLTE_PHY_N_RB_DL_10MHZ;
+        mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_50;
     }else if(!strcasecmp(char_value, "15")){
-        bandwidth    = 15;
-        N_rb_dl      = LIBLTE_PHY_N_RB_DL_15MHZ;
-        FFT_pad_size = LIBLTE_PHY_FFT_PAD_SIZE_15MHZ;
-        mib.dl_bw    = LIBLTE_RRC_DL_BANDWIDTH_75;
+        bandwidth = 15;
+        N_rb_dl   = LIBLTE_PHY_N_RB_DL_15MHZ;
+        mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_75;
     }else if(!strcasecmp(char_value, "20")){
-        bandwidth    = 20;
-        N_rb_dl      = LIBLTE_PHY_N_RB_DL_20MHZ;
-        FFT_pad_size = LIBLTE_PHY_FFT_PAD_SIZE_20MHZ;
-        mib.dl_bw    = LIBLTE_RRC_DL_BANDWIDTH_100;
+        bandwidth = 20;
+        N_rb_dl   = LIBLTE_PHY_N_RB_DL_20MHZ;
+        mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_100;
     }else{
         err = true;
     }
@@ -998,7 +1030,7 @@ bool LTE_fdd_dl_fg_samp_buf::set_q_hyst(char *char_value)
     uint32 i;
     bool   err = false;
 
-    for(i=0; i<LIBLTE_RRC_Q_HYST_SIZE; i++)
+    for(i=0; i<LIBLTE_RRC_Q_HYST_N_ITEMS; i++)
     {
         if(!strcasecmp(char_value, liblte_rrc_q_hyst_text[i]))
         {
@@ -1006,7 +1038,7 @@ bool LTE_fdd_dl_fg_samp_buf::set_q_hyst(char *char_value)
             break;
         }
     }
-    if(LIBLTE_RRC_Q_HYST_SIZE == i)
+    if(LIBLTE_RRC_Q_HYST_N_ITEMS == i)
     {
         err = true;
     }
@@ -1056,7 +1088,7 @@ bool LTE_fdd_dl_fg_samp_buf::set_q_offset_range(LIBLTE_RRC_Q_OFFSET_RANGE_ENUM *
     uint32 i;
     bool   err = false;
 
-    for(i=0; i<LIBLTE_RRC_Q_OFFSET_RANGE_SIZE; i++)
+    for(i=0; i<LIBLTE_RRC_Q_OFFSET_RANGE_N_ITEMS; i++)
     {
         if(!strcasecmp(char_value, liblte_rrc_q_offset_range_text[i]))
         {
@@ -1064,7 +1096,7 @@ bool LTE_fdd_dl_fg_samp_buf::set_q_offset_range(LIBLTE_RRC_Q_OFFSET_RANGE_ENUM *
             break;
         }
     }
-    if(LIBLTE_RRC_Q_OFFSET_RANGE_SIZE == i)
+    if(LIBLTE_RRC_Q_OFFSET_RANGE_N_ITEMS == i)
     {
         err = true;
     }

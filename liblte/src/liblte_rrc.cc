@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2012 Ben Wojtowicz
+    Copyright 2012-2013 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -32,6 +32,8 @@
                                    SIB4, and SIB8 packing and unpacking
     10/06/2012    Ben Wojtowicz    Added more decoding/encoding.
     11/10/2012    Ben Wojtowicz    Filled in the N_bits for SI messages
+    03/03/2013    Ben Wojtowicz    Added carrier_freqs_geran, SIB5, SIB6, SIB7
+                                   and paging packing and unpacking.
 
 *******************************************************************************/
 
@@ -1663,7 +1665,68 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_carrier_freq_geran_ie(uint8                 
 
     Document Reference: 36.331 v10.0.0 Section 6.3.4
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_carrier_freqs_geran_ie(LIBLTE_RRC_CARRIER_FREQS_GERAN_STRUCT  *carrier_freqs,
+                                                         uint8                                 **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+
+    if(carrier_freqs != NULL &&
+       ie_ptr        != NULL)
+    {
+        liblte_rrc_pack_arfcn_value_geran_ie(carrier_freqs->starting_arfcn, ie_ptr);
+        liblte_rrc_pack_band_indicator_geran_ie(carrier_freqs->band_indicator, ie_ptr);
+        rrc_value_2_bits(carrier_freqs->following_arfcns, ie_ptr, 2);
+        if(LIBLTE_RRC_FOLLOWING_ARFCNS_EXPLICIT_LIST == carrier_freqs->following_arfcns)
+        {
+            rrc_value_2_bits(carrier_freqs->explicit_list_of_arfcns_size, ie_ptr, 5);
+            for(i=0; i<carrier_freqs->explicit_list_of_arfcns_size; i++)
+            {
+                liblte_rrc_pack_arfcn_value_geran_ie(carrier_freqs->explicit_list_of_arfcns[i], ie_ptr);
+            }
+        }else if(LIBLTE_RRC_FOLLOWING_ARFCNS_EQUALLY_SPACED == carrier_freqs->following_arfcns){
+            rrc_value_2_bits(carrier_freqs->equally_spaced_arfcns.arfcn_spacing - 1, ie_ptr, 3);
+            rrc_value_2_bits(carrier_freqs->equally_spaced_arfcns.number_of_arfcns,  ie_ptr, 5);
+        }else{ // LIBLTE_RRC_FOLLOWING_ARFCNS_VARIABLE_BIT_MAP == carrier_freqs->following_arfcns
+            rrc_value_2_bits(carrier_freqs->variable_bit_map_of_arfcns, ie_ptr, 16);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_carrier_freqs_geran_ie(uint8                                 **ie_ptr,
+                                                           LIBLTE_RRC_CARRIER_FREQS_GERAN_STRUCT  *carrier_freqs)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+
+    if(ie_ptr        != NULL &&
+       carrier_freqs != NULL)
+    {
+        liblte_rrc_unpack_arfcn_value_geran_ie(ie_ptr, &carrier_freqs->starting_arfcn);
+        liblte_rrc_unpack_band_indicator_geran_ie(ie_ptr, &carrier_freqs->band_indicator);
+        carrier_freqs->following_arfcns = (LIBLTE_RRC_FOLLOWING_ARFCNS_ENUM)rrc_bits_2_value(ie_ptr, 2);
+        if(LIBLTE_RRC_FOLLOWING_ARFCNS_EXPLICIT_LIST == carrier_freqs->following_arfcns)
+        {
+            carrier_freqs->explicit_list_of_arfcns_size = rrc_bits_2_value(ie_ptr, 5);
+            for(i=0; i<carrier_freqs->explicit_list_of_arfcns_size; i++)
+            {
+                liblte_rrc_unpack_arfcn_value_geran_ie(ie_ptr, &carrier_freqs->explicit_list_of_arfcns[i]);
+            }
+        }else if(LIBLTE_RRC_FOLLOWING_ARFCNS_EQUALLY_SPACED == carrier_freqs->following_arfcns){
+            carrier_freqs->equally_spaced_arfcns.arfcn_spacing    = rrc_bits_2_value(ie_ptr, 3) + 1;
+            carrier_freqs->equally_spaced_arfcns.number_of_arfcns = rrc_bits_2_value(ie_ptr, 5);
+        }else{ // LIBLTE_RRC_FOLLOWING_ARFCNS_VARIABLE_BIT_MAP == carrier_freqs->following_arfcns
+            carrier_freqs->variable_bit_map_of_arfcns = rrc_bits_2_value(ie_ptr, 16);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: CDMA2000 Type
@@ -4876,7 +4939,166 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_4_ie(uint8              
 
     Document Reference: 36.331 v10.0.0 Section 6.3.1
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_block_type_5_ie(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_5_STRUCT  *sib5,
+                                                           uint8                                   **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+    uint32            j;
+
+    if(sib5   != NULL &&
+       ie_ptr != NULL)
+    {
+        // Extension indicator
+        rrc_value_2_bits(0, ie_ptr, 1);
+
+        rrc_value_2_bits(sib5->inter_freq_carrier_freq_list_size - 1, ie_ptr, 3);
+        for(i=0; i<sib5->inter_freq_carrier_freq_list_size; i++)
+        {
+            // Extension indicator
+            rrc_value_2_bits(0, ie_ptr, 1);
+
+            // Optional indicators
+            rrc_value_2_bits(sib5->inter_freq_carrier_freq_list[i].p_max_present,            ie_ptr, 1);
+            rrc_value_2_bits(sib5->inter_freq_carrier_freq_list[i].t_resel_eutra_sf_present, ie_ptr, 1);
+            rrc_value_2_bits(sib5->inter_freq_carrier_freq_list[i].cell_resel_prio_present,  ie_ptr, 1);
+            if(0 != sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list_size)
+            {
+                rrc_value_2_bits(1, ie_ptr, 1);
+            }else{
+                rrc_value_2_bits(0, ie_ptr, 1);
+            }
+            if(0 != sib5->inter_freq_carrier_freq_list[i].inter_freq_black_cell_list_size)
+            {
+                rrc_value_2_bits(1, ie_ptr, 1);
+            }else{
+                rrc_value_2_bits(0, ie_ptr, 1);
+            }
+
+            liblte_rrc_pack_arfcn_value_eutra_ie(sib5->inter_freq_carrier_freq_list[i].dl_carrier_freq, ie_ptr);
+            liblte_rrc_pack_q_rx_lev_min_ie(sib5->inter_freq_carrier_freq_list[i].q_rx_lev_min, ie_ptr);
+            if(true == sib5->inter_freq_carrier_freq_list[i].p_max_present)
+            {
+                liblte_rrc_pack_p_max_ie(sib5->inter_freq_carrier_freq_list[i].p_max, ie_ptr);
+            }
+            liblte_rrc_pack_t_reselection_ie(sib5->inter_freq_carrier_freq_list[i].t_resel_eutra, ie_ptr);
+            if(true == sib5->inter_freq_carrier_freq_list[i].t_resel_eutra_sf_present)
+            {
+                liblte_rrc_pack_speed_state_scale_factors_ie(&sib5->inter_freq_carrier_freq_list[i].t_resel_eutra_sf, ie_ptr);
+            }
+            liblte_rrc_pack_reselection_threshold_ie(sib5->inter_freq_carrier_freq_list[i].threshx_high, ie_ptr);
+            liblte_rrc_pack_reselection_threshold_ie(sib5->inter_freq_carrier_freq_list[i].threshx_low, ie_ptr);
+            liblte_rrc_pack_allowed_meas_bandwidth_ie(sib5->inter_freq_carrier_freq_list[i].allowed_meas_bw, ie_ptr);
+            liblte_rrc_pack_presence_antenna_port_1_ie(sib5->inter_freq_carrier_freq_list[i].presence_ant_port_1, ie_ptr);
+            if(true == sib5->inter_freq_carrier_freq_list[i].cell_resel_prio_present)
+            {
+                liblte_rrc_pack_cell_reselection_priority_ie(sib5->inter_freq_carrier_freq_list[i].cell_resel_prio, ie_ptr);
+            }
+            liblte_rrc_pack_neigh_cell_config_ie(sib5->inter_freq_carrier_freq_list[i].neigh_cell_cnfg, ie_ptr);
+            liblte_rrc_pack_q_offset_range_ie(sib5->inter_freq_carrier_freq_list[i].q_offset_freq, ie_ptr);
+            if(0 != sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list_size)
+            {
+                rrc_value_2_bits(sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list_size - 1, ie_ptr, 4);
+                for(j=0; j<sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list_size; j++)
+                {
+                    liblte_rrc_pack_phys_cell_id_ie(sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list[j].phys_cell_id, ie_ptr);
+                    liblte_rrc_pack_q_offset_range_ie(sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list[j].q_offset_cell, ie_ptr);
+                }
+            }
+            if(0 != sib5->inter_freq_carrier_freq_list[i].inter_freq_black_cell_list_size)
+            {
+                rrc_value_2_bits(sib5->inter_freq_carrier_freq_list[i].inter_freq_black_cell_list_size - 1, ie_ptr, 4);
+                for(j=0; j<sib5->inter_freq_carrier_freq_list[i].inter_freq_black_cell_list_size; j++)
+                {
+                    liblte_rrc_pack_phys_cell_id_range_ie(&sib5->inter_freq_carrier_freq_list[i].inter_freq_black_cell_list[j], ie_ptr);
+                }
+            }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_5_ie(uint8                                   **ie_ptr,
+                                                             LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_5_STRUCT  *sib5)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+    uint32            j;
+    bool              ext_ind;
+    bool              inter_freq_carrier_freq_list_ext_ind;
+    bool              inter_freq_neigh_cell_list_opt;
+    bool              inter_freq_black_cell_list_opt;
+
+    if(ie_ptr != NULL &&
+       sib5   != NULL)
+    {
+        // Extension indicator
+        ext_ind = rrc_bits_2_value(ie_ptr, 1);
+
+        sib5->inter_freq_carrier_freq_list_size = rrc_bits_2_value(ie_ptr, 3) + 1;
+        for(i=0; i<sib5->inter_freq_carrier_freq_list_size; i++)
+        {
+            // Extension indicator
+            inter_freq_carrier_freq_list_ext_ind = rrc_bits_2_value(ie_ptr, 1);
+
+            // Optional indicators
+            sib5->inter_freq_carrier_freq_list[i].p_max_present            = rrc_bits_2_value(ie_ptr, 1);
+            sib5->inter_freq_carrier_freq_list[i].t_resel_eutra_sf_present = rrc_bits_2_value(ie_ptr, 1);
+            sib5->inter_freq_carrier_freq_list[i].cell_resel_prio_present  = rrc_bits_2_value(ie_ptr, 1);
+            inter_freq_neigh_cell_list_opt                                 = rrc_bits_2_value(ie_ptr, 1);
+            inter_freq_black_cell_list_opt                                 = rrc_bits_2_value(ie_ptr, 1);
+
+            liblte_rrc_unpack_arfcn_value_eutra_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].dl_carrier_freq);
+            liblte_rrc_unpack_q_rx_lev_min_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].q_rx_lev_min);
+            if(true == sib5->inter_freq_carrier_freq_list[i].p_max_present)
+            {
+                liblte_rrc_unpack_p_max_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].p_max);
+            }
+            liblte_rrc_unpack_t_reselection_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].t_resel_eutra);
+            if(true == sib5->inter_freq_carrier_freq_list[i].t_resel_eutra_sf_present)
+            {
+                liblte_rrc_unpack_speed_state_scale_factors_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].t_resel_eutra_sf);
+            }
+            liblte_rrc_unpack_reselection_threshold_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].threshx_high);
+            liblte_rrc_unpack_reselection_threshold_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].threshx_low);
+            liblte_rrc_unpack_allowed_meas_bandwidth_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].allowed_meas_bw);
+            liblte_rrc_unpack_presence_antenna_port_1_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].presence_ant_port_1);
+            if(true == sib5->inter_freq_carrier_freq_list[i].cell_resel_prio_present)
+            {
+                liblte_rrc_unpack_cell_reselection_priority_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].cell_resel_prio);
+            }
+            liblte_rrc_unpack_neigh_cell_config_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].neigh_cell_cnfg);
+            liblte_rrc_unpack_q_offset_range_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].q_offset_freq);
+            if(true == inter_freq_neigh_cell_list_opt)
+            {
+                sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list_size = rrc_bits_2_value(ie_ptr, 4) + 1;
+                for(j=0; j<sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list_size; j++)
+                {
+                    liblte_rrc_unpack_phys_cell_id_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list[j].phys_cell_id);
+                    liblte_rrc_unpack_q_offset_range_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list[j].q_offset_cell);
+                }
+            }else{
+                sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list_size = 0;
+            }
+            if(true == inter_freq_black_cell_list_opt)
+            {
+                sib5->inter_freq_carrier_freq_list[i].inter_freq_black_cell_list_size = rrc_bits_2_value(ie_ptr, 4) + 1;
+                for(j=0; j<sib5->inter_freq_carrier_freq_list[i].inter_freq_black_cell_list_size; j++)
+                {
+                    liblte_rrc_unpack_phys_cell_id_range_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].inter_freq_black_cell_list[j]);
+                }
+            }else{
+                sib5->inter_freq_carrier_freq_list[i].inter_freq_black_cell_list_size = 0;
+            }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: System Information Block Type 6
@@ -4888,7 +5110,170 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_4_ie(uint8              
 
     Document Reference: 36.331 v10.0.0 Section 6.3.1
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_block_type_6_ie(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_6_STRUCT  *sib6,
+                                                           uint8                                   **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+
+    if(sib6   != NULL &&
+       ie_ptr != NULL)
+    {
+        // Extension indicator
+        rrc_value_2_bits(0, ie_ptr, 1);
+
+        // Optional indicators
+        if(0 != sib6->carrier_freq_list_utra_fdd_size)
+        {
+            rrc_value_2_bits(1, ie_ptr, 1);
+        }else{
+            rrc_value_2_bits(0, ie_ptr, 1);
+        }
+        if(0 != sib6->carrier_freq_list_utra_tdd_size)
+        {
+            rrc_value_2_bits(1, ie_ptr, 1);
+        }else{
+            rrc_value_2_bits(0, ie_ptr, 1);
+        }
+        rrc_value_2_bits(sib6->t_resel_utra_sf_present, ie_ptr, 1);
+
+        if(0 != sib6->carrier_freq_list_utra_fdd_size)
+        {
+            rrc_value_2_bits(sib6->carrier_freq_list_utra_fdd_size - 1, ie_ptr, 4);
+            for(i=0; i<sib6->carrier_freq_list_utra_fdd_size; i++)
+            {
+                // Extension indicator
+                rrc_value_2_bits(0, ie_ptr, 1);
+
+                // Optional indicator
+                rrc_value_2_bits(sib6->carrier_freq_list_utra_fdd[i].cell_resel_prio_present, ie_ptr, 1);
+
+                liblte_rrc_pack_arfcn_value_utra_ie(sib6->carrier_freq_list_utra_fdd[i].carrier_freq, ie_ptr);
+                if(true == sib6->carrier_freq_list_utra_fdd[i].cell_resel_prio_present)
+                {
+                    liblte_rrc_pack_cell_reselection_priority_ie(sib6->carrier_freq_list_utra_fdd[i].cell_resel_prio, ie_ptr);
+                }
+                liblte_rrc_pack_reselection_threshold_ie(sib6->carrier_freq_list_utra_fdd[i].threshx_high, ie_ptr);
+                liblte_rrc_pack_reselection_threshold_ie(sib6->carrier_freq_list_utra_fdd[i].threshx_low, ie_ptr);
+                rrc_value_2_bits(((sib6->carrier_freq_list_utra_fdd[i].q_rx_lev_min - 1) / 2) + 60, ie_ptr, 6);
+                rrc_value_2_bits(sib6->carrier_freq_list_utra_fdd[i].p_max_utra + 50,               ie_ptr, 7);
+                rrc_value_2_bits(sib6->carrier_freq_list_utra_fdd[i].q_qual_min + 24,               ie_ptr, 5);
+            }
+        }
+        if(0 != sib6->carrier_freq_list_utra_tdd_size)
+        {
+            rrc_value_2_bits(sib6->carrier_freq_list_utra_tdd_size - 1, ie_ptr, 4);
+            for(i=0; i<sib6->carrier_freq_list_utra_tdd_size; i++)
+            {
+                // Extension indicator
+                rrc_value_2_bits(0, ie_ptr, 1);
+
+                // Optional indicator
+                rrc_value_2_bits(sib6->carrier_freq_list_utra_tdd[i].cell_resel_prio_present, ie_ptr, 1);
+
+                liblte_rrc_pack_arfcn_value_utra_ie(sib6->carrier_freq_list_utra_tdd[i].carrier_freq, ie_ptr);
+                if(true == sib6->carrier_freq_list_utra_tdd[i].cell_resel_prio_present)
+                {
+                    liblte_rrc_pack_cell_reselection_priority_ie(sib6->carrier_freq_list_utra_tdd[i].cell_resel_prio, ie_ptr);
+                }
+                liblte_rrc_pack_reselection_threshold_ie(sib6->carrier_freq_list_utra_tdd[i].threshx_high, ie_ptr);
+                liblte_rrc_pack_reselection_threshold_ie(sib6->carrier_freq_list_utra_tdd[i].threshx_low, ie_ptr);
+                rrc_value_2_bits(((sib6->carrier_freq_list_utra_tdd[i].q_rx_lev_min - 1) / 2) + 60, ie_ptr, 6);
+                rrc_value_2_bits(sib6->carrier_freq_list_utra_tdd[i].p_max_utra + 50,               ie_ptr, 7);
+            }
+        }
+        liblte_rrc_pack_t_reselection_ie(sib6->t_resel_utra, ie_ptr);
+        if(true == sib6->t_resel_utra_sf_present)
+        {
+            liblte_rrc_pack_speed_state_scale_factors_ie(&sib6->t_resel_utra_sf, ie_ptr);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_6_ie(uint8                                   **ie_ptr,
+                                                             LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_6_STRUCT  *sib6)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+    bool              ext_ind;
+    bool              carrier_freq_list_utra_fdd_opt;
+    bool              carrier_freq_list_utra_fdd_ext_ind;
+    bool              carrier_freq_list_utra_tdd_opt;
+    bool              carrier_freq_list_utra_tdd_ext_ind;
+
+    if(ie_ptr != NULL &&
+       sib6   != NULL)
+    {
+        // Extension indicator
+        ext_ind = rrc_bits_2_value(ie_ptr, 1);
+
+        // Optional indicators
+        carrier_freq_list_utra_fdd_opt = rrc_bits_2_value(ie_ptr, 1);
+        carrier_freq_list_utra_tdd_opt = rrc_bits_2_value(ie_ptr, 1);
+        sib6->t_resel_utra_sf_present  = rrc_bits_2_value(ie_ptr, 1);
+
+        if(true == carrier_freq_list_utra_fdd_opt)
+        {
+            sib6->carrier_freq_list_utra_fdd_size = rrc_bits_2_value(ie_ptr, 4) + 1;
+            for(i=0; i<sib6->carrier_freq_list_utra_fdd_size; i++)
+            {
+                // Extension indicator
+                carrier_freq_list_utra_fdd_ext_ind = rrc_bits_2_value(ie_ptr, 1);
+
+                // Optional indicator
+                sib6->carrier_freq_list_utra_fdd[i].cell_resel_prio_present = rrc_bits_2_value(ie_ptr, 1);
+
+                liblte_rrc_unpack_arfcn_value_utra_ie(ie_ptr, &sib6->carrier_freq_list_utra_fdd[i].carrier_freq);
+                if(true == sib6->carrier_freq_list_utra_fdd[i].cell_resel_prio_present)
+                {
+                    liblte_rrc_unpack_cell_reselection_priority_ie(ie_ptr, &sib6->carrier_freq_list_utra_fdd[i].cell_resel_prio);
+                }
+                liblte_rrc_unpack_reselection_threshold_ie(ie_ptr, &sib6->carrier_freq_list_utra_fdd[i].threshx_high);
+                liblte_rrc_unpack_reselection_threshold_ie(ie_ptr, &sib6->carrier_freq_list_utra_fdd[i].threshx_low);
+                sib6->carrier_freq_list_utra_fdd[i].q_rx_lev_min = (int8)((rrc_bits_2_value(ie_ptr, 6) * 2) + 1) - 60;
+                sib6->carrier_freq_list_utra_fdd[i].p_max_utra   = (int8)rrc_bits_2_value(ie_ptr, 7) - 50;
+                sib6->carrier_freq_list_utra_fdd[i].q_qual_min   = (int8)rrc_bits_2_value(ie_ptr, 5) - 24;
+            }
+        }else{
+            sib6->carrier_freq_list_utra_fdd_size = 0;
+        }
+        if(true == carrier_freq_list_utra_tdd_opt)
+        {
+            sib6->carrier_freq_list_utra_tdd_size = rrc_bits_2_value(ie_ptr, 4) + 1;
+            for(i=0; i<sib6->carrier_freq_list_utra_tdd_size; i++)
+            {
+                // Extension indicator
+                carrier_freq_list_utra_tdd_ext_ind = rrc_bits_2_value(ie_ptr, 1);
+
+                // Optional indicator
+                sib6->carrier_freq_list_utra_tdd[i].cell_resel_prio_present = rrc_bits_2_value(ie_ptr, 1);
+
+                liblte_rrc_unpack_arfcn_value_utra_ie(ie_ptr, &sib6->carrier_freq_list_utra_tdd[i].carrier_freq);
+                if(true == sib6->carrier_freq_list_utra_tdd[i].cell_resel_prio_present)
+                {
+                    liblte_rrc_unpack_cell_reselection_priority_ie(ie_ptr, &sib6->carrier_freq_list_utra_tdd[i].cell_resel_prio);
+                }
+                liblte_rrc_unpack_reselection_threshold_ie(ie_ptr, &sib6->carrier_freq_list_utra_tdd[i].threshx_high);
+                liblte_rrc_unpack_reselection_threshold_ie(ie_ptr, &sib6->carrier_freq_list_utra_tdd[i].threshx_low);
+                sib6->carrier_freq_list_utra_tdd[i].q_rx_lev_min = (int8)((rrc_bits_2_value(ie_ptr, 6) * 2) + 1) - 60;
+                sib6->carrier_freq_list_utra_tdd[i].p_max_utra   = (int8)rrc_bits_2_value(ie_ptr, 7) - 50;
+            }
+        }else{
+            sib6->carrier_freq_list_utra_tdd_size = 0;
+        }
+        liblte_rrc_unpack_t_reselection_ie(ie_ptr, &sib6->t_resel_utra);
+        if(true == sib6->t_resel_utra_sf_present)
+        {
+            liblte_rrc_unpack_speed_state_scale_factors_ie(ie_ptr, &sib6->t_resel_utra_sf);
+        }
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: System Information Block Type 7
@@ -4899,7 +5284,132 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_4_ie(uint8              
 
     Document Reference: 36.331 v10.0.0 Section 6.3.1
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_block_type_7_ie(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7_STRUCT  *sib7,
+                                                           uint8                                   **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+
+    if(sib7   != NULL &&
+       ie_ptr != NULL)
+    {
+        // Extension indicator
+        rrc_value_2_bits(0, ie_ptr, 1);
+
+        // Optional indicators
+        rrc_value_2_bits(sib7->t_resel_geran_sf_present, ie_ptr, 1);
+        if(0 != sib7->carrier_freqs_info_list_size)
+        {
+            rrc_value_2_bits(1, ie_ptr, 1);
+        }else{
+            rrc_value_2_bits(0, ie_ptr, 1);
+        }
+
+        liblte_rrc_pack_t_reselection_ie(sib7->t_resel_geran, ie_ptr);
+        if(true == sib7->t_resel_geran_sf_present)
+        {
+            liblte_rrc_pack_speed_state_scale_factors_ie(&sib7->t_resel_geran_sf, ie_ptr);
+        }
+        if(0 != sib7->carrier_freqs_info_list_size)
+        {
+            rrc_value_2_bits(sib7->carrier_freqs_info_list_size - 1, ie_ptr, 4);
+            for(i=0; i<sib7->carrier_freqs_info_list_size; i++)
+            {
+                // Extension indicator
+                rrc_value_2_bits(0, ie_ptr, 1);
+
+                liblte_rrc_pack_carrier_freqs_geran_ie(&sib7->carrier_freqs_info_list[i].carrier_freqs, ie_ptr);
+
+                // Common Info
+                {
+                    // Optional indicators
+                    rrc_value_2_bits(sib7->carrier_freqs_info_list[i].cell_resel_prio_present, ie_ptr, 1);
+                    rrc_value_2_bits(sib7->carrier_freqs_info_list[i].p_max_geran_present,     ie_ptr, 1);
+
+                    if(true == sib7->carrier_freqs_info_list[i].cell_resel_prio_present)
+                    {
+                        liblte_rrc_pack_cell_reselection_priority_ie(sib7->carrier_freqs_info_list[i].cell_resel_prio, ie_ptr);
+                    }
+                    rrc_value_2_bits(sib7->carrier_freqs_info_list[i].ncc_permitted,            ie_ptr, 8);
+                    rrc_value_2_bits((sib7->carrier_freqs_info_list[i].q_rx_lev_min + 115) / 2, ie_ptr, 6);
+                    if(true == sib7->carrier_freqs_info_list[i].p_max_geran_present)
+                    {
+                        rrc_value_2_bits(sib7->carrier_freqs_info_list[i].p_max_geran, ie_ptr, 6);
+                    }
+                    liblte_rrc_pack_reselection_threshold_ie(sib7->carrier_freqs_info_list[i].threshx_high, ie_ptr);
+                    liblte_rrc_pack_reselection_threshold_ie(sib7->carrier_freqs_info_list[i].threshx_low,  ie_ptr);
+                }
+            }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_7_ie(uint8                                   **ie_ptr,
+                                                             LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7_STRUCT  *sib7)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+    bool              ext_ind;
+    bool              carrier_freqs_info_list_opt;
+    bool              carrier_freqs_info_list_ext_ind;
+
+    if(ie_ptr != NULL &&
+       sib7   != NULL)
+    {
+        // Extension indicator
+        ext_ind = rrc_bits_2_value(ie_ptr, 1);
+
+        // Optional indicators
+        sib7->t_resel_geran_sf_present = rrc_bits_2_value(ie_ptr, 1);
+        carrier_freqs_info_list_opt    = rrc_bits_2_value(ie_ptr, 1);
+
+        liblte_rrc_unpack_t_reselection_ie(ie_ptr, &sib7->t_resel_geran);
+        if(true == sib7->t_resel_geran_sf_present)
+        {
+            liblte_rrc_unpack_speed_state_scale_factors_ie(ie_ptr, &sib7->t_resel_geran_sf);
+        }
+        if(true == carrier_freqs_info_list_opt)
+        {
+            sib7->carrier_freqs_info_list_size = rrc_bits_2_value(ie_ptr, 4) + 1;
+            for(i=0; i<sib7->carrier_freqs_info_list_size; i++)
+            {
+                // Extension indicator
+                carrier_freqs_info_list_ext_ind = rrc_bits_2_value(ie_ptr, 1);
+
+                liblte_rrc_unpack_carrier_freqs_geran_ie(ie_ptr, &sib7->carrier_freqs_info_list[i].carrier_freqs);
+
+                // Common Info
+                {
+                    // Optional indicators
+                    sib7->carrier_freqs_info_list[i].cell_resel_prio_present = rrc_bits_2_value(ie_ptr, 1);
+                    sib7->carrier_freqs_info_list[i].p_max_geran_present     = rrc_bits_2_value(ie_ptr, 1);
+
+                    if(true == sib7->carrier_freqs_info_list[i].cell_resel_prio_present)
+                    {
+                        liblte_rrc_unpack_cell_reselection_priority_ie(ie_ptr, &sib7->carrier_freqs_info_list[i].cell_resel_prio);
+                    }
+                    sib7->carrier_freqs_info_list[i].ncc_permitted = rrc_bits_2_value(ie_ptr, 8);
+                    sib7->carrier_freqs_info_list[i].q_rx_lev_min  = (rrc_bits_2_value(ie_ptr, 6) * 2) - 115;
+                    if(true == sib7->carrier_freqs_info_list[i].p_max_geran_present)
+                    {
+                        sib7->carrier_freqs_info_list[i].p_max_geran = rrc_bits_2_value(ie_ptr, 6);
+                    }
+                    liblte_rrc_unpack_reselection_threshold_ie(ie_ptr, &sib7->carrier_freqs_info_list[i].threshx_high);
+                    liblte_rrc_unpack_reselection_threshold_ie(ie_ptr, &sib7->carrier_freqs_info_list[i].threshx_low);
+                }
+            }
+        }else{
+            sib7->carrier_freqs_info_list_size = 0;
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: System Information Block Type 8
@@ -5642,7 +6152,206 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_msg(LIBLTE_RRC_MSG_STRUCT          
 }
 
 /*********************************************************************
-    Message Name: bcch_bch_msg
+    Message Name: Paging
+
+    Description: Used for the notification of one or more UEs
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_rrc_pack_paging_msg(LIBLTE_RRC_PAGING_STRUCT *page,
+                                             LIBLTE_RRC_MSG_STRUCT    *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint32             i;
+    uint32             j;
+
+    if(page != NULL &&
+       msg  != NULL)
+    {
+        // Optional indicators
+        if(page->paging_record_list_size != 0)
+        {
+            rrc_value_2_bits(1, &msg_ptr, 1);
+        }else{
+            rrc_value_2_bits(0, &msg_ptr, 1);
+        }
+        rrc_value_2_bits(page->system_info_modification_present, &msg_ptr, 1);
+        rrc_value_2_bits(page->etws_indication_present,          &msg_ptr, 1);
+        rrc_value_2_bits(page->non_crit_ext_present,             &msg_ptr, 1);
+
+        if(page->paging_record_list_size != 0)
+        {
+            rrc_value_2_bits(page->paging_record_list_size - 1, &msg_ptr, 4);
+            for(i=0; i<page->paging_record_list_size; i++)
+            {
+                // Extension indicator
+                rrc_value_2_bits(0, &msg_ptr, 1);
+
+                // Paging UE identity
+                {
+                    // Extension indicator
+                    rrc_value_2_bits(0, &msg_ptr, 1);
+
+                    rrc_value_2_bits(page->paging_record_list[i].ue_identity.ue_identity_type, &msg_ptr, 1);
+                    if(LIBLTE_RRC_PAGING_UE_IDENTITY_TYPE_S_TMSI == page->paging_record_list[i].ue_identity.ue_identity_type)
+                    {
+                        liblte_rrc_pack_s_tmsi_ie(&page->paging_record_list[i].ue_identity.s_tmsi,
+                                                  &msg_ptr);
+                    }else{
+                        rrc_value_2_bits(page->paging_record_list[i].ue_identity.imsi_size - 6, &msg_ptr, 4);
+                        for(j=0; j<page->paging_record_list[i].ue_identity.imsi_size; j++)
+                        {
+                            rrc_value_2_bits(page->paging_record_list[i].ue_identity.imsi[j], &msg_ptr, 4);
+                        }
+                    }
+                }
+
+                rrc_value_2_bits(page->paging_record_list[i].cn_domain, &msg_ptr, 1);
+            }
+        }
+
+        if(page->system_info_modification_present)
+        {
+            rrc_value_2_bits(page->system_info_modification, &msg_ptr, 1);
+        }
+
+        if(page->etws_indication_present)
+        {
+            rrc_value_2_bits(page->etws_indication, &msg_ptr, 1);
+        }
+
+        if(page->non_crit_ext_present)
+        {
+            // Optional indicators
+            rrc_value_2_bits(page->non_crit_ext.late_non_crit_ext_present, &msg_ptr, 1);
+            rrc_value_2_bits(page->non_crit_ext.non_crit_ext_present,      &msg_ptr, 1);
+
+            if(page->non_crit_ext.late_non_crit_ext_present)
+            {
+                // FIXME
+            }
+
+            if(page->non_crit_ext.non_crit_ext_present)
+            {
+                // Optional indicators
+                rrc_value_2_bits(page->non_crit_ext.non_crit_ext.cmas_ind_present,     &msg_ptr, 1);
+                rrc_value_2_bits(page->non_crit_ext.non_crit_ext.non_crit_ext_present, &msg_ptr, 1);
+
+                if(page->non_crit_ext.non_crit_ext.cmas_ind_present)
+                {
+                    rrc_value_2_bits(page->non_crit_ext.non_crit_ext.cmas_ind_r9, &msg_ptr, 1);
+                }
+
+                if(page->non_crit_ext.non_crit_ext.non_crit_ext_present)
+                {
+                    // FIXME
+                }
+            }
+        }
+
+        // Fill in the number of bits used
+        msg->N_bits = msg_ptr - msg->msg;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_paging_msg(LIBLTE_RRC_MSG_STRUCT    *msg,
+                                               LIBLTE_RRC_PAGING_STRUCT *page)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint32             i;
+    uint32             j;
+    uint8              paging_record_list_present;
+
+    if(msg  != NULL &&
+       page != NULL)
+    {
+        // Optional indicators
+        paging_record_list_present             = rrc_bits_2_value(&msg_ptr, 1);
+        page->system_info_modification_present = rrc_bits_2_value(&msg_ptr, 1);
+        page->etws_indication_present          = rrc_bits_2_value(&msg_ptr, 1);
+        page->non_crit_ext_present             = rrc_bits_2_value(&msg_ptr, 1);
+
+        if(paging_record_list_present)
+        {
+            page->paging_record_list_size = rrc_bits_2_value(&msg_ptr, 4) + 1;
+            for(i=0; i<page->paging_record_list_size; i++)
+            {
+                // Extension indicator
+                rrc_bits_2_value(&msg_ptr, 1);
+
+                // Paging UE identity
+                {
+                    // Extension indicator
+                    rrc_bits_2_value(&msg_ptr, 1);
+
+                    page->paging_record_list[i].ue_identity.ue_identity_type = (LIBLTE_RRC_PAGING_UE_IDENTITY_TYPE_ENUM)rrc_bits_2_value(&msg_ptr, 1);
+                    if(LIBLTE_RRC_PAGING_UE_IDENTITY_TYPE_S_TMSI == page->paging_record_list[i].ue_identity.ue_identity_type)
+                    {
+                        liblte_rrc_unpack_s_tmsi_ie(&msg_ptr,
+                                                    &page->paging_record_list[i].ue_identity.s_tmsi);
+                    }else{
+                        page->paging_record_list[i].ue_identity.imsi_size = rrc_bits_2_value(&msg_ptr, 4) + 6;
+                        for(j=0; j<page->paging_record_list[i].ue_identity.imsi_size; j++)
+                        {
+                            page->paging_record_list[i].ue_identity.imsi[j] = rrc_bits_2_value(&msg_ptr, 4);
+                        }
+                    }
+                }
+
+                page->paging_record_list[i].cn_domain = (LIBLTE_RRC_CN_DOMAIN_ENUM)rrc_bits_2_value(&msg_ptr, 1);
+            }
+        }
+
+        if(page->system_info_modification_present)
+        {
+            page->system_info_modification = (LIBLTE_RRC_SYSTEM_INFO_MODIFICATION_ENUM)rrc_bits_2_value(&msg_ptr, 1);
+        }
+
+        if(page->etws_indication_present)
+        {
+            page->etws_indication = (LIBLTE_RRC_ETWS_INDICATION_ENUM)rrc_bits_2_value(&msg_ptr, 1);
+        }
+
+        if(page->non_crit_ext_present)
+        {
+            // Optional indicators
+            page->non_crit_ext.late_non_crit_ext_present = rrc_bits_2_value(&msg_ptr, 1);
+            page->non_crit_ext.non_crit_ext_present      = rrc_bits_2_value(&msg_ptr, 1);
+
+            if(page->non_crit_ext.late_non_crit_ext_present)
+            {
+                // FIXME
+            }
+
+            if(page->non_crit_ext.non_crit_ext_present)
+            {
+                // Optional indicators
+                page->non_crit_ext.non_crit_ext.cmas_ind_present     = rrc_bits_2_value(&msg_ptr, 1);
+                page->non_crit_ext.non_crit_ext.non_crit_ext_present = rrc_bits_2_value(&msg_ptr, 1);
+
+                if(page->non_crit_ext.non_crit_ext.cmas_ind_present)
+                {
+                    page->non_crit_ext.non_crit_ext.cmas_ind_r9 = (LIBLTE_RRC_CMAS_INDICATION_R9_ENUM)rrc_bits_2_value(&msg_ptr, 1);
+                }
+
+                if(page->non_crit_ext.non_crit_ext.non_crit_ext_present)
+                {
+                    // FIXME
+                }
+            }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    Message Name: BCCH BCH Message
 
     Description: Contains the set of RRC messages that may be sent
                  from the E-UTRAN to the UE via BCH on the BCCH
@@ -5704,7 +6413,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_bch_msg(LIBLTE_RRC_MSG_STRUCT *msg,
 }
 
 /*********************************************************************
-    Message Name: bcch_dlsch_msg
+    Message Name: BCCH DLSCH Message
 
     Description: Contains the set of RRC messages that may be sent
                  from the E-UTRAN to the UE via DLSCH on the BCCH
@@ -5779,6 +6488,57 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_dlsch_msg(LIBLTE_RRC_MSG_STRUCT        
             err = liblte_rrc_unpack_sys_info_msg(&global_msg,
                                                  bcch_dlsch_msg);
         }
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    Message Name: PCCH Message
+
+    Description: Contains the set of RRC messages that may be sent
+                 from the E-UTRAN to the UE on the PCCH logical
+                 channel
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.1
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_rrc_pack_pcch_msg(LIBLTE_RRC_PCCH_MSG_STRUCT *pcch_msg,
+                                           LIBLTE_RRC_MSG_STRUCT      *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint8              ext     = false;
+
+    if(pcch_msg != NULL &&
+       msg      != NULL)
+    {
+        // Paging choice
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        err = liblte_rrc_pack_paging_msg(pcch_msg,
+                                         &global_msg);
+        memcpy(msg_ptr, global_msg.msg, global_msg.N_bits);
+        msg->N_bits = global_msg.N_bits + 1;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_pcch_msg(LIBLTE_RRC_MSG_STRUCT      *msg,
+                                             LIBLTE_RRC_PCCH_MSG_STRUCT *pcch_msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint32             N_bits_used;
+
+    if(msg      != NULL &&
+       pcch_msg != NULL)
+    {
+        // Paging choice
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        memcpy(global_msg.msg, msg_ptr, msg->N_bits-(msg_ptr-msg->msg));
+        err = liblte_rrc_unpack_paging_msg(&global_msg,
+                                           pcch_msg);
     }
 
     return(err);
