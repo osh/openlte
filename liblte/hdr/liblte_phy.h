@@ -44,6 +44,7 @@
     03/03/2013    Ben Wojtowicz    Added support for multiple sampling rates,
                                    pre-permutation of PDCCH encoding, and
                                    integer frequency offset detection.
+    03/17/2013    Ben Wojtowicz    Moved to single float version of fftw.
 
 *******************************************************************************/
 
@@ -322,10 +323,10 @@ typedef struct{
     uint32 N_id_cell_crs;
 
     // Samples to Symbols & Symbols to Samples
-    fftw_complex *s2s_in;
-    fftw_complex *s2s_out;
-    fftw_plan     symbs_to_samps_plan;
-    fftw_plan     samps_to_symbs_plan;
+    fftwf_complex *s2s_in;
+    fftwf_complex *s2s_out;
+    fftwf_plan     symbs_to_samps_plan;
+    fftwf_plan     samps_to_symbs_plan;
 
     // Viterbi decode
     float vd_path_metric[128][2048];

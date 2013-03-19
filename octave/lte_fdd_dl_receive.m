@@ -1,5 +1,5 @@
 %
-% Copyright 2011-2012 Ben Wojtowicz
+% Copyright 2011-2013 Ben Wojtowicz
 %
 %    This program is free software: you can redistribute it and/or modify
 %    it under the terms of the GNU Affero General Public License as published by
@@ -27,6 +27,9 @@
 %                                       with find_pss_and_fine_timing
 %              Ben Wojtowicz 02/16/2012 Added SIB1 decoding, fixed bugs
 %                                       in channel estimator
+%              Ben Wojtowicz 03/17/2013 Fixed a bug calculating the number
+%                                       of CCE resources and skipped PBCH,
+%                                       PSS and SSS while decoding PDSCH
 %
 function [] = lte_fdd_dl_receive(input_samps)
     % DEFINES
@@ -751,7 +754,6 @@ function [pcfich_s, phich_s, pdcch_s] = decode_pdcch(ce_sf, symb, N_sf, mib_s, N
             pdcch_s.N_reg = pdcch_s.N_reg - N_rb_dl; % Remove CRS
         endif
         pdcch_s.N_cce = floor(pdcch_s.N_reg/9);
-        pdcch_s.N_reg = pdcch_s.N_cce*9;
         % Extract resource elements and channel estimate 36.211 section 6.8.5 v10.1.0
         % Step 1 and 2
         m_prime = 0;
@@ -1019,6 +1021,27 @@ function [pcfich_s, phich_s, pdcch_s] = decode_pdcch(ce_sf, symb, N_sf, mib_s, N
 endfunction
 
 function [pdsch_s] = decode_pdsch(ce_sf, symb, N_sf, pcfich_s, phich_s, pdcch_s, mib_s, N_id_cell, N_sc_rb, N_rb_dl)
+    % Determine first and last PBCH, PSS, and SSS subcarriers
+    if(N_rb_dl == 6)
+        first_sc = 0;
+        last_sc  = (6*N_sc_rb)-1;
+    elseif(N_rb_dl == 15)
+        first_sc = (4*N_sc_rb)+6;
+        last_sc  = (11*N_sc_rb)-7;
+    elseif(N_rb_dl == 25)
+        first_sc = (9*N_sc_rb)+6;
+        last_sc  = (16*N_sc_rb)-7;
+    elseif(N_rb_dl == 50)
+        first_sc = 22*N_sc_rb;
+        last_sc  = (28*N_sc_rb)-1;
+    elseif(N_rb_dl == 75)
+        first_sc = (34*N_sc_rb)+6;
+        last_sc  = (41*N_sc_rb)-7;
+    else % N_rb_dl == 100
+        first_sc = 47*N_sc_rb;
+        last_sc  = (53*N_sc_rb)-1;
+    endif
+
     % Extract resource elements and channel estimate 36.211 section 6.3.5 v10.1.0
     % FIXME: Handle PBCH/PSS/SSS
     for(alloc_idx=0:pdcch_s.N_alloc-1)
@@ -1046,6 +1069,22 @@ function [pdsch_s] = decode_pdsch(ce_sf, symb, N_sf, pcfich_s, phich_s, pdcch_s,
                                    mod(L, 7) == 1 &&
                                    mod(N_id_cell, 3) == mod(m, 3))
                                 % CRS
+                            elseif(N_sf == 0 &&
+                                   (n*N_sc_rb+m) >= first_sc &&
+                                   (n*N_sc_rb+m) <= last_sc &&
+                                   L >= 7 &&
+                                   L <= 10)
+                                % PBCH
+                            elseif((N_sf == 0 || N_sf == 5) &&
+                                   (n*N_sc_rb+m) >= first_sc &&
+                                   (n*N_sc_rb+m) <= last_sc &&
+                                   L == 6)
+                                % PSS
+                            elseif((N_sf == 0 || N_sf == 5) &&
+                                   (n*N_sc_rb+m) >= first_sc &&
+                                   (n*N_sc_rb+m) <= last_sc &&
+                                   L == 5)
+                                % SSS
                             else
                                 y_est(idx+1) = symb(L+1,n*N_sc_rb+m+1);
                                 for(p=0:mib_s.N_ant-1)

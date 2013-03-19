@@ -34,6 +34,7 @@
                                    and SIB7 decoding, using the latest
                                    libraries, and fixed a bug that allowed
                                    multiple decodes of the same channel.
+    03/17/2013    Ben Wojtowicz    Added paging message printing.
 
 *******************************************************************************/
 
@@ -155,6 +156,7 @@ private:
     void print_sib6(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_6_STRUCT *sib6);
     void print_sib7(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7_STRUCT *sib7);
     void print_sib8(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT *sib8);
+    void print_page(LIBLTE_RRC_PAGING_STRUCT *page);
 };
 
 #endif /* __LTE_FDD_DL_FS_SAMP_BUF_H__ */

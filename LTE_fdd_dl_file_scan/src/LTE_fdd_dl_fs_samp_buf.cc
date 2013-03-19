@@ -41,6 +41,7 @@
                                    fixed a bug that allowed multiple decodes
                                    of the same channel, and fixed a frequency
                                    offset correction bug.
+    03/17/2013    Ben Wojtowicz    Added paging message printing.
 
 *******************************************************************************/
 
@@ -495,13 +496,9 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                         if(i == 16)
                         {
                             printf("TEST FILL RECEIVED\n");
-                        }else{
-                            printf("PAGING MESSAGE RECEIVED: ");
-                            for(i=0; i<rrc_msg.N_bits; i++)
-                            {
-                                printf("%u", rrc_msg.msg[i]);
-                            }
-                            printf("\n");
+                        }else if(LIBLTE_SUCCESS == liblte_rrc_unpack_pcch_msg(&rrc_msg,
+                                                                              &pcch_msg)){
+                            print_page(&pcch_msg);
                         }
                     }else{
                         printf("MESSAGE RECEIVED FOR RNTI=%04X: ", pdcch.alloc[0].rnti);
@@ -1619,5 +1616,42 @@ void LTE_fdd_dl_fs_samp_buf::print_sib8(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT 
         }
 
         sib8_printed = true;
+    }
+}
+
+void LTE_fdd_dl_fs_samp_buf::print_page(LIBLTE_RRC_PAGING_STRUCT *page)
+{
+    uint32 i;
+    uint32 j;
+
+    printf("\tPAGE Decoded:\n");
+    if(0 != page->paging_record_list_size)
+    {
+        printf("\t\tNumber of paging records: %u\n", page->paging_record_list_size);
+        for(i=0; i<page->paging_record_list_size; i++)
+        {
+            if(LIBLTE_RRC_PAGING_UE_IDENTITY_TYPE_S_TMSI == page->paging_record_list[i].ue_identity.ue_identity_type)
+            {
+                printf("\t\t\t%s\n", "S-TMSI");
+                printf("\t\t\t\t%-40s= %08X\n", "M-TMSI", page->paging_record_list[i].ue_identity.s_tmsi.m_tmsi);
+                printf("\t\t\t\t%-40s= %u\n", "MMEC", page->paging_record_list[i].ue_identity.s_tmsi.mmec);
+            }else{
+                printf("\t\t\t%-40s=", "IMSI");
+                for(j=0; j<page->paging_record_list[i].ue_identity.imsi_size; j++)
+                {
+                    printf("%u", page->paging_record_list[i].ue_identity.imsi[j]);
+                }
+                printf("\n");
+            }
+            printf("\t\t\t%-40s=%20s\n", "CN Domain", liblte_rrc_cn_domain_text[page->paging_record_list[i].cn_domain]);
+        }
+    }
+    if(true == page->system_info_modification_present)
+    {
+        printf("\t\t%-40s=%20s\n", "System Info Modification", liblte_rrc_system_info_modification_text[page->system_info_modification]);
+    }
+    if(true == page->etws_indication_present)
+    {
+        printf("\t\t%-40s=%20s\n", "ETWS Indication", liblte_rrc_etws_indication_text[page->etws_indication]);
     }
 }

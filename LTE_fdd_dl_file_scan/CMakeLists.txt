@@ -2,7 +2,7 @@
 include(GrPlatform)
 add_library(LTE_fdd_dl_fs SHARED src/LTE_fdd_dl_fs_samp_buf.cc)
 include_directories(hdr ${CMAKE_SOURCE_DIR}/liblte/hdr ${CMAKE_SOURCE_DIR}/cmn_hdr)
-target_link_libraries(LTE_fdd_dl_fs lte fftw3 ${Boost_LIBRARIES} ${GRUEL_LIBRARIES} ${GNURADIO_CORE_LIBRARIES})
+target_link_libraries(LTE_fdd_dl_fs lte fftw3f ${Boost_LIBRARIES} ${GRUEL_LIBRARIES} ${GNURADIO_CORE_LIBRARIES})
 set_target_properties(LTE_fdd_dl_fs PROPERTIES DEFINE_SYMBOL "LTE_fdd_dl_fs_EXPORTS")
 install(TARGETS LTE_fdd_dl_fs LIBRARY DESTINATION lib${LIB_SUFFIX} ARCHIVE DESTINATION lib${LIB_SUFFIX} RUNTIME DESTINATION bin)
 
