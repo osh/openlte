@@ -33,9 +33,10 @@ To use the installed C++ and python code for the file scanner,
 set the PYTHONPATH env variable to
 <python_install_dir>/dist-packages/gnuradio/
 for instance /usr/local/lib/python2.7/dist-packages/gnuradio/
-and make sure that /usr/local/lib is added to /etc/ld.so.conf.
-Then run LTE_fdd_dl_file_scan.py and specify a recorded LTE file
-as the input. For example:
+and make sure that /usr/local/lib is added to /etc/ld.so.conf
+and that LD_LIBRARY_PATH is set to /usr/local/lib (export
+LD_LIBRARY_PATH=/usr/local/lib).  Then run LTE_fdd_dl_file_scan.py
+and specify a recorded LTE file as the input. For example:
 
   $ LTE_fdd_dl_file_scan.py lte_file.bin
 
@@ -48,9 +49,11 @@ Q samples recorded at 30.72MHz.
 To use the installed C++ and python code for the file generator,
 set the PYTHONPATH env variable to
 <python_install_dir>/dist-packages/gnuradio/
-for instance /usr/local/lib/python2.7/dist-packages/gnuradio/.
-Then run LTE_fdd_dl_file_gen.py and specify an output file for the
-LTE fdd downlink signal.  For example:
+for instance /usr/local/lib/python2.7/dist-packages/gnuradio/
+and that LD_LIBRARY_PATH is set to /usr/local/lib (export
+LD_LIBRARY_PATH=/usr/local/lib).  Then run LTE_fdd_dl_file_gen.py
+and specify an output file for the LTE fdd downlink signal.
+For example:
 
   $ LTE_fdd_dl_file_gen.py lte_file.bin
 
@@ -61,11 +64,13 @@ input for the LTE_fdd_dl_file_scan application.
 #############
 #  SCANNER  #
 #############
-To use the installed C++ live scanner, plug in rtl-sdr hardware,
-run LTE_fdd_dl_scan, and connect (via telnet, nc, etc) to the
-control port at port number 20000.  Scan parameters can be changed
-and scan results can be observed on the control port.  For a list
-of parameters simply type help on the control port.
+To use the installed C++ live scanner, make sure LD_LIBRARY_PATH
+is set to /usr/local/lib (export LD_LIBRARY_PATH=/usr/local/lib),
+plug in rtl-sdr hardware, run LTE_fdd_dl_scan, and connect (via
+telnet, nc, etc) to the control port at port number 20000.  Scan
+parameters can be changed and scan results can be observed on the
+control port.  For a list of parameters simply type help on the
+control port.
 
 ############
 #  OCTAVE  #
