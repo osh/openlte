@@ -55,3 +55,4 @@ v00.08.00     Added a scanner application with support for rtl-sdr hardware.
               application.
 v00.08.01     Converted fftw from double to single precision.  Added paging
               message printing.  Fixed bugs in lte_fdd_dl_receive.m.
+v00.08.02     Fixed two indexing bugs in liblte_phy.cc.

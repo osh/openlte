@@ -65,6 +65,7 @@
                                    and fixed a phase wrapping bug in
                                    get_subframe_and_ce.
     03/17/2013    Ben Wojtowicz    Moved to single float version of fftw.
+    07/03/2013    Ben Wojtowicz    Fixed two indexing bugs.
 
 *******************************************************************************/
 
@@ -3657,10 +3658,21 @@ LIBLTE_ERROR_ENUM liblte_phy_find_pss_and_fine_timing(LIBLTE_PHY_STRUCT *phy_str
         timing   = 0;
         for(i=-40; i<40; i++)
         {
+            idx = symb_starts[N_symb] + (phy_struct->N_samps_per_slot*N_s);
+            if(i < 0)
+            {
+                if(idx >= -i)
+                {
+                    idx += i;
+                }
+            }else{
+                idx += i;
+            }
+
             samples_to_symbols(phy_struct,
                                i_samps,
                                q_samps,
-                               symb_starts[N_symb]+i+(phy_struct->N_samps_per_slot*N_s),
+                               idx,
                                0,
                                0,
                                phy_struct->rx_symb_re,
@@ -3988,9 +4000,11 @@ LIBLTE_ERROR_ENUM liblte_phy_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUC
                     tmp_idx += N_samps_per_symb_else;
                     for(k=0; k<N_samps_to_blank; k++)
                     {
-                        if((tmp_idx - (N_samps_to_blank/2) + k) >= 0)
+                        idx = tmp_idx - (N_samps_to_blank/2) + k;
+                        if(idx >= 0 &&
+                           idx <= (LIBLTE_PHY_N_SAMPS_PER_SLOT_30_72MHZ*2))
                         {
-                            phy_struct->timing_abs_corr[tmp_idx - (N_samps_to_blank/2) + k] = 0;
+                            phy_struct->timing_abs_corr[idx] = 0;
                         }
                     }
                 }
@@ -5355,7 +5369,7 @@ void samples_to_symbols(LIBLTE_PHY_STRUCT *phy_struct,
     fftwf_execute(phy_struct->samps_to_symbs_plan);
     for(i=0; i<(phy_struct->FFT_size/2)-phy_struct->FFT_pad_size; i++)
     {
-        // Postive spectrum
+        // Positive spectrum
         symb_re[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)] = phy_struct->s2s_out[i+1][0];
         symb_im[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)] = phy_struct->s2s_out[i+1][1];
 
