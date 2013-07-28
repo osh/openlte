@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     02/26/2013    Ben Wojtowicz    Created file
+    07/21/2013    Ben Wojtowicz    Added support for multiple sample rates
 
 *******************************************************************************/
 
@@ -72,7 +73,7 @@ typedef enum{
                               CLASS DECLARATIONS
 *******************************************************************************/
 
-LTE_FDD_DL_SCAN_STATE_MACHINE_API LTE_fdd_dl_scan_state_machine_sptr LTE_fdd_dl_scan_make_state_machine ();
+LTE_FDD_DL_SCAN_STATE_MACHINE_API LTE_fdd_dl_scan_state_machine_sptr LTE_fdd_dl_scan_make_state_machine (uint32 samp_rate);
 class LTE_FDD_DL_SCAN_STATE_MACHINE_API LTE_fdd_dl_scan_state_machine : public gr_sync_block
 {
 public:
@@ -83,14 +84,14 @@ public:
                gr_vector_void_star       &output_items);
 
 private:
-    friend LTE_FDD_DL_SCAN_STATE_MACHINE_API LTE_fdd_dl_scan_state_machine_sptr LTE_fdd_dl_scan_make_state_machine();
+    friend LTE_FDD_DL_SCAN_STATE_MACHINE_API LTE_fdd_dl_scan_state_machine_sptr LTE_fdd_dl_scan_make_state_machine(uint32 samp_rate);
 
-    LTE_fdd_dl_scan_state_machine();
+    LTE_fdd_dl_scan_state_machine(uint32 samp_rate);
 
     // LTE library
     LIBLTE_PHY_STRUCT                *phy_struct;
     LIBLTE_PHY_COARSE_TIMING_STRUCT   timing_struct;
-    LIBLTE_RRC_MSG_STRUCT             rrc_msg;
+    LIBLTE_MSG_STRUCT                 rrc_msg;
     LIBLTE_RRC_MIB_STRUCT             mib;
     LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT  bcch_dlsch_msg;
 
@@ -99,6 +100,15 @@ private:
     float  *q_buf;
     uint32  samp_buf_w_idx;
     uint32  samp_buf_r_idx;
+    uint32  one_subframe_num_samps;
+    uint32  one_frame_num_samps;
+    uint32  freq_change_wait_num_samps;
+    uint32  coarse_timing_search_num_samps;
+    uint32  pss_and_fine_timing_search_num_samps;
+    uint32  sss_search_num_samps;
+    uint32  bch_decode_num_samps;
+    uint32  pdsch_decode_sib1_num_samps;
+    uint32  pdsch_decode_si_generic_num_samps;
 
     // Variables
     LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT         chan_data;
@@ -112,33 +122,26 @@ private:
     uint32                                   N_decoded_chans;
     uint32                                   N_attempts;
     uint32                                   N_bch_attempts;
+    uint32                                   N_pdsch_attempts;
     uint32                                   N_samps_needed;
     uint32                                   freq_change_wait_cnt;
+    uint32                                   sfn;
+    uint8                                    N_ant;
     bool                                     freq_change_wait_done;
-    bool                                     mib_rxed;
-    bool                                     sib1_rxed;
-    bool                                     sib2_rxed;
-    bool                                     sib3_rxed;
-    bool                                     sib4_rxed;
-    bool                                     sib5_rxed;
-    bool                                     sib6_rxed;
-    bool                                     sib7_rxed;
-    bool                                     sib8_rxed;
+    bool                                     sib1_sent;
+    bool                                     sib2_sent;
+    bool                                     sib3_sent;
+    bool                                     sib4_sent;
+    bool                                     sib5_sent;
+    bool                                     sib6_sent;
+    bool                                     sib7_sent;
+    bool                                     sib8_sent;
     bool                                     send_cnf;
 
     // Helpers
     void init(void);
     void copy_input_to_samp_buf(const gr_complex *in, int32 ninput_items);
     void freq_shift(uint32 start_idx, uint32 num_samps, float freq_offset);
-    void save_mib(LIBLTE_RRC_MIB_STRUCT *mib);
-    void save_sib1(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *sib1);
-    void save_sib2(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT *sib2);
-    void save_sib3(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3_STRUCT *sib3);
-    void save_sib4(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4_STRUCT *sib4);
-    void save_sib5(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_5_STRUCT *sib5);
-    void save_sib6(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_6_STRUCT *sib6);
-    void save_sib7(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7_STRUCT *sib7);
-    void save_sib8(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT *sib8);
     void channel_found(bool &switch_freq, int32 &done_flag);
     void channel_not_found(bool &switch_freq, int32 &done_flag);
 };

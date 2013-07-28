@@ -34,6 +34,8 @@
     11/10/2012    Ben Wojtowicz    Filled in the N_bits for SI messages
     03/03/2013    Ben Wojtowicz    Added carrier_freqs_geran, SIB5, SIB6, SIB7
                                    and paging packing and unpacking.
+    07/21/2013    Ben Wojtowicz    Fixed several bugs and moved to the common
+                                   message struct.
 
 *******************************************************************************/
 
@@ -57,7 +59,7 @@
                               GLOBAL VARIABLES
 *******************************************************************************/
 
-LIBLTE_RRC_MSG_STRUCT global_msg;
+LIBLTE_MSG_STRUCT global_msg;
 
 /*******************************************************************************
                               LOCAL FUNCTION PROTOTYPES
@@ -1471,7 +1473,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_arfcn_value_utra_ie(uint16   arfcn,
 
     if(ie_ptr != NULL)
     {
-        rrc_value_2_bits(arfcn, ie_ptr, 16);
+        rrc_value_2_bits(arfcn, ie_ptr, 14);
 
         err = LIBLTE_SUCCESS;
     }
@@ -1486,7 +1488,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_arfcn_value_utra_ie(uint8  **ie_ptr,
     if(ie_ptr != NULL &&
        arfcn  != NULL)
     {
-        *arfcn = rrc_bits_2_value(ie_ptr, 16);
+        *arfcn = rrc_bits_2_value(ie_ptr, 14);
 
         err = LIBLTE_SUCCESS;
     }
@@ -5028,6 +5030,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_5_ie(uint8              
     uint32            j;
     bool              ext_ind;
     bool              inter_freq_carrier_freq_list_ext_ind;
+    bool              q_offset_freq_opt;
     bool              inter_freq_neigh_cell_list_opt;
     bool              inter_freq_black_cell_list_opt;
 
@@ -5047,6 +5050,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_5_ie(uint8              
             sib5->inter_freq_carrier_freq_list[i].p_max_present            = rrc_bits_2_value(ie_ptr, 1);
             sib5->inter_freq_carrier_freq_list[i].t_resel_eutra_sf_present = rrc_bits_2_value(ie_ptr, 1);
             sib5->inter_freq_carrier_freq_list[i].cell_resel_prio_present  = rrc_bits_2_value(ie_ptr, 1);
+            q_offset_freq_opt                                              = rrc_bits_2_value(ie_ptr, 1);
             inter_freq_neigh_cell_list_opt                                 = rrc_bits_2_value(ie_ptr, 1);
             inter_freq_black_cell_list_opt                                 = rrc_bits_2_value(ie_ptr, 1);
 
@@ -5070,7 +5074,12 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_5_ie(uint8              
                 liblte_rrc_unpack_cell_reselection_priority_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].cell_resel_prio);
             }
             liblte_rrc_unpack_neigh_cell_config_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].neigh_cell_cnfg);
-            liblte_rrc_unpack_q_offset_range_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].q_offset_freq);
+            if(true == q_offset_freq_opt)
+            {
+                liblte_rrc_unpack_q_offset_range_ie(ie_ptr, &sib5->inter_freq_carrier_freq_list[i].q_offset_freq);
+            }else{
+                sib5->inter_freq_carrier_freq_list[i].q_offset_freq = LIBLTE_RRC_Q_OFFSET_RANGE_DB_0;
+            }
             if(true == inter_freq_neigh_cell_list_opt)
             {
                 sib5->inter_freq_carrier_freq_list[i].inter_freq_neigh_cell_list_size = rrc_bits_2_value(ie_ptr, 4) + 1;
@@ -5233,7 +5242,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_6_ie(uint8              
                 }
                 liblte_rrc_unpack_reselection_threshold_ie(ie_ptr, &sib6->carrier_freq_list_utra_fdd[i].threshx_high);
                 liblte_rrc_unpack_reselection_threshold_ie(ie_ptr, &sib6->carrier_freq_list_utra_fdd[i].threshx_low);
-                sib6->carrier_freq_list_utra_fdd[i].q_rx_lev_min = (int8)((rrc_bits_2_value(ie_ptr, 6) * 2) + 1) - 60;
+                sib6->carrier_freq_list_utra_fdd[i].q_rx_lev_min = (int8)((rrc_bits_2_value(ie_ptr, 6) - 60) * 2) + 1;
                 sib6->carrier_freq_list_utra_fdd[i].p_max_utra   = (int8)rrc_bits_2_value(ie_ptr, 7) - 50;
                 sib6->carrier_freq_list_utra_fdd[i].q_qual_min   = (int8)rrc_bits_2_value(ie_ptr, 5) - 24;
             }
@@ -5804,7 +5813,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_8_ie(uint8              
     Document Reference: 36.331 v10.0.0 Section 6.2.2
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_block_type_1_msg(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *sib1,
-                                                            LIBLTE_RRC_MSG_STRUCT                   *msg)
+                                                            LIBLTE_MSG_STRUCT                       *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -5894,7 +5903,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_block_type_1_msg(LIBLTE_RRC_SYS_INFO_
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_1_msg(LIBLTE_RRC_MSG_STRUCT                   *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_1_msg(LIBLTE_MSG_STRUCT                       *msg,
                                                               LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *sib1,
                                                               uint32                                  *N_bits_used)
 {
@@ -6012,7 +6021,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_1_msg(LIBLTE_RRC_MSG_STR
     Document Reference: 36.331 v10.0.0 Section 6.2.2
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_msg(LIBLTE_RRC_SYS_INFO_MSG_STRUCT *sibs,
-                                               LIBLTE_RRC_MSG_STRUCT          *msg)
+                                               LIBLTE_MSG_STRUCT              *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -6078,7 +6087,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_msg(LIBLTE_RRC_SYS_INFO_MSG_STRUCT *s
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_msg(LIBLTE_RRC_MSG_STRUCT          *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_msg(LIBLTE_MSG_STRUCT              *msg,
                                                  LIBLTE_RRC_SYS_INFO_MSG_STRUCT *sibs)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -6118,13 +6127,22 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_msg(LIBLTE_RRC_MSG_STRUCT          
                         err = liblte_rrc_unpack_sys_info_block_type_4_ie(&msg_ptr,
                                                                          (LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4_STRUCT *)&sibs->sibs[i].sib);
                         break;
+                    case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_5:
+                        err = liblte_rrc_unpack_sys_info_block_type_5_ie(&msg_ptr,
+                                                                         (LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_5_STRUCT *)&sibs->sibs[i].sib);
+                        break;
+                    case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_6:
+                        err = liblte_rrc_unpack_sys_info_block_type_6_ie(&msg_ptr,
+                                                                         (LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_6_STRUCT *)&sibs->sibs[i].sib);
+                        break;
+                    case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7:
+                        err = liblte_rrc_unpack_sys_info_block_type_7_ie(&msg_ptr,
+                                                                         (LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7_STRUCT *)&sibs->sibs[i].sib);
+                        break;
                     case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8:
                         err = liblte_rrc_unpack_sys_info_block_type_8_ie(&msg_ptr,
                                                                          (LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT *)&sibs->sibs[i].sib);
                         break;
-                    case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_5:
-                    case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_6:
-                    case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7:
                     case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_9:
                     case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_10:
                     case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_11:
@@ -6159,7 +6177,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_msg(LIBLTE_RRC_MSG_STRUCT          
     Document Reference: 36.331 v10.0.0 Section 6.2.2
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_paging_msg(LIBLTE_RRC_PAGING_STRUCT *page,
-                                             LIBLTE_RRC_MSG_STRUCT    *msg)
+                                             LIBLTE_MSG_STRUCT        *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -6256,7 +6274,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_paging_msg(LIBLTE_RRC_PAGING_STRUCT *page,
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_paging_msg(LIBLTE_RRC_MSG_STRUCT    *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_paging_msg(LIBLTE_MSG_STRUCT        *msg,
                                                LIBLTE_RRC_PAGING_STRUCT *page)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -6360,7 +6378,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_paging_msg(LIBLTE_RRC_MSG_STRUCT    *msg,
     Document Reference: 36.331 v10.0.0 Sections 6.2.1 and 6.2.2
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_bcch_bch_msg(LIBLTE_RRC_MIB_STRUCT *mib,
-                                               LIBLTE_RRC_MSG_STRUCT *msg)
+                                               LIBLTE_MSG_STRUCT     *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -6388,7 +6406,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_bcch_bch_msg(LIBLTE_RRC_MIB_STRUCT *mib,
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_bch_msg(LIBLTE_RRC_MSG_STRUCT *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_bch_msg(LIBLTE_MSG_STRUCT     *msg,
                                                  LIBLTE_RRC_MIB_STRUCT *mib)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -6422,7 +6440,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_bch_msg(LIBLTE_RRC_MSG_STRUCT *msg,
     Document Reference: 36.331 v10.0.0 Section 6.2.1
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_bcch_dlsch_msg(LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT *bcch_dlsch_msg,
-                                                 LIBLTE_RRC_MSG_STRUCT            *msg)
+                                                 LIBLTE_MSG_STRUCT                *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -6458,7 +6476,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_bcch_dlsch_msg(LIBLTE_RRC_BCCH_DLSCH_MSG_STRUC
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_dlsch_msg(LIBLTE_RRC_MSG_STRUCT            *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_dlsch_msg(LIBLTE_MSG_STRUCT                *msg,
                                                    LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT *bcch_dlsch_msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -6503,7 +6521,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_dlsch_msg(LIBLTE_RRC_MSG_STRUCT        
     Document Reference: 36.331 v10.0.0 Section 6.2.1
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_pcch_msg(LIBLTE_RRC_PCCH_MSG_STRUCT *pcch_msg,
-                                           LIBLTE_RRC_MSG_STRUCT      *msg)
+                                           LIBLTE_MSG_STRUCT          *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -6523,7 +6541,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_pcch_msg(LIBLTE_RRC_PCCH_MSG_STRUCT *pcch_msg,
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_pcch_msg(LIBLTE_RRC_MSG_STRUCT      *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_pcch_msg(LIBLTE_MSG_STRUCT          *msg,
                                              LIBLTE_RRC_PCCH_MSG_STRUCT *pcch_msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;

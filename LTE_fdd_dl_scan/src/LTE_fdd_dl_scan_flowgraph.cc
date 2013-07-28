@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     02/26/2013    Ben Wojtowicz    Created file
+    07/21/2013    Ben Wojtowicz    Added support for HackRF Jawbreaker
 
 *******************************************************************************/
 
@@ -103,9 +104,11 @@ bool LTE_fdd_dl_scan_flowgraph::is_started(void)
 }
 LTE_FDD_DL_SCAN_STATUS_ENUM LTE_fdd_dl_scan_flowgraph::start(uint16 dl_earfcn)
 {
-    boost::mutex::scoped_lock    lock(start_mutex);
-    LTE_fdd_dl_scan_interface   *interface = LTE_fdd_dl_scan_interface::get_instance();
-    LTE_FDD_DL_SCAN_STATUS_ENUM  err = LTE_FDD_DL_SCAN_STATUS_FAIL;
+    boost::mutex::scoped_lock     lock(start_mutex);
+    LTE_fdd_dl_scan_interface    *interface     = LTE_fdd_dl_scan_interface::get_instance();
+    LTE_FDD_DL_SCAN_STATUS_ENUM   err           = LTE_FDD_DL_SCAN_STATUS_FAIL;
+    LTE_FDD_DL_SCAN_HW_TYPE_ENUM  hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_UNKNOWN;
+    std::vector<double>           range;
 
     if(!started)
     {
@@ -116,10 +119,31 @@ LTE_FDD_DL_SCAN_STATUS_ENUM LTE_fdd_dl_scan_flowgraph::start(uint16 dl_earfcn)
         if(NULL == samp_src.get())
         {
             samp_src = osmosdr_make_source_c();
+            if(0 != samp_src->get_num_channels())
+            {
+                range = samp_src->get_sample_rates().values();
+                if(range[range.size()-1] == 20000000)
+                {
+                    hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_HACKRF;
+                }else if(range[range.size()-1] == 2400000){
+                    hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_RTL_SDR;
+                }
+            }
         }
         if(NULL == state_machine.get())
         {
-            state_machine = LTE_fdd_dl_scan_make_state_machine();
+            switch(hardware_type)
+            {
+            case LTE_FDD_DL_SCAN_HW_TYPE_HACKRF:
+                state_machine = LTE_fdd_dl_scan_make_state_machine(15360000);
+                break;
+            case LTE_FDD_DL_SCAN_HW_TYPE_UNKNOWN:
+            default:
+                printf("Unknown hardware, treating like RTL-SDR\n");
+            case LTE_FDD_DL_SCAN_HW_TYPE_RTL_SDR:
+                state_machine = LTE_fdd_dl_scan_make_state_machine(1920000);
+                break;
+            }
         }
 
         if(NULL != top_block.get() &&
@@ -128,8 +152,22 @@ LTE_FDD_DL_SCAN_STATUS_ENUM LTE_fdd_dl_scan_flowgraph::start(uint16 dl_earfcn)
         {
             if(0 != samp_src->get_num_channels())
             {
-                samp_src->set_sample_rate(1920000);
-                samp_src->set_gain_mode(true);
+                switch(hardware_type)
+                {
+                case LTE_FDD_DL_SCAN_HW_TYPE_HACKRF:
+                    samp_src->set_sample_rate(15360000);
+                    samp_src->set_gain_mode(false);
+                    samp_src->set_gain(14);
+                    samp_src->set_dc_offset_mode(osmosdr_source_c::DCOffsetAutomatic);
+                    break;
+                case LTE_FDD_DL_SCAN_HW_TYPE_UNKNOWN:
+                default:
+                    printf("Unknown hardware, treating like RTL-SDR\n");
+                case LTE_FDD_DL_SCAN_HW_TYPE_RTL_SDR:
+                    samp_src->set_sample_rate(1920000);
+                    samp_src->set_gain_mode(true);
+                    break;
+                }
                 samp_src->set_center_freq(liblte_interface_dl_earfcn_to_frequency(dl_earfcn));
                 top_block->connect(samp_src, 0, state_machine, 0);
                 if(0 == pthread_create(&start_thread, NULL, &run_thread, this))

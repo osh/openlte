@@ -23,7 +23,7 @@
 ########################################################################
 cmake_minimum_required(VERSION 2.6)
 project(openLTE CXX C)
-set(openLTE_version 0.8.2)
+set(openLTE_version 0.8.3)
 enable_testing()
 
 #select the release build type by default to get optimization flags
@@ -89,6 +89,7 @@ find_package(Gruel)
 find_package(GnuradioCore)
 find_package(GnuradioOsmosdr)
 find_package(Rtlsdr)
+find_package(HackRf)
 
 if(NOT GRUEL_FOUND)
     message(FATAL_ERROR "Gruel required to compile openLTE")
@@ -99,11 +100,15 @@ if(NOT GNURADIO_CORE_FOUND)
 endif()
 
 if(NOT GNURADIO_OSMOSDR_FOUND)
-    message(FATAL_ERROR "GnuRadio Osmosdr required to compile openLTE")
+    message(FATAL_ERROR "GnuRadio Osmosdr required to compile openLTE (sdr.osmocom.org/trac/)")
 endif()
 
 if(NOT RTLSDR_FOUND)
-    message(FATAL_ERROR "Rtlsdr required to compile openLTE")
+    message(FATAL_ERROR "Rtlsdr required to compile openLTE (sdr.osmocom.org/trac/wiki/rtl-sdr)")
+endif()
+
+if(NOT HACKRF_FOUND)
+    message(FATAL_ERROR "HackRf required to compile openLTE (github.com/mossmann/hackrf/wiki)")
 endif()
 
 ########################################################################

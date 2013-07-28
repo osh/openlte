@@ -66,6 +66,8 @@
                                    get_subframe_and_ce.
     03/17/2013    Ben Wojtowicz    Moved to single float version of fftw.
     07/03/2013    Ben Wojtowicz    Fixed two indexing bugs.
+    07/21/2013    Ben Wojtowicz    Added routines for determining TBS, MCS,
+                                   N_prb, and N_cce.
 
 *******************************************************************************/
 
@@ -74,6 +76,7 @@
 *******************************************************************************/
 
 #include "liblte_phy.h"
+#include "liblte_mac.h"
 #include <math.h>
 
 /*******************************************************************************
@@ -2444,8 +2447,8 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
                 }
             }
             // Add the DCIs to the search space, FIXME: only handling alloc[0]
-            if(LIBLTE_PHY_SI_RNTI == pdcch->alloc[0].rnti ||
-               LIBLTE_PHY_P_RNTI  == pdcch->alloc[0].rnti)
+            if(LIBLTE_MAC_SI_RNTI == pdcch->alloc[0].rnti ||
+               LIBLTE_MAC_P_RNTI  == pdcch->alloc[0].rnti)
             {
                 // Add to the common search space, using aggregation level of 8
                 for(p=0; p<N_ant; p++)
@@ -3149,7 +3152,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                (LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
                                                      phy_struct->pdcch_descramb_bits,
                                                      N_bits,
-                                                     LIBLTE_PHY_SI_RNTI,
+                                                     LIBLTE_MAC_SI_RNTI,
                                                      1,
                                                      0,
                                                      phy_struct->pdcch_dci,
@@ -3158,7 +3161,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                 LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
                                                      phy_struct->pdcch_descramb_bits,
                                                      N_bits,
-                                                     LIBLTE_PHY_P_RNTI,
+                                                     LIBLTE_MAC_P_RNTI,
                                                      1,
                                                      0,
                                                      phy_struct->pdcch_dci,
@@ -3167,8 +3170,8 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                 LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
                                                      phy_struct->pdcch_descramb_bits,
                                                      N_bits,
-                                                     LIBLTE_PHY_RA_RNTI_START,
-                                                     LIBLTE_PHY_RA_RNTI_END - LIBLTE_PHY_RA_RNTI_START + 1,
+                                                     LIBLTE_MAC_RA_RNTI_START,
+                                                     LIBLTE_MAC_RA_RNTI_END - LIBLTE_MAC_RA_RNTI_START + 1,
                                                      0,
                                                      phy_struct->pdcch_dci,
                                                      dci_1a_size,
@@ -3187,7 +3190,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                (LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
                                                      phy_struct->pdcch_descramb_bits,
                                                      N_bits,
-                                                     LIBLTE_PHY_SI_RNTI,
+                                                     LIBLTE_MAC_SI_RNTI,
                                                      1,
                                                      0,
                                                      phy_struct->pdcch_dci,
@@ -3196,7 +3199,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                 LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
                                                      phy_struct->pdcch_descramb_bits,
                                                      N_bits,
-                                                     LIBLTE_PHY_P_RNTI,
+                                                     LIBLTE_MAC_P_RNTI,
                                                      1,
                                                      0,
                                                      phy_struct->pdcch_dci,
@@ -3205,8 +3208,8 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                 LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
                                                      phy_struct->pdcch_descramb_bits,
                                                      N_bits,
-                                                     LIBLTE_PHY_RA_RNTI_START,
-                                                     LIBLTE_PHY_RA_RNTI_END - LIBLTE_PHY_RA_RNTI_START + 1,
+                                                     LIBLTE_MAC_RA_RNTI_START,
+                                                     LIBLTE_MAC_RA_RNTI_END - LIBLTE_MAC_RA_RNTI_START + 1,
                                                      0,
                                                      phy_struct->pdcch_dci,
                                                      dci_1c_size,
@@ -3267,7 +3270,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                (LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
                                                      phy_struct->pdcch_descramb_bits,
                                                      N_bits,
-                                                     LIBLTE_PHY_SI_RNTI,
+                                                     LIBLTE_MAC_SI_RNTI,
                                                      1,
                                                      0,
                                                      phy_struct->pdcch_dci,
@@ -3276,7 +3279,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                 LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
                                                      phy_struct->pdcch_descramb_bits,
                                                      N_bits,
-                                                     LIBLTE_PHY_P_RNTI,
+                                                     LIBLTE_MAC_P_RNTI,
                                                      1,
                                                      0,
                                                      phy_struct->pdcch_dci,
@@ -3285,8 +3288,8 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                 LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
                                                      phy_struct->pdcch_descramb_bits,
                                                      N_bits,
-                                                     LIBLTE_PHY_RA_RNTI_START,
-                                                     LIBLTE_PHY_RA_RNTI_END - LIBLTE_PHY_RA_RNTI_START + 1,
+                                                     LIBLTE_MAC_RA_RNTI_START,
+                                                     LIBLTE_MAC_RA_RNTI_END - LIBLTE_MAC_RA_RNTI_START + 1,
                                                      0,
                                                      phy_struct->pdcch_dci,
                                                      dci_1a_size,
@@ -3305,7 +3308,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                (LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
                                                      phy_struct->pdcch_descramb_bits,
                                                      N_bits,
-                                                     LIBLTE_PHY_SI_RNTI,
+                                                     LIBLTE_MAC_SI_RNTI,
                                                      1,
                                                      0,
                                                      phy_struct->pdcch_dci,
@@ -3314,7 +3317,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                 LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
                                                      phy_struct->pdcch_descramb_bits,
                                                      N_bits,
-                                                     LIBLTE_PHY_P_RNTI,
+                                                     LIBLTE_MAC_P_RNTI,
                                                      1,
                                                      0,
                                                      phy_struct->pdcch_dci,
@@ -3323,8 +3326,8 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                 LIBLTE_SUCCESS == dci_channel_decode(phy_struct,
                                                      phy_struct->pdcch_descramb_bits,
                                                      N_bits,
-                                                     LIBLTE_PHY_RA_RNTI_START,
-                                                     LIBLTE_PHY_RA_RNTI_END - LIBLTE_PHY_RA_RNTI_START + 1,
+                                                     LIBLTE_MAC_RA_RNTI_START,
+                                                     LIBLTE_MAC_RA_RNTI_END - LIBLTE_MAC_RA_RNTI_START + 1,
                                                      0,
                                                      phy_struct->pdcch_dci,
                                                      dci_1c_size,
@@ -4401,17 +4404,18 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
 }
 
 /*********************************************************************
-    Name: liblte_phy_get_tbs_mcs_and_n_prb_for_si
+    Name: liblte_phy_get_tbs_mcs_and_n_prb_for_dl
 
     Description: Determines the transport block size, modulation and
                  coding scheme, and the number of PRBs needed to send
-                 a certain number of bits for SI
+                 the specified number of DL bits
 
     Document Reference: 3GPP TS 36.213 v10.3.0 section 7.1.7
 *********************************************************************/
-LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_si(uint32  N_bits,
+LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_dl(uint32  N_bits,
                                                           uint32  N_subframe,
                                                           uint32  N_rb_dl,
+                                                          uint16  rnti,
                                                           uint32 *tbs,
                                                           uint8  *mcs,
                                                           uint32 *N_prb)
@@ -4425,38 +4429,97 @@ LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_si(uint32  N_bits,
        mcs   != NULL &&
        N_prb != NULL)
     {
-        // Choose N_prb == 2 to give the largest possible tbs
-        N_prb_tmp = 2;
-        for(i=0; i<27; i++)
+        if(LIBLTE_MAC_SI_RNTI == rnti)
         {
-            if(N_bits < TBS_71721[i][N_prb_tmp])
+            // Choose N_prb == 2 to give the largest possible tbs
+            N_prb_tmp = 2;
+            for(i=0; i<27; i++)
             {
-                *tbs = TBS_71721[i][N_prb_tmp];
-                *mcs = i;
-                break;
+                if(N_bits < TBS_71721[i][N_prb_tmp])
+                {
+                    *tbs = TBS_71721[i][N_prb_tmp];
+                    *mcs = i;
+                    break;
+                }
             }
-        }
 
-        // Targetting a coding rate of 4:1
-        N_bits_per_prb = get_num_bits_in_prb(N_subframe, 3, N_rb_dl/2, N_rb_dl, 2, LIBLTE_PHY_MODULATION_TYPE_QPSK);
-        *N_prb         = 0;
-        for(i=0; i<N_rb_dl; i++)
-        {
-            if((*tbs * 4) < (N_bits_per_prb*i))
+            // Targetting a coding rate of 4:1
+            N_bits_per_prb = get_num_bits_in_prb(N_subframe, 3, N_rb_dl/2, N_rb_dl, 2, LIBLTE_PHY_MODULATION_TYPE_QPSK);
+            *N_prb         = 0;
+            for(i=0; i<N_rb_dl; i++)
             {
-                *N_prb = i;
-                break;
+                if((*tbs * 4) < (N_bits_per_prb*i))
+                {
+                    *N_prb = i;
+                    break;
+                }
             }
-        }
-        if(*N_prb == 0)
-        {
-            *N_prb = N_rb_dl;
-        }
+            if(*N_prb == 0)
+            {
+                *N_prb = N_rb_dl;
+            }
 
-        err = LIBLTE_SUCCESS;
+            err = LIBLTE_SUCCESS;
+        }else{
+            // FIXME: Add support for other RNTIs
+        }
     }
 
     return(err);
+}
+
+/*********************************************************************
+    Name: liblte_phy_get_tbs_and_n_prb_for_dl
+
+    Description: Determines the transport block size and the number of
+                 PRBs needed to send the specified number of DL bits
+                 according to the specified modulation and coding
+                 scheme
+
+    Document Reference: 3GPP TS 36.213 v10.3.0 section 7.1.7
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_phy_get_tbs_and_n_prb_for_dl(uint32  N_bits,
+                                                      uint32  N_subframe,
+                                                      uint32  N_rb_dl,
+                                                      uint16  rnti,
+                                                      uint8   mcs,
+                                                      uint32 *tbs,
+                                                      uint32 *N_prb)
+{
+    // FIXME
+}
+
+/*********************************************************************
+    Name: liblte_phy_get_tbs_mcs_and_n_prb_for_ul
+
+    Description: Determines the transport block size, modulation and
+                 coding scheme, and the number of PRBs needed to send
+                 the specified number of UL bits
+
+    Document Reference: 3GPP TS 36.213 v10.3.0 section 7.1.7
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_ul(uint32  N_bits,
+                                                          uint32  N_rb_ul,
+                                                          uint32 *tbs,
+                                                          uint8  *mcs,
+                                                          uint32 *N_prb)
+{
+    // FIXME
+}
+
+/*********************************************************************
+    Name: liblte_phy_get_n_cce
+
+    Description: Determines the number of control channel elements
+                 available in the specified subframe
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 6.8.1
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_phy_get_n_cce(LIBLTE_PHY_STRUCT *phy_struct,
+                                       uint32             N_subframe,
+                                       uint32            *N_cce)
+{
+    // FIXME
 }
 
 /*******************************************************************************
@@ -9065,8 +9128,8 @@ void dci_1a_pack(LIBLTE_PHY_ALLOCATION_STRUCT    *alloc,
     // Format 0/1A flag is set to 1A
     phy_value_2_bits(DCI_0_1A_FLAG_1A, &dci, 1);
 
-    if(LIBLTE_PHY_SI_RNTI == alloc->rnti ||
-       LIBLTE_PHY_P_RNTI  == alloc->rnti)
+    if(LIBLTE_MAC_SI_RNTI == alloc->rnti ||
+       LIBLTE_MAC_P_RNTI  == alloc->rnti)
     {
         // FIXME: Only supporting localized VRBs
         phy_value_2_bits(DCI_VRB_TYPE_LOCALIZED, &dci, 1);
@@ -9170,10 +9233,10 @@ void dci_1a_unpack(uint8                           *in_bits,
         return;
     }
 
-    if(LIBLTE_PHY_SI_RNTI        == rnti ||
-       LIBLTE_PHY_P_RNTI         == rnti ||
-       (LIBLTE_PHY_RA_RNTI_START <= rnti &&
-        LIBLTE_PHY_RA_RNTI_END   >= rnti))
+    if(LIBLTE_MAC_SI_RNTI        == rnti ||
+       LIBLTE_MAC_P_RNTI         == rnti ||
+       (LIBLTE_MAC_RA_RNTI_START <= rnti &&
+        LIBLTE_MAC_RA_RNTI_END   >= rnti))
     {
         // Determine if RIV uses local or distributed VRBs
         loc_or_dist = phy_bits_2_value(&dci, 1);

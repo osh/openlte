@@ -42,6 +42,7 @@
                                    of the same channel, and fixed a frequency
                                    offset correction bug.
     03/17/2013    Ben Wojtowicz    Added paging message printing.
+    07/21/2013    Ben Wojtowicz    Fixed a bug and using the latest LTE library.
 
 *******************************************************************************/
 
@@ -50,6 +51,7 @@
 *******************************************************************************/
 
 #include "LTE_fdd_dl_fs_samp_buf.h"
+#include "liblte_mac.h"
 #include "liblte_mcc_mnc_list.h"
 #include "gr_io_signature.h"
 
@@ -448,7 +450,7 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                                      rrc_msg.msg,
                                                                      &rrc_msg.N_bits))
                 {
-                    if(LIBLTE_PHY_SI_RNTI == pdcch.alloc[0].rnti &&
+                    if(LIBLTE_MAC_SI_RNTI == pdcch.alloc[0].rnti &&
                        LIBLTE_SUCCESS     == liblte_rrc_unpack_bcch_dlsch_msg(&rrc_msg,
                                                                               &bcch_dlsch_msg))
                     {
@@ -485,7 +487,7 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                 break;
                             }
                         }
-                    }else if(LIBLTE_PHY_P_RNTI == pdcch.alloc[0].rnti){
+                    }else if(LIBLTE_MAC_P_RNTI == pdcch.alloc[0].rnti){
                         for(i=0; i<8; i++)
                         {
                             if(rrc_msg.msg[i] != liblte_rrc_test_fill[i])
@@ -1181,7 +1183,7 @@ void LTE_fdd_dl_fs_samp_buf::print_sib3(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3_STRUCT 
         {
             printf("\t\t%-40s=%17ddBm\n", "P Max", sib3->p_max);
         }
-        if(true == sib3->s_intra_search)
+        if(true == sib3->s_intra_search_present)
         {
             printf("\t\t%-40s=%18udB\n", "S-Intra Search", sib3->s_intra_search);
         }

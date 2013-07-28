@@ -32,6 +32,7 @@
                                    a file size bug
     01/07/2013    Ben Wojtowicz    Moved from automake to cmake
     03/03/2013    Ben Wojtowicz    Added support for a test load.
+    07/21/2013    Ben Wojtowicz    Using the latest LTE library.
 
 *******************************************************************************/
 
@@ -114,7 +115,7 @@ private:
 
     // LTE parameters
     void recreate_sched_info(void);
-    LIBLTE_RRC_MSG_STRUCT                    rrc_msg;
+    LIBLTE_MSG_STRUCT                        rrc_msg;
     LIBLTE_RRC_MIB_STRUCT                    mib;
     LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT         bcch_dlsch_msg;
     LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT  sib1;

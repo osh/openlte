@@ -35,6 +35,7 @@
                                    mappings for all enums, carrier_freqs_geran,
                                    SIB5, SIB6, SIB7, and paging packing and
                                    unpacking.
+    07/21/2013    Ben Wojtowicz    Using the common msg structure.
 
 *******************************************************************************/
 
@@ -51,18 +52,10 @@
                               DEFINES
 *******************************************************************************/
 
-// FIXME: These were chosen arbitrarily
-#define LIBLTE_RRC_MAX_IE_SIZE  4096
-#define LIBLTE_RRC_MAX_MSG_SIZE 4096
 
 /*******************************************************************************
                               TYPEDEFS
 *******************************************************************************/
-
-typedef struct{
-    uint32 N_bits;
-    uint8  msg[LIBLTE_RRC_MAX_MSG_SIZE];
-}LIBLTE_RRC_MSG_STRUCT;
 
 static const uint8 liblte_rrc_test_fill[8] = {1,0,1,0,0,1,0,1};
 
@@ -3819,8 +3812,8 @@ typedef struct{
 }LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_block_type_1_msg(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *sib1,
-                                                            LIBLTE_RRC_MSG_STRUCT                   *msg);
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_1_msg(LIBLTE_RRC_MSG_STRUCT                   *msg,
+                                                            LIBLTE_MSG_STRUCT                       *msg);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_1_msg(LIBLTE_MSG_STRUCT                       *msg,
                                                               LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *sib1,
                                                               uint32                                  *N_bits_used);
 
@@ -3875,8 +3868,8 @@ typedef struct{
 }LIBLTE_RRC_SYS_INFO_MSG_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_msg(LIBLTE_RRC_SYS_INFO_MSG_STRUCT *sibs,
-                                               LIBLTE_RRC_MSG_STRUCT          *msg);
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_msg(LIBLTE_RRC_MSG_STRUCT          *msg,
+                                               LIBLTE_MSG_STRUCT              *msg);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_msg(LIBLTE_MSG_STRUCT              *msg,
                                                  LIBLTE_RRC_SYS_INFO_MSG_STRUCT *sibs);
 
 /*********************************************************************
@@ -3950,8 +3943,8 @@ typedef struct{
 }LIBLTE_RRC_PAGING_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_rrc_pack_paging_msg(LIBLTE_RRC_PAGING_STRUCT *page,
-                                             LIBLTE_RRC_MSG_STRUCT    *msg);
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_paging_msg(LIBLTE_RRC_MSG_STRUCT    *msg,
+                                             LIBLTE_MSG_STRUCT        *msg);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_paging_msg(LIBLTE_MSG_STRUCT        *msg,
                                                LIBLTE_RRC_PAGING_STRUCT *page);
 
 /*********************************************************************
@@ -3985,8 +3978,8 @@ typedef struct{
 }LIBLTE_RRC_MIB_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_rrc_pack_bcch_bch_msg(LIBLTE_RRC_MIB_STRUCT *mib,
-                                               LIBLTE_RRC_MSG_STRUCT *msg);
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_bch_msg(LIBLTE_RRC_MSG_STRUCT *msg,
+                                               LIBLTE_MSG_STRUCT     *msg);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_bch_msg(LIBLTE_MSG_STRUCT     *msg,
                                                  LIBLTE_RRC_MIB_STRUCT *mib);
 
 /*********************************************************************
@@ -4004,8 +3997,8 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_bch_msg(LIBLTE_RRC_MSG_STRUCT *msg,
 typedef LIBLTE_RRC_SYS_INFO_MSG_STRUCT LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_rrc_pack_bcch_dlsch_msg(LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT *bcch_dlsch_msg,
-                                                 LIBLTE_RRC_MSG_STRUCT            *msg);
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_dlsch_msg(LIBLTE_RRC_MSG_STRUCT            *msg,
+                                                 LIBLTE_MSG_STRUCT                *msg);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_dlsch_msg(LIBLTE_MSG_STRUCT                *msg,
                                                    LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT *bcch_dlsch_msg);
 
 /*********************************************************************
@@ -4023,8 +4016,8 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_dlsch_msg(LIBLTE_RRC_MSG_STRUCT        
 typedef LIBLTE_RRC_PAGING_STRUCT LIBLTE_RRC_PCCH_MSG_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_rrc_pack_pcch_msg(LIBLTE_RRC_PCCH_MSG_STRUCT *pcch_msg,
-                                           LIBLTE_RRC_MSG_STRUCT      *msg);
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_pcch_msg(LIBLTE_RRC_MSG_STRUCT      *msg,
+                                           LIBLTE_MSG_STRUCT          *msg);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_pcch_msg(LIBLTE_MSG_STRUCT          *msg,
                                              LIBLTE_RRC_PCCH_MSG_STRUCT *pcch_msg);
 
 #endif /* __LIBLTE_RRC_H__ */

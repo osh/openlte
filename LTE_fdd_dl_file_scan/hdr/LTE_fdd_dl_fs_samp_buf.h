@@ -35,6 +35,7 @@
                                    libraries, and fixed a bug that allowed
                                    multiple decodes of the same channel.
     03/17/2013    Ben Wojtowicz    Added paging message printing.
+    07/21/2013    Ben Wojtowicz    Using the latest LTE library.
 
 *******************************************************************************/
 
@@ -101,7 +102,7 @@ private:
     // LTE library
     LIBLTE_PHY_STRUCT                *phy_struct;
     LIBLTE_PHY_COARSE_TIMING_STRUCT   timing_struct;
-    LIBLTE_RRC_MSG_STRUCT             rrc_msg;
+    LIBLTE_MSG_STRUCT                 rrc_msg;
     LIBLTE_RRC_MIB_STRUCT             mib;
     LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT  bcch_dlsch_msg;
     LIBLTE_RRC_PCCH_MSG_STRUCT        pcch_msg;

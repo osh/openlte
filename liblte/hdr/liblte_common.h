@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2012 Ben Wojtowicz
+    Copyright 2012-2013 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -24,6 +24,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     02/26/2012    Ben Wojtowicz    Created file.
+    07/21/2013    Ben Wojtowicz    Added a common message structure.
 
 *******************************************************************************/
 
@@ -41,6 +42,8 @@
                               DEFINES
 *******************************************************************************/
 
+// FIXME: This was chosen arbitrarily
+#define LIBLTE_MAX_MSG_SIZE 4096
 
 /*******************************************************************************
                               TYPEDEFS
@@ -52,6 +55,11 @@ typedef enum{
     LIBLTE_ERROR_DECODE_FAIL,
     LIBLTE_ERROR_INVALID_CRC,
 }LIBLTE_ERROR_ENUM;
+
+typedef struct{
+    uint32 N_bits;
+    uint8  msg[LIBLTE_MAX_MSG_SIZE];
+}LIBLTE_MSG_STRUCT;
 
 /*******************************************************************************
                               DECLARATIONS

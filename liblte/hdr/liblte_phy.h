@@ -45,6 +45,8 @@
                                    pre-permutation of PDCCH encoding, and
                                    integer frequency offset detection.
     03/17/2013    Ben Wojtowicz    Moved to single float version of fftw.
+    07/21/2013    Ben Wojtowicz    Added routines for determining TBS, MCS,
+                                   N_prb, and N_cce.
 
 *******************************************************************************/
 
@@ -79,21 +81,25 @@
 #define LIBLTE_PHY_N_RB_DL_20MHZ  100
 #define LIBLTE_PHY_N_RB_DL_MAX    110
 
+// N_rb_ul
+#define LIBLTE_PHY_N_RB_UL_1_4MHZ 6
+#define LIBLTE_PHY_N_RB_UL_3MHZ   15
+#define LIBLTE_PHY_N_RB_UL_5MHZ   25
+#define LIBLTE_PHY_N_RB_UL_10MHZ  50
+#define LIBLTE_PHY_N_RB_UL_15MHZ  75
+#define LIBLTE_PHY_N_RB_UL_20MHZ  100
+#define LIBLTE_PHY_N_RB_UL_MAX    110
+
 // N_sc_rb
 #define LIBLTE_PHY_N_SC_RB_NORMAL_CP 12
 // FIXME: Add Extended CP
-
-// RNTI
-#define LIBLTE_PHY_RA_RNTI_START 0x0001
-#define LIBLTE_PHY_RA_RNTI_END   0x003C
-#define LIBLTE_PHY_P_RNTI        0xFFFE
-#define LIBLTE_PHY_SI_RNTI       0xFFFF
 
 // N_ant
 #define LIBLTE_PHY_N_ANT_MAX 4
 
 // Symbol, CP, Slot, Subframe, and Frame timing
 // Generic
+#define LIBLTE_PHY_SFN_MAX           1023
 #define LIBLTE_PHY_N_SLOTS_PER_SUBFR 2
 #define LIBLTE_PHY_N_SUBFR_PER_FRAME 10
 // 20MHz and 15MHz bandwidths
@@ -471,7 +477,7 @@ LIBLTE_ERROR_ENUM liblte_phy_update_n_rb_dl(LIBLTE_PHY_STRUCT *phy_struct,
 // Enums
 // Structs
 typedef struct{
-    LIBLTE_RRC_MSG_STRUCT           msg;
+    LIBLTE_MSG_STRUCT               msg;
     LIBLTE_PHY_PRE_CODER_TYPE_ENUM  pre_coder_type;
     LIBLTE_PHY_MODULATION_TYPE_ENUM mod_type;
     uint32                          tbs;
@@ -774,11 +780,11 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
                                                  LIBLTE_PHY_SUBFRAME_STRUCT *subframe);
 
 /*********************************************************************
-    Name: liblte_phy_get_tbs_mcs_and_n_prb_for_si
+    Name: liblte_phy_get_tbs_mcs_and_n_prb_for_dl
 
     Description: Determines the transport block size, modulation and
                  coding scheme, and the number of PRBs needed to send
-                 a certain number of bits for SI
+                 the specified number of DL bits
 
     Document Reference: 3GPP TS 36.213 v10.3.0 section 7.1.7
 *********************************************************************/
@@ -786,11 +792,69 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
 // Enums
 // Structs
 // Functions
-LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_si(uint32  N_bits,
+LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_dl(uint32  N_bits,
                                                           uint32  N_subframe,
                                                           uint32  N_rb_dl,
+                                                          uint16  rnti,
                                                           uint32 *tbs,
                                                           uint8  *mcs,
                                                           uint32 *N_prb);
+
+/*********************************************************************
+    Name: liblte_phy_get_tbs_and_n_prb_for_dl
+
+    Description: Determines the transport block size and the number of
+                 PRBs needed to send the specified number of DL bits
+                 according to the specified modulation and coding
+                 scheme
+
+    Document Reference: 3GPP TS 36.213 v10.3.0 section 7.1.7
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_phy_get_tbs_and_n_prb_for_dl(uint32  N_bits,
+                                                      uint32  N_subframe,
+                                                      uint32  N_rb_dl,
+                                                      uint16  rnti,
+                                                      uint8   mcs,
+                                                      uint32 *tbs,
+                                                      uint32 *N_prb);
+
+/*********************************************************************
+    Name: liblte_phy_get_tbs_mcs_and_n_prb_for_ul
+
+    Description: Determines the transport block size, modulation and
+                 coding scheme, and the number of PRBs needed to send
+                 the specified number of UL bits
+
+    Document Reference: 3GPP TS 36.213 v10.3.0 section 7.1.7
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_ul(uint32  N_bits,
+                                                          uint32  N_rb_ul,
+                                                          uint32 *tbs,
+                                                          uint8  *mcs,
+                                                          uint32 *N_prb);
+
+/*********************************************************************
+    Name: liblte_phy_get_n_cce
+
+    Description: Determines the number of control channel elements
+                 available in the specified subframe
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 6.8.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_phy_get_n_cce(LIBLTE_PHY_STRUCT *phy_struct,
+                                       uint32             N_subframe,
+                                       uint32            *N_cce);
 
 #endif /* __LIBLTE_PHY_H__ */

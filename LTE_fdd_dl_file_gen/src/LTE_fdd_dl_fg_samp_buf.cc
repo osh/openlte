@@ -36,6 +36,7 @@
     01/07/2013    Ben Wojtowicz    Moved from automake to cmake
     03/03/2013    Ben Wojtowicz    Added support for a test load and using the
                                    latest libraries.
+    07/21/2013    Ben Wojtowicz    Using the latest LTE library.
 
 *******************************************************************************/
 
@@ -44,6 +45,7 @@
 *******************************************************************************/
 
 #include "LTE_fdd_dl_fg_samp_buf.h"
+#include "liblte_mac.h"
 #include "gr_io_signature.h"
 #include <errno.h>
 
@@ -344,9 +346,10 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                     memcpy(&bcch_dlsch_msg.sibs[0].sib, &sib1, sizeof(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT));
                     liblte_rrc_pack_bcch_dlsch_msg(&bcch_dlsch_msg,
                                                    &pdcch.alloc[pdcch.N_alloc].msg);
-                    liblte_phy_get_tbs_mcs_and_n_prb_for_si(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
+                    liblte_phy_get_tbs_mcs_and_n_prb_for_dl(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
                                                             subframe.num,
                                                             N_rb_dl,
+                                                            LIBLTE_MAC_SI_RNTI,
                                                             &pdcch.alloc[pdcch.N_alloc].tbs,
                                                             &pdcch.alloc[pdcch.N_alloc].mcs,
                                                             &pdcch.alloc[pdcch.N_alloc].N_prb);
@@ -354,7 +357,7 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                     pdcch.alloc[pdcch.N_alloc].mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
                     pdcch.alloc[pdcch.N_alloc].rv_idx         = (uint32)ceilf(1.5 * ((sfn / 2) % 4)) % 4; //36.321 section 5.3.1
                     pdcch.alloc[pdcch.N_alloc].N_codewords    = 1;
-                    pdcch.alloc[pdcch.N_alloc].rnti           = LIBLTE_PHY_SI_RNTI;
+                    pdcch.alloc[pdcch.N_alloc].rnti           = LIBLTE_MAC_SI_RNTI;
                     pdcch.alloc[pdcch.N_alloc].tx_mode        = sib_tx_mode;
                     pdcch.N_alloc++;
                 }
@@ -390,9 +393,10 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                     }
                     liblte_rrc_pack_bcch_dlsch_msg(&bcch_dlsch_msg,
                                                    &pdcch.alloc[pdcch.N_alloc].msg);
-                    liblte_phy_get_tbs_mcs_and_n_prb_for_si(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
+                    liblte_phy_get_tbs_mcs_and_n_prb_for_dl(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
                                                             subframe.num,
                                                             N_rb_dl,
+                                                            LIBLTE_MAC_SI_RNTI,
                                                             &pdcch.alloc[pdcch.N_alloc].tbs,
                                                             &pdcch.alloc[pdcch.N_alloc].mcs,
                                                             &pdcch.alloc[pdcch.N_alloc].N_prb);
@@ -400,7 +404,7 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                     pdcch.alloc[pdcch.N_alloc].mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
                     pdcch.alloc[pdcch.N_alloc].rv_idx         = 0; //36.321 section 5.3.1
                     pdcch.alloc[pdcch.N_alloc].N_codewords    = 1;
-                    pdcch.alloc[pdcch.N_alloc].rnti           = LIBLTE_PHY_SI_RNTI;
+                    pdcch.alloc[pdcch.N_alloc].rnti           = LIBLTE_MAC_SI_RNTI;
                     pdcch.alloc[pdcch.N_alloc].tx_mode        = sib_tx_mode;
                     pdcch.N_alloc++;
                 }
@@ -435,9 +439,10 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                         {
                             liblte_rrc_pack_bcch_dlsch_msg(&bcch_dlsch_msg,
                                                            &pdcch.alloc[pdcch.N_alloc].msg);
-                            liblte_phy_get_tbs_mcs_and_n_prb_for_si(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
+                            liblte_phy_get_tbs_mcs_and_n_prb_for_dl(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
                                                                     subframe.num,
                                                                     N_rb_dl,
+                                                                    LIBLTE_MAC_SI_RNTI,
                                                                     &pdcch.alloc[pdcch.N_alloc].tbs,
                                                                     &pdcch.alloc[pdcch.N_alloc].mcs,
                                                                     &pdcch.alloc[pdcch.N_alloc].N_prb);
@@ -445,7 +450,7 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                             pdcch.alloc[pdcch.N_alloc].mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
                             pdcch.alloc[pdcch.N_alloc].rv_idx         = 0; //36.321 section 5.3.1
                             pdcch.alloc[pdcch.N_alloc].N_codewords    = 1;
-                            pdcch.alloc[pdcch.N_alloc].rnti           = LIBLTE_PHY_SI_RNTI;
+                            pdcch.alloc[pdcch.N_alloc].rnti           = LIBLTE_MAC_SI_RNTI;
                             pdcch.alloc[pdcch.N_alloc].tx_mode        = sib_tx_mode;
                             pdcch.N_alloc++;
                         }
@@ -456,18 +461,20 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                 {
                     pdcch.alloc[0].msg.N_bits = 0;
                     pdcch.alloc[0].N_prb      = 0;
-                    liblte_phy_get_tbs_mcs_and_n_prb_for_si(1480,
+                    liblte_phy_get_tbs_mcs_and_n_prb_for_dl(1480,
                                                             subframe.num,
                                                             N_rb_dl,
+                                                            LIBLTE_MAC_P_RNTI,
                                                             &pdcch.alloc[0].tbs,
                                                             &pdcch.alloc[0].mcs,
                                                             &max_N_prb);
                     while(pdcch.alloc[0].N_prb < (uint32)((float)(max_N_prb*percent_load)/100.0))
                     {
                         pdcch.alloc[0].msg.N_bits += 8;
-                        liblte_phy_get_tbs_mcs_and_n_prb_for_si(pdcch.alloc[0].msg.N_bits,
+                        liblte_phy_get_tbs_mcs_and_n_prb_for_dl(pdcch.alloc[0].msg.N_bits,
                                                                 subframe.num,
                                                                 N_rb_dl,
+                                                                LIBLTE_MAC_P_RNTI,
                                                                 &pdcch.alloc[0].tbs,
                                                                 &pdcch.alloc[0].mcs,
                                                                 &pdcch.alloc[0].N_prb);
@@ -481,7 +488,7 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                         pdcch.alloc[0].pre_coder_type = LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY;
                         pdcch.alloc[0].mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
                         pdcch.alloc[0].N_codewords    = 1;
-                        pdcch.alloc[0].rnti           = LIBLTE_PHY_P_RNTI;
+                        pdcch.alloc[0].rnti           = LIBLTE_MAC_P_RNTI;
                         pdcch.alloc[0].tx_mode        = sib_tx_mode;
                         pdcch.N_alloc++;
                     }
@@ -787,6 +794,7 @@ void LTE_fdd_dl_fg_samp_buf::print_config(void)
            sib3_present);
     if(sib3_present)
     {
+        // Q_HYST
         printf("\t%-30s = %10s, values = [0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24]\n",
                Q_HYST_PARAM,
                liblte_rrc_q_hyst_text[sib3.q_hyst]);
@@ -798,6 +806,7 @@ void LTE_fdd_dl_fg_samp_buf::print_config(void)
            sib4_present);
     if(sib4_present)
     {
+        // NEIGH_CELL_LIST
         printf("\t%-30s = %10d:",
                NEIGH_CELL_LIST_PARAM,
                sib4.intra_freq_neigh_cell_list_size);
@@ -816,6 +825,7 @@ void LTE_fdd_dl_fg_samp_buf::print_config(void)
            sib8_present);
     if(sib8_present)
     {
+        // SEARCH_WIN_SIZE
         printf("\t%-30s = %10d, bounds = [0, 15]\n",
                SEARCH_WIN_SIZE_PARAM,
                sib8.search_win_size);

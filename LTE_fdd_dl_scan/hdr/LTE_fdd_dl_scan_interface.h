@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     02/26/2013    Ben Wojtowicz    Created file
+    07/21/2013    Ben Wojtowicz    Added support for decoding SIBs.
 
 *******************************************************************************/
 
@@ -62,27 +63,8 @@ typedef enum{
 }LTE_FDD_DL_SCAN_STATUS_ENUM;
 
 typedef struct{
-    LIBLTE_RRC_MIB_STRUCT                   mib;
-    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT sib1;
-    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT sib2;
-    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3_STRUCT sib3;
-    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4_STRUCT sib4;
-    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_5_STRUCT sib5;
-    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_6_STRUCT sib6;
-    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7_STRUCT sib7;
-    LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT sib8;
-    float                                   freq_offset;
-    uint32                                  N_id_cell;
-    uint32                                  sfn;
-    uint8                                   N_ant;
-    bool                                    sib1_present;
-    bool                                    sib2_present;
-    bool                                    sib3_present;
-    bool                                    sib4_present;
-    bool                                    sib5_present;
-    bool                                    sib6_present;
-    bool                                    sib7_present;
-    bool                                    sib8_present;
+    float  freq_offset;
+    uint32 N_id_cell;
 }LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT;
 
 /*******************************************************************************
@@ -102,7 +84,16 @@ public:
     void stop_ctrl_port(void);
     void send_ctrl_msg(std::string msg);
     void send_ctrl_info_msg(std::string msg);
-    void send_ctrl_channel_found_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data);
+    void send_ctrl_channel_found_begin_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data, LIBLTE_RRC_MIB_STRUCT *mib, uint32 sfn, uint8 N_ant);
+    void send_ctrl_sib1_decoded_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data, LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *sib1, uint32 sfn);
+    void send_ctrl_sib2_decoded_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data, LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_2_STRUCT *sib2, uint32 sfn);
+    void send_ctrl_sib3_decoded_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data, LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_3_STRUCT *sib3, uint32 sfn);
+    void send_ctrl_sib4_decoded_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data, LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_4_STRUCT *sib4, uint32 sfn);
+    void send_ctrl_sib5_decoded_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data, LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_5_STRUCT *sib5, uint32 sfn);
+    void send_ctrl_sib6_decoded_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data, LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_6_STRUCT *sib6, uint32 sfn);
+    void send_ctrl_sib7_decoded_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data, LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7_STRUCT *sib7, uint32 sfn);
+    void send_ctrl_sib8_decoded_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data, LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT *sib8, uint32 sfn);
+    void send_ctrl_channel_found_end_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data);
     void send_ctrl_channel_not_found_msg(void);
     void send_ctrl_status_msg(LTE_FDD_DL_SCAN_STATUS_ENUM status, std::string msg);
     static void handle_ctrl_msg(std::string msg);

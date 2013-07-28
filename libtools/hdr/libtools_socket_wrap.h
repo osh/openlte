@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     02/26/2013    Ben Wojtowicz    Created file
+    07/21/2013    Ben Wojtowicz    Added enum to text conversion
 
 *******************************************************************************/
 
@@ -61,7 +62,13 @@ typedef enum{
     LIBTOOLS_SOCKET_WRAP_ERROR_SOCKET,
     LIBTOOLS_SOCKET_WRAP_ERROR_PTHREAD,
     LIBTOOLS_SOCKET_WRAP_ERROR_WRITE_FAIL,
+    LIBTOOLS_SOCKET_WRAP_ERROR_N_ITEMS,
 }LIBTOOLS_SOCKET_WRAP_ERROR_ENUM;
+static const char libtools_socket_wrap_error_text[LIBTOOLS_SOCKET_WRAP_ERROR_N_ITEMS][20] = {"Success",
+                                                                                             "Invalid Inputs",
+                                                                                             "Socket",
+                                                                                             "PThread",
+                                                                                             "Write Fail"};
 
 typedef enum{
     LIBTOOLS_SOCKET_WRAP_TYPE_SERVER = 0,
