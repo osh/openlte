@@ -17,17 +17,14 @@
 
 *******************************************************************************
 
-    File: LTE_fdd_dl_scan_flowgraph.cc
+    File: LTE_file_recorder_flowgraph.cc
 
-    Description: Contains all the implementations for the LTE FDD DL Scanner
+    Description: Contains all the implementations for the LTE file recorder
                  gnuradio flowgraph.
 
     Revision History
     ----------    -------------    --------------------------------------------
-    02/26/2013    Ben Wojtowicz    Created file
-    07/21/2013    Ben Wojtowicz    Added support for HackRF Jawbreaker
-    08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7 and added a
-                                   new hardware discovery mechanism.
+    08/26/2013    Ben Wojtowicz    Created file
 
 *******************************************************************************/
 
@@ -35,7 +32,7 @@
                               INCLUDES
 *******************************************************************************/
 
-#include "LTE_fdd_dl_scan_flowgraph.h"
+#include "LTE_file_recorder_flowgraph.h"
 
 /*******************************************************************************
                               DEFINES
@@ -51,26 +48,26 @@
                               GLOBAL VARIABLES
 *******************************************************************************/
 
-LTE_fdd_dl_scan_flowgraph* LTE_fdd_dl_scan_flowgraph::instance = NULL;
-boost::mutex               flowgraph_instance_mutex;
+LTE_file_recorder_flowgraph* LTE_file_recorder_flowgraph::instance = NULL;
+boost::mutex                 flowgraph_instance_mutex;
 
 /*******************************************************************************
                               CLASS IMPLEMENTATIONS
 *******************************************************************************/
 
 // Singleton
-LTE_fdd_dl_scan_flowgraph* LTE_fdd_dl_scan_flowgraph::get_instance(void)
+LTE_file_recorder_flowgraph* LTE_file_recorder_flowgraph::get_instance(void)
 {
     boost::mutex::scoped_lock lock(flowgraph_instance_mutex);
 
     if(NULL == instance)
     {
-        instance = new LTE_fdd_dl_scan_flowgraph();
+        instance = new LTE_file_recorder_flowgraph();
     }
 
     return(instance);
 }
-void LTE_fdd_dl_scan_flowgraph::cleanup(void)
+void LTE_file_recorder_flowgraph::cleanup(void)
 {
     boost::mutex::scoped_lock lock(flowgraph_instance_mutex);
 
@@ -82,11 +79,11 @@ void LTE_fdd_dl_scan_flowgraph::cleanup(void)
 }
 
 // Constructor/Destructor
-LTE_fdd_dl_scan_flowgraph::LTE_fdd_dl_scan_flowgraph()
+LTE_file_recorder_flowgraph::LTE_file_recorder_flowgraph()
 {
     started = false;
 }
-LTE_fdd_dl_scan_flowgraph::~LTE_fdd_dl_scan_flowgraph()
+LTE_file_recorder_flowgraph::~LTE_file_recorder_flowgraph()
 {
     boost::mutex::scoped_lock lock(start_mutex);
 
@@ -98,18 +95,20 @@ LTE_fdd_dl_scan_flowgraph::~LTE_fdd_dl_scan_flowgraph()
 }
 
 // Flowgraph
-bool LTE_fdd_dl_scan_flowgraph::is_started(void)
+bool LTE_file_recorder_flowgraph::is_started(void)
 {
     boost::mutex::scoped_lock lock(start_mutex);
 
     return(started);
 }
-LTE_FDD_DL_SCAN_STATUS_ENUM LTE_fdd_dl_scan_flowgraph::start(uint16 dl_earfcn)
+LTE_FILE_RECORDER_STATUS_ENUM LTE_file_recorder_flowgraph::start(uint16      earfcn,
+                                                                 std::string file_name)
 {
-    boost::mutex::scoped_lock     lock(start_mutex);
-    LTE_fdd_dl_scan_interface    *interface     = LTE_fdd_dl_scan_interface::get_instance();
-    LTE_FDD_DL_SCAN_STATUS_ENUM   err           = LTE_FDD_DL_SCAN_STATUS_FAIL;
-    LTE_FDD_DL_SCAN_HW_TYPE_ENUM  hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_UNKNOWN;
+    boost::mutex::scoped_lock       lock(start_mutex);
+    LTE_file_recorder_interface    *interface     = LTE_file_recorder_interface::get_instance();
+    LTE_FILE_RECORDER_STATUS_ENUM   err           = LTE_FILE_RECORDER_STATUS_FAIL;
+    LTE_FILE_RECORDER_HW_TYPE_ENUM  hardware_type = LTE_FILE_RECORDER_HW_TYPE_UNKNOWN;
+    uint32                          freq;
 
     if(!started)
     {
@@ -122,62 +121,57 @@ LTE_FDD_DL_SCAN_STATUS_ENUM LTE_fdd_dl_scan_flowgraph::start(uint16 dl_earfcn)
             osmosdr::source::sptr tmp_src1 = osmosdr::source::make("hackrf");
             if(0 != tmp_src1->get_sample_rates().size())
             {
-                hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_HACKRF;
+                hardware_type = LTE_FILE_RECORDER_HW_TYPE_HACKRF;
                 samp_src      = tmp_src1;
             }else{
                 osmosdr::source::sptr tmp_src2 = osmosdr::source::make("rtl=0");
                 if(0 != tmp_src2->get_sample_rates().size())
                 {
-                    hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_RTL_SDR;
+                    hardware_type = LTE_FILE_RECORDER_HW_TYPE_RTL_SDR;
                     samp_src      = tmp_src2;
                 }else{
                     samp_src = osmosdr::source::make();
                 }
             }
         }
-        if(NULL == state_machine.get())
+        if(NULL == file_sink.get())
         {
-            switch(hardware_type)
-            {
-            case LTE_FDD_DL_SCAN_HW_TYPE_HACKRF:
-                state_machine = LTE_fdd_dl_scan_make_state_machine(15360000);
-                break;
-            case LTE_FDD_DL_SCAN_HW_TYPE_UNKNOWN:
-            default:
-                printf("Unknown hardware, treating like RTL-SDR\n");
-            case LTE_FDD_DL_SCAN_HW_TYPE_RTL_SDR:
-                state_machine = LTE_fdd_dl_scan_make_state_machine(1920000);
-                break;
-            }
+            file_sink = gr::blocks::file_sink::make(sizeof(gr_complex), file_name.c_str());
         }
 
         if(NULL != top_block.get() &&
            NULL != samp_src.get()  &&
-           NULL != state_machine.get())
+           NULL != file_sink.get())
         {
             if(0 != samp_src->get_num_channels())
             {
                 switch(hardware_type)
                 {
-                case LTE_FDD_DL_SCAN_HW_TYPE_HACKRF:
+                case LTE_FILE_RECORDER_HW_TYPE_HACKRF:
                     samp_src->set_sample_rate(15360000);
                     samp_src->set_gain_mode(false);
                     samp_src->set_gain(14);
                     samp_src->set_dc_offset_mode(osmosdr::source::DCOffsetAutomatic);
                     break;
-                case LTE_FDD_DL_SCAN_HW_TYPE_UNKNOWN:
+                case LTE_FILE_RECORDER_HW_TYPE_UNKNOWN:
                 default:
                     printf("Unknown hardware, treating like RTL-SDR\n");
-                case LTE_FDD_DL_SCAN_HW_TYPE_RTL_SDR:
+                case LTE_FILE_RECORDER_HW_TYPE_RTL_SDR:
                     samp_src->set_sample_rate(1920000);
                     samp_src->set_gain_mode(true);
                     break;
                 }
-                samp_src->set_center_freq(liblte_interface_dl_earfcn_to_frequency(dl_earfcn));
-                top_block->connect(samp_src, 0, state_machine, 0);
+
+                freq = liblte_interface_dl_earfcn_to_frequency(earfcn);
+                if(freq == 0)
+                {
+                    freq = liblte_interface_ul_earfcn_to_frequency(earfcn);
+                }
+                samp_src->set_center_freq(freq);
+                top_block->connect(samp_src, 0, file_sink, 0);
                 if(0 == pthread_create(&start_thread, NULL, &run_thread, this))
                 {
-                    err     = LTE_FDD_DL_SCAN_STATUS_OK;
+                    err     = LTE_FILE_RECORDER_STATUS_OK;
                     started = true;
                 }else{
                     top_block->disconnect_all();
@@ -190,40 +184,31 @@ LTE_FDD_DL_SCAN_STATUS_ENUM LTE_fdd_dl_scan_flowgraph::start(uint16 dl_earfcn)
 
     return(err);
 }
-LTE_FDD_DL_SCAN_STATUS_ENUM LTE_fdd_dl_scan_flowgraph::stop(void)
+LTE_FILE_RECORDER_STATUS_ENUM LTE_file_recorder_flowgraph::stop(void)
 {
-    boost::mutex::scoped_lock   lock(start_mutex);
-    LTE_FDD_DL_SCAN_STATUS_ENUM err = LTE_FDD_DL_SCAN_STATUS_FAIL;
+    boost::mutex::scoped_lock     lock(start_mutex);
+    LTE_FILE_RECORDER_STATUS_ENUM err = LTE_FILE_RECORDER_STATUS_FAIL;
 
     if(started)
     {
         started = false;
         start_mutex.unlock();
+        top_block->stop();
         sleep(1); // Wait for state_machine to exit
         pthread_cancel(start_thread);
         pthread_join(start_thread, NULL);
         top_block.reset();
-        err = LTE_FDD_DL_SCAN_STATUS_OK;
+        err = LTE_FILE_RECORDER_STATUS_OK;
     }
 
     return(err);
 }
-void LTE_fdd_dl_scan_flowgraph::update_center_freq(uint16 dl_earfcn)
-{
-    boost::mutex::scoped_lock lock(start_mutex);
-
-    if(started &&
-       NULL != samp_src.get())
-    {
-        samp_src->set_center_freq(liblte_interface_dl_earfcn_to_frequency(dl_earfcn));
-    }
-}
 
 // Run
-void* LTE_fdd_dl_scan_flowgraph::run_thread(void *inputs)
+void* LTE_file_recorder_flowgraph::run_thread(void *inputs)
 {
-    LTE_fdd_dl_scan_interface *interface = LTE_fdd_dl_scan_interface::get_instance();
-    LTE_fdd_dl_scan_flowgraph *flowgraph = (LTE_fdd_dl_scan_flowgraph *)inputs;
+    LTE_file_recorder_interface *interface = LTE_file_recorder_interface::get_instance();
+    LTE_file_recorder_flowgraph *flowgraph = (LTE_file_recorder_flowgraph *)inputs;
 
     // Disable cancellation while running, state machine block will respond to the stop
     if(0 == pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, NULL))
@@ -242,13 +227,11 @@ void* LTE_fdd_dl_scan_flowgraph::run_thread(void *inputs)
     flowgraph->top_block->stop();
     flowgraph->top_block->disconnect_all();
     flowgraph->samp_src.reset();
-    flowgraph->state_machine.reset();
+    flowgraph->file_sink.reset();
 
     // Wait for flowgraph to be stopped
     if(flowgraph->is_started())
     {
-        interface->send_ctrl_info_msg("scan_done");
-
         while(flowgraph->is_started())
         {
             sleep(1);

@@ -17,36 +17,34 @@
 
 *******************************************************************************
 
-    File: LTE_fdd_dl_scan_flowgraph.h
+    File: LTE_file_recorder_interface.h
 
-    Description: Contains all the definitions for the LTE FDD DL Scanner
-                 gnuradio flowgraph.
+    Description: Contains all the definitions for the LTE file recorder
+                 interface.
 
     Revision History
     ----------    -------------    --------------------------------------------
-    02/26/2013    Ben Wojtowicz    Created file
-    07/21/2013    Ben Wojtowicz    Added support for HackRF Jawbreaker
-    08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7.
+    08/26/2013    Ben Wojtowicz    Created file
 
 *******************************************************************************/
 
-#ifndef __LTE_FDD_DL_SCAN_FLOWGRAPH_H__
-#define __LTE_FDD_DL_SCAN_FLOWGRAPH_H__
+#ifndef __LTE_FILE_RECORDER_INTERFACE_H__
+#define __LTE_FILE_RECORDER_INTERFACE_H__
 
 /*******************************************************************************
                               INCLUDES
 *******************************************************************************/
 
-#include "LTE_fdd_dl_scan_interface.h"
-#include "LTE_fdd_dl_scan_state_machine.h"
+#include "liblte_interface.h"
+#include "libtools_socket_wrap.h"
 #include <boost/thread/mutex.hpp>
-#include <gnuradio/top_block.h>
-#include <osmosdr/source.h>
+#include <string>
 
 /*******************************************************************************
                               DEFINES
 *******************************************************************************/
 
+#define LTE_FILE_RECORDER_DEFAULT_CTRL_PORT 25000
 
 /*******************************************************************************
                               FORWARD DECLARATIONS
@@ -58,45 +56,63 @@
 *******************************************************************************/
 
 typedef enum{
-    LTE_FDD_DL_SCAN_HW_TYPE_RTL_SDR = 0,
-    LTE_FDD_DL_SCAN_HW_TYPE_HACKRF,
-    LTE_FDD_DL_SCAN_HW_TYPE_UNKNOWN,
-}LTE_FDD_DL_SCAN_HW_TYPE_ENUM;
+    LTE_FILE_RECORDER_STATUS_OK = 0,
+    LTE_FILE_RECORDER_STATUS_FAIL,
+}LTE_FILE_RECORDER_STATUS_ENUM;
 
 /*******************************************************************************
                               CLASS DECLARATIONS
 *******************************************************************************/
 
-class LTE_fdd_dl_scan_flowgraph
+class LTE_file_recorder_interface
 {
 public:
     // Singleton
-    static LTE_fdd_dl_scan_flowgraph* get_instance(void);
+    static LTE_file_recorder_interface* get_instance(void);
     static void cleanup(void);
 
-    // Flowgraph
-    bool is_started(void);
-    LTE_FDD_DL_SCAN_STATUS_ENUM start(uint16 dl_earfcn);
-    LTE_FDD_DL_SCAN_STATUS_ENUM stop(void);
-    void update_center_freq(uint16 dl_earfcn);
+    // Communication
+    void set_ctrl_port(int16 port);
+    void start_ctrl_port(void);
+    void stop_ctrl_port(void);
+    void send_ctrl_msg(std::string msg);
+    void send_ctrl_info_msg(std::string msg);
+    void send_ctrl_status_msg(LTE_FILE_RECORDER_STATUS_ENUM status, std::string msg);
+    static void handle_ctrl_msg(std::string msg);
+    static void handle_ctrl_connect(void);
+    static void handle_ctrl_disconnect(void);
+    static void handle_ctrl_error(LIBTOOLS_SOCKET_WRAP_ERROR_ENUM err);
+    boost::mutex          ctrl_mutex;
+    libtools_socket_wrap *ctrl_socket;
+    int16                 ctrl_port;
+    static bool           ctrl_connected;
+
+    // Get/Set
+    bool get_shutdown(void);
 
 private:
     // Singleton
-    static LTE_fdd_dl_scan_flowgraph *instance;
-    LTE_fdd_dl_scan_flowgraph();
-    ~LTE_fdd_dl_scan_flowgraph();
+    static LTE_file_recorder_interface *instance;
+    LTE_file_recorder_interface();
+    ~LTE_file_recorder_interface();
 
-    // Run
-    static void* run_thread(void *inputs);
+    // Handlers
+    void handle_read(std::string msg);
+    void handle_write(std::string msg);
+    void handle_start(void);
+    void handle_stop(void);
+    void handle_help(void);
+
+    // Reads/Writes
+    void read_earfcn(void);
+    void write_earfcn(std::string earfcn_str);
+    void read_file_name(void);
+    void write_file_name(std::string file_name_str);
 
     // Variables
-    gr::top_block_sptr                 top_block;
-    osmosdr::source::sptr              samp_src;
-    LTE_fdd_dl_scan_state_machine_sptr state_machine;
-
-    pthread_t    start_thread;
-    boost::mutex start_mutex;
-    bool         started;
+    std::string file_name;
+    uint16      earfcn;
+    bool        shutdown;
 };
 
-#endif /* __LTE_FDD_DL_SCAN_FLOWGRAPH_H__ */
+#endif /* __LTE_FILE_RECORDER_INTERFACE_H__ */

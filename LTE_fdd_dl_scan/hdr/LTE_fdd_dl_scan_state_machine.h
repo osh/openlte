@@ -26,6 +26,7 @@
     ----------    -------------    --------------------------------------------
     02/26/2013    Ben Wojtowicz    Created file
     07/21/2013    Ben Wojtowicz    Added support for multiple sample rates
+    08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7.
 
 *******************************************************************************/
 
@@ -38,9 +39,9 @@
 
 #include "LTE_fdd_dl_scan_state_machine_api.h"
 #include "LTE_fdd_dl_scan_interface.h"
-#include "gr_sync_block.h"
 #include "liblte_phy.h"
 #include "liblte_rrc.h"
+#include <gnuradio/sync_block.h>
 
 /*******************************************************************************
                               DEFINES
@@ -74,7 +75,7 @@ typedef enum{
 *******************************************************************************/
 
 LTE_FDD_DL_SCAN_STATE_MACHINE_API LTE_fdd_dl_scan_state_machine_sptr LTE_fdd_dl_scan_make_state_machine (uint32 samp_rate);
-class LTE_FDD_DL_SCAN_STATE_MACHINE_API LTE_fdd_dl_scan_state_machine : public gr_sync_block
+class LTE_FDD_DL_SCAN_STATE_MACHINE_API LTE_fdd_dl_scan_state_machine : public gr::sync_block
 {
 public:
     ~LTE_fdd_dl_scan_state_machine();

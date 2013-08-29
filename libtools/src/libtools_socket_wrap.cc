@@ -25,6 +25,8 @@
     Revision History
     ----------    -------------    --------------------------------------------
     02/26/2013    Ben Wojtowicz    Created file
+    08/26/2013    Ben Wojtowicz    Moved to using select with a timeout for
+                                   socket management.
 
 *******************************************************************************/
 
@@ -156,6 +158,7 @@ libtools_socket_wrap::~libtools_socket_wrap()
         socket_state = LIBTOOLS_SOCKET_WRAP_STATE_DISCONNECTED;
     }
     close(sock);
+    sleep(1);
     pthread_cancel(socket_thread);
     pthread_join(socket_thread, NULL);
 }
@@ -184,12 +187,16 @@ void* libtools_socket_wrap::server_thread(void *inputs)
 {
     std::string                                msg;
     LIBTOOLS_SOCKET_WRAP_THREAD_INPUTS_STRUCT *act_inputs = (LIBTOOLS_SOCKET_WRAP_THREAD_INPUTS_STRUCT *)inputs;
+    fd_set                                     fds;
+    fd_set                                     tmp_fds;
+    struct timeval                             select_timeout;
     struct sockaddr_in                         c_addr;
     socklen_t                                  c_addr_len;
-    LIBTOOLS_SOCKET_WRAP_STATE_ENUM            state;
     int32                                      sock_fd;
     int32                                      nbytes;
     int32                                      ready;
+    int32                                      fd_max;
+    int32                                      i;
     char                                       read_buf[LINE_MAX];
 
     // Put socket into listen mode
@@ -199,80 +206,121 @@ void* libtools_socket_wrap::server_thread(void *inputs)
         return(NULL);
     }
 
+    // Setup the FD_SETs
+    FD_ZERO(&fds);
+    FD_ZERO(&tmp_fds);
+    FD_SET(act_inputs->sock, &fds);
+    fd_max = act_inputs->sock;
+
     while(1)
     {
-        // Accept connections
-        sock_fd = accept(act_inputs->sock, (struct sockaddr *)&c_addr, &c_addr_len);
-        if(0 > sock_fd)
-        {
-            act_inputs->handle_error(LIBTOOLS_SOCKET_WRAP_ERROR_SOCKET);
-            return(NULL);
-        }
-
-        // Finish setup
-        act_inputs->socket_wrap->socket_mutex.lock();
-        act_inputs->socket_wrap->socket_fd    = sock_fd;
-        act_inputs->socket_wrap->socket_state = LIBTOOLS_SOCKET_WRAP_STATE_CONNECTED;
-        act_inputs->socket_wrap->socket_mutex.unlock();
-        act_inputs->handle_connect();
-
-        // Read loop
-        while(1)
-        {
-            memset(read_buf, '\0', LINE_MAX);
-            nbytes = read(sock_fd, read_buf, LINE_MAX);
-
-            // Check the return
-            if(-1 == nbytes)
-            {
-                state = LIBTOOLS_SOCKET_WRAP_STATE_CLOSED;
-                break;
-            }else if(0 == nbytes){
-                state = LIBTOOLS_SOCKET_WRAP_STATE_THREADED;
-                break;
-            }else{
-                // Remove \n
-                read_buf[strlen(read_buf)-1] = '\0';
-                msg = read_buf;
-
-                // Check for \r
-                if(std::string::npos != msg.find("\r"))
-                {
-                    // Remove \r
-                    read_buf[strlen(read_buf)-1] = '\0';
-                    msg = read_buf;
-
-                    // Process input
-                    while(std::string::npos != msg.find("\n"))
-                    {
-                        act_inputs->handle_msg(msg.substr(0, msg.find("\n")-1));
-                        msg = msg.substr(msg.find("\n")+1, std::string::npos);
-                    }
-                    act_inputs->handle_msg(msg);
-                }else{
-                    // Process input
-                    while(std::string::npos != msg.find("\n"))
-                    {
-                        act_inputs->handle_msg(msg.substr(0, msg.find("\n")));
-                        msg = msg.substr(msg.find("\n")+1, std::string::npos);
-                    }
-                    act_inputs->handle_msg(msg);
-                }
-            }
-        }
-
-        if(LIBTOOLS_SOCKET_WRAP_STATE_CLOSED == state)
+        // Select on the fds to see if there is any new data
+        select_timeout.tv_sec  = 0;
+        select_timeout.tv_usec = 500000;
+        tmp_fds                = fds;
+        if(select(fd_max+1, &tmp_fds, NULL, NULL, &select_timeout) == -1)
         {
             break;
         }
-    }
 
-    act_inputs->socket_wrap->socket_mutex.lock();
-    act_inputs->socket_wrap->socket_state = state;
-    act_inputs->socket_wrap->socket_mutex.unlock();
+        for(i=0; i<=fd_max; i++)
+        {
+            if(FD_ISSET(i, &tmp_fds))
+            {
+                if(i == act_inputs->sock)
+                {
+                    // Accept connections
+                    act_inputs->socket_wrap->socket_mutex.lock();
+                    if(act_inputs->socket_wrap->socket_state != LIBTOOLS_SOCKET_WRAP_STATE_CONNECTED)
+                    {
+                        sock_fd = accept(act_inputs->sock, (struct sockaddr *)&c_addr, &c_addr_len);
+                        if(0 > sock_fd)
+                        {
+                            act_inputs->handle_error(LIBTOOLS_SOCKET_WRAP_ERROR_SOCKET);
+                            return(NULL);
+                        }
+
+                        // Finish setup
+                        act_inputs->socket_wrap->socket_fd    = sock_fd;
+                        act_inputs->socket_wrap->socket_state = LIBTOOLS_SOCKET_WRAP_STATE_CONNECTED;
+                        act_inputs->socket_wrap->socket_mutex.unlock();
+                        act_inputs->handle_connect();
+
+                        // Finish FD_SET setup
+                        FD_SET(sock_fd, &fds);
+                        if(sock_fd > fd_max)
+                        {
+                            fd_max = sock_fd;
+                        }
+                    }
+                    act_inputs->socket_wrap->socket_mutex.unlock();
+                }else{
+                    memset(read_buf, '\0', LINE_MAX);
+                    nbytes = read(sock_fd, read_buf, LINE_MAX);
+
+                    // Check the return
+                    if(-1 == nbytes)
+                    {
+                        act_inputs->socket_wrap->socket_mutex.lock();
+                        if(LIBTOOLS_SOCKET_WRAP_STATE_CONNECTED == act_inputs->socket_wrap->socket_state)
+                        {
+                            act_inputs->socket_wrap->socket_mutex.unlock();
+                            act_inputs->handle_disconnect();
+                        }
+                        act_inputs->socket_wrap->socket_mutex.unlock();
+                        act_inputs->socket_wrap->socket_mutex.lock();
+                        act_inputs->socket_wrap->socket_state = LIBTOOLS_SOCKET_WRAP_STATE_CLOSED;
+                        act_inputs->socket_wrap->socket_mutex.unlock();
+                        break;
+                    }else if(0 == nbytes){
+                        act_inputs->socket_wrap->socket_mutex.lock();
+                        if(LIBTOOLS_SOCKET_WRAP_STATE_CONNECTED == act_inputs->socket_wrap->socket_state)
+                        {
+                            act_inputs->socket_wrap->socket_mutex.unlock();
+                            act_inputs->handle_disconnect();
+                        }
+                        act_inputs->socket_wrap->socket_mutex.unlock();
+                        act_inputs->socket_wrap->socket_mutex.lock();
+                        act_inputs->socket_wrap->socket_state = LIBTOOLS_SOCKET_WRAP_STATE_THREADED;
+                        act_inputs->socket_wrap->socket_mutex.unlock();
+                        break;
+                    }else{
+                        // Remove \n
+                        read_buf[strlen(read_buf)-1] = '\0';
+                        msg = read_buf;
+
+                        // Check for \r
+                        if(std::string::npos != msg.find("\r"))
+                        {
+                            // Remove \r
+                            read_buf[strlen(read_buf)-1] = '\0';
+                            msg = read_buf;
+
+                            // Process input
+                            while(std::string::npos != msg.find("\n"))
+                            {
+                                act_inputs->handle_msg(msg.substr(0, msg.find("\n")-1));
+                                msg = msg.substr(msg.find("\n")+1, std::string::npos);
+                            }
+                            act_inputs->handle_msg(msg);
+                        }else{
+                            // Process input
+                            while(std::string::npos != msg.find("\n"))
+                            {
+                                act_inputs->handle_msg(msg.substr(0, msg.find("\n")));
+                                msg = msg.substr(msg.find("\n")+1, std::string::npos);
+                            }
+                            act_inputs->handle_msg(msg);
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     // Close
     close(sock_fd);
+    close(act_inputs->sock);
 
     return(NULL);
 }

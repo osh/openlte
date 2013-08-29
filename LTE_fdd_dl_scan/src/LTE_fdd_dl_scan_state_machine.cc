@@ -27,6 +27,8 @@
     02/26/2013    Ben Wojtowicz    Created file
     07/21/2013    Ben Wojtowicz    Added support for multiple sample rates and
                                    for decoding SIBs.
+    08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7 and the
+                                   latest LTE library.
 
 *******************************************************************************/
 
@@ -37,7 +39,7 @@
 #include "LTE_fdd_dl_scan_state_machine.h"
 #include "LTE_fdd_dl_scan_flowgraph.h"
 #include "liblte_mac.h"
-#include "gr_io_signature.h"
+#include <gnuradio/io_signature.h>
 
 /*******************************************************************************
                               DEFINES
@@ -96,9 +98,9 @@ LTE_fdd_dl_scan_state_machine_sptr LTE_fdd_dl_scan_make_state_machine(uint32 sam
 }
 
 LTE_fdd_dl_scan_state_machine::LTE_fdd_dl_scan_state_machine(uint32 samp_rate)
-    : gr_sync_block ("LTE_fdd_dl_scan_state_machine",
-                     gr_make_io_signature(MIN_IN,  MAX_IN,  sizeof(gr_complex)),
-                     gr_make_io_signature(MIN_OUT, MAX_OUT, sizeof(gr_complex)))
+    : gr::sync_block ("LTE_fdd_dl_scan_state_machine",
+                      gr::io_signature::make(MIN_IN,  MAX_IN,  sizeof(gr_complex)),
+                      gr::io_signature::make(MIN_OUT, MAX_OUT, sizeof(gr_complex)))
 {
     uint32 i;
 
@@ -111,7 +113,11 @@ LTE_fdd_dl_scan_state_machine::LTE_fdd_dl_scan_state_machine(uint32 samp_rate)
                         4,
                         LIBLTE_PHY_N_RB_DL_1_4MHZ,
                         LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                        liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1]);
+                        liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1],
+                        0,
+                        0,
+                        1,
+                        false);
         one_subframe_num_samps               = ONE_SUBFRAME_NUM_SAMPS_1_92MHZ;
         one_frame_num_samps                  = ONE_FRAME_NUM_SAMPS_1_92MHZ;
         freq_change_wait_num_samps           = FREQ_CHANGE_WAIT_NUM_SAMPS_1_92MHZ;
@@ -128,7 +134,11 @@ LTE_fdd_dl_scan_state_machine::LTE_fdd_dl_scan_state_machine(uint32 samp_rate)
                         4,
                         LIBLTE_PHY_N_RB_DL_10MHZ,
                         LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                        liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1]);
+                        liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1],
+                        0,
+                        0,
+                        1,
+                        false);
         one_subframe_num_samps               = ONE_SUBFRAME_NUM_SAMPS_15_36MHZ;
         one_frame_num_samps                  = ONE_FRAME_NUM_SAMPS_15_36MHZ;
         freq_change_wait_num_samps           = FREQ_CHANGE_WAIT_NUM_SAMPS_15_36MHZ;
@@ -229,11 +239,11 @@ int32 LTE_fdd_dl_scan_state_machine::work(int32                      ninput_item
             switch(state)
             {
             case LTE_FDD_DL_SCAN_STATE_MACHINE_STATE_COARSE_TIMING_SEARCH:
-                if(LIBLTE_SUCCESS == liblte_phy_find_coarse_timing_and_freq_offset(phy_struct,
-                                                                                   i_buf,
-                                                                                   q_buf,
-                                                                                   COARSE_TIMING_N_SLOTS,
-                                                                                   &timing_struct))
+                if(LIBLTE_SUCCESS == liblte_phy_dl_find_coarse_timing_and_freq_offset(phy_struct,
+                                                                                      i_buf,
+                                                                                      q_buf,
+                                                                                      COARSE_TIMING_N_SLOTS,
+                                                                                      &timing_struct))
                 {
                     if(corr_peak_idx < timing_struct.n_corr_peaks)
                     {
@@ -339,14 +349,14 @@ int32 LTE_fdd_dl_scan_state_machine::work(int32                      ninput_item
                 }
                 break;
             case LTE_FDD_DL_SCAN_STATE_MACHINE_STATE_BCH_DECODE:
-                if(LIBLTE_SUCCESS == liblte_phy_get_subframe_and_ce(phy_struct,
-                                                                    i_buf,
-                                                                    q_buf,
-                                                                    samp_buf_r_idx,
-                                                                    0,
-                                                                    chan_data.N_id_cell,
-                                                                    4,
-                                                                    &subframe) &&
+                if(LIBLTE_SUCCESS == liblte_phy_get_dl_subframe_and_ce(phy_struct,
+                                                                       i_buf,
+                                                                       q_buf,
+                                                                       samp_buf_r_idx,
+                                                                       0,
+                                                                       chan_data.N_id_cell,
+                                                                       4,
+                                                                       &subframe) &&
                    LIBLTE_SUCCESS == liblte_phy_bch_channel_decode(phy_struct,
                                                                    &subframe,
                                                                    chan_data.N_id_cell,
@@ -429,14 +439,14 @@ int32 LTE_fdd_dl_scan_state_machine::work(int32                      ninput_item
                 }
                 break;
             case LTE_FDD_DL_SCAN_STATE_MACHINE_STATE_PDSCH_DECODE_SIB1:
-                if(LIBLTE_SUCCESS == liblte_phy_get_subframe_and_ce(phy_struct,
-                                                                    i_buf,
-                                                                    q_buf,
-                                                                    samp_buf_r_idx,
-                                                                    5,
-                                                                    chan_data.N_id_cell,
-                                                                    N_ant,
-                                                                    &subframe) &&
+                if(LIBLTE_SUCCESS == liblte_phy_get_dl_subframe_and_ce(phy_struct,
+                                                                       i_buf,
+                                                                       q_buf,
+                                                                       samp_buf_r_idx,
+                                                                       5,
+                                                                       chan_data.N_id_cell,
+                                                                       N_ant,
+                                                                       &subframe) &&
                    LIBLTE_SUCCESS == liblte_phy_pdcch_channel_decode(phy_struct,
                                                                      &subframe,
                                                                      chan_data.N_id_cell,
@@ -486,14 +496,14 @@ int32 LTE_fdd_dl_scan_state_machine::work(int32                      ninput_item
                 }
                 break;
             case LTE_FDD_DL_SCAN_STATE_MACHINE_STATE_PDSCH_DECODE_SI_GENERIC:
-                if(LIBLTE_SUCCESS == liblte_phy_get_subframe_and_ce(phy_struct,
-                                                                    i_buf,
-                                                                    q_buf,
-                                                                    samp_buf_r_idx,
-                                                                    N_sfr,
-                                                                    chan_data.N_id_cell,
-                                                                    N_ant,
-                                                                    &subframe) &&
+                if(LIBLTE_SUCCESS == liblte_phy_get_dl_subframe_and_ce(phy_struct,
+                                                                       i_buf,
+                                                                       q_buf,
+                                                                       samp_buf_r_idx,
+                                                                       N_sfr,
+                                                                       chan_data.N_id_cell,
+                                                                       N_ant,
+                                                                       &subframe) &&
                    LIBLTE_SUCCESS == liblte_phy_pdcch_channel_decode(phy_struct,
                                                                      &subframe,
                                                                      chan_data.N_id_cell,

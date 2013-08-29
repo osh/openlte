@@ -43,6 +43,8 @@
                                    offset correction bug.
     03/17/2013    Ben Wojtowicz    Added paging message printing.
     07/21/2013    Ben Wojtowicz    Fixed a bug and using the latest LTE library.
+    08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7 and the
+                                   latest LTE library.
 
 *******************************************************************************/
 
@@ -53,7 +55,7 @@
 #include "LTE_fdd_dl_fs_samp_buf.h"
 #include "liblte_mac.h"
 #include "liblte_mcc_mnc_list.h"
-#include "gr_io_signature.h"
+#include <gnuradio/io_signature.h>
 
 /*******************************************************************************
                               DEFINES
@@ -95,9 +97,9 @@ LTE_fdd_dl_fs_samp_buf_sptr LTE_fdd_dl_fs_make_samp_buf()
 }
 
 LTE_fdd_dl_fs_samp_buf::LTE_fdd_dl_fs_samp_buf()
-    : gr_sync_block ("samp_buf",
-                     gr_make_io_signature(MIN_IN,  MAX_IN,  sizeof(int8)),
-                     gr_make_io_signature(MIN_OUT, MAX_OUT, sizeof(int8)))
+    : gr::sync_block ("samp_buf",
+                      gr::io_signature::make(MIN_IN,  MAX_IN,  sizeof(int8)),
+                      gr::io_signature::make(MIN_OUT, MAX_OUT, sizeof(int8)))
 {
     uint32 i;
 
@@ -108,7 +110,11 @@ LTE_fdd_dl_fs_samp_buf::LTE_fdd_dl_fs_samp_buf()
                     4,
                     LIBLTE_PHY_N_RB_DL_20MHZ,
                     LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                    liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1]);
+                    liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1],
+                    0,
+                    0,
+                    1,
+                    false);
 
     // Initialize the sample buffer
     i_buf           = (float *)malloc(LTE_FDD_DL_FS_SAMP_BUF_SIZE*sizeof(float));
@@ -224,11 +230,11 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
             switch(state)
             {
             case LTE_FDD_DL_FS_SAMP_BUF_STATE_COARSE_TIMING_SEARCH:
-                if(LIBLTE_SUCCESS == liblte_phy_find_coarse_timing_and_freq_offset(phy_struct,
-                                                                                   i_buf,
-                                                                                   q_buf,
-                                                                                   COARSE_TIMING_N_SLOTS,
-                                                                                   &timing_struct))
+                if(LIBLTE_SUCCESS == liblte_phy_dl_find_coarse_timing_and_freq_offset(phy_struct,
+                                                                                      i_buf,
+                                                                                      q_buf,
+                                                                                      COARSE_TIMING_N_SLOTS,
+                                                                                      &timing_struct))
                 {
                     if(corr_peak_idx < timing_struct.n_corr_peaks)
                     {
@@ -311,14 +317,14 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                 }
                 break;
             case LTE_FDD_DL_FS_SAMP_BUF_STATE_BCH_DECODE:
-                if(LIBLTE_SUCCESS == liblte_phy_get_subframe_and_ce(phy_struct,
-                                                                    i_buf,
-                                                                    q_buf,
-                                                                    samp_buf_r_idx,
-                                                                    0,
-                                                                    N_id_cell,
-                                                                    4,
-                                                                    &subframe) &&
+                if(LIBLTE_SUCCESS == liblte_phy_get_dl_subframe_and_ce(phy_struct,
+                                                                       i_buf,
+                                                                       q_buf,
+                                                                       samp_buf_r_idx,
+                                                                       0,
+                                                                       N_id_cell,
+                                                                       4,
+                                                                       &subframe) &&
                    LIBLTE_SUCCESS == liblte_phy_bch_channel_decode(phy_struct,
                                                                    &subframe,
                                                                    N_id_cell,
@@ -378,14 +384,14 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                 }
                 break;
             case LTE_FDD_DL_FS_SAMP_BUF_STATE_PDSCH_DECODE_SIB1:
-                if(LIBLTE_SUCCESS == liblte_phy_get_subframe_and_ce(phy_struct,
-                                                                    i_buf,
-                                                                    q_buf,
-                                                                    samp_buf_r_idx,
-                                                                    5,
-                                                                    N_id_cell,
-                                                                    N_ant,
-                                                                    &subframe) &&
+                if(LIBLTE_SUCCESS == liblte_phy_get_dl_subframe_and_ce(phy_struct,
+                                                                       i_buf,
+                                                                       q_buf,
+                                                                       samp_buf_r_idx,
+                                                                       5,
+                                                                       N_id_cell,
+                                                                       N_ant,
+                                                                       &subframe) &&
                    LIBLTE_SUCCESS == liblte_phy_pdcch_channel_decode(phy_struct,
                                                                      &subframe,
                                                                      N_id_cell,
@@ -424,14 +430,14 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                 }
                 break;
             case LTE_FDD_DL_FS_SAMP_BUF_STATE_PDSCH_DECODE_SI_GENERIC:
-                if(LIBLTE_SUCCESS == liblte_phy_get_subframe_and_ce(phy_struct,
-                                                                    i_buf,
-                                                                    q_buf,
-                                                                    samp_buf_r_idx,
-                                                                    N_sfr,
-                                                                    N_id_cell,
-                                                                    N_ant,
-                                                                    &subframe) &&
+                if(LIBLTE_SUCCESS == liblte_phy_get_dl_subframe_and_ce(phy_struct,
+                                                                       i_buf,
+                                                                       q_buf,
+                                                                       samp_buf_r_idx,
+                                                                       N_sfr,
+                                                                       N_id_cell,
+                                                                       N_ant,
+                                                                       &subframe) &&
                    LIBLTE_SUCCESS == liblte_phy_pdcch_channel_decode(phy_struct,
                                                                      &subframe,
                                                                      N_id_cell,

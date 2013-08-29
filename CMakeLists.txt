@@ -23,7 +23,7 @@
 ########################################################################
 cmake_minimum_required(VERSION 2.6)
 project(openLTE CXX C)
-set(openLTE_version 0.8.3)
+set(openLTE_version 0.9.0)
 enable_testing()
 
 #select the release build type by default to get optimization flags
@@ -47,6 +47,9 @@ endif()
 ########################################################################
 # Find boost
 ########################################################################
+SET(BOOST_REQUIRED_COMPONENTS
+    system
+)
 if(UNIX AND EXISTS "/usr/lib64")
     list(APPEND BOOST_LIBRARYDIR "/usr/lib64") #fedora 64-bit fix
 endif(UNIX AND EXISTS "/usr/lib64")
@@ -59,7 +62,7 @@ set(Boost_ADDITIONAL_VERSIONS
     "1.60.0" "1.60" "1.61.0" "1.61" "1.62.0" "1.62" "1.63.0" "1.63" "1.64.0" "1.64"
     "1.65.0" "1.65" "1.66.0" "1.66" "1.67.0" "1.67" "1.68.0" "1.68" "1.69.0" "1.69"
 )
-find_package(Boost "1.35")
+find_package(Boost "1.35" COMPONENTS ${BOOST_REQUIRED_COMPONENTS})
 
 if(NOT Boost_FOUND)
     message(FATAL_ERROR "Boost required to compile openLTE")
@@ -85,30 +88,26 @@ set(GRC_BLOCKS_DIR      ${GR_PKG_DATA_DIR}/grc/blocks)
 ########################################################################
 # Find gnuradio build dependencies
 ########################################################################
-find_package(Gruel)
-find_package(GnuradioCore)
+set(GR_REQUIRED_COMPONENTS RUNTIME BLOCKS PMT)
+find_package(Gnuradio "3.7.0")
 find_package(GnuradioOsmosdr)
 find_package(Rtlsdr)
 find_package(HackRf)
 
-if(NOT GRUEL_FOUND)
-    message(FATAL_ERROR "Gruel required to compile openLTE")
-endif()
-
-if(NOT GNURADIO_CORE_FOUND)
-    message(FATAL_ERROR "GnuRadio Core required to compile openLTE")
+if(NOT GNURADIO_RUNTIME_FOUND)
+    message(FATAL_ERROR "GNURadio required to compile openLTE")
 endif()
 
 if(NOT GNURADIO_OSMOSDR_FOUND)
-    message(FATAL_ERROR "GnuRadio Osmosdr required to compile openLTE (sdr.osmocom.org/trac/)")
+    message(FATAL_ERROR "GNURadio Osmosdr required to compile openLTE (http://sdr.osmocom.org/trac/wiki/GrOsmoSDR)")
 endif()
 
 if(NOT RTLSDR_FOUND)
-    message(FATAL_ERROR "Rtlsdr required to compile openLTE (sdr.osmocom.org/trac/wiki/rtl-sdr)")
+    message(FATAL_ERROR "RTLSDR required to compile openLTE (http://sdr.osmocom.org/trac/wiki/rtl-sdr)")
 endif()
 
 if(NOT HACKRF_FOUND)
-    message(FATAL_ERROR "HackRf required to compile openLTE (github.com/mossmann/hackrf/wiki)")
+    message(FATAL_ERROR "HackRF required to compile openLTE (http://github.com/mossmann/hackrf/wiki)")
 endif()
 
 ########################################################################
@@ -116,15 +115,15 @@ endif()
 ########################################################################
 include_directories(
     ${Boost_INCLUDE_DIRS}
-    ${GRUEL_INCLUDE_DIRS}
-    ${GNURADIO_CORE_INCLUDE_DIRS}
+    ${GNURADIO_RUNTIME_INCLUDE_DIRS}
+    ${GNURADIO_PMT_INCLUDE_DIRS}
     ${GNURADIO_OSMOSDR_INCLUDE_DIRS}
 )
 
 link_directories(
     ${Boost_LIBRARY_DIRS}
-    ${GRUEL_LIBRARY_DIRS}
-    ${GNURADIO_CORE_LIBRARY_DIRS}
+    ${GNURADIO_RUNTIME_LIBRARY_DIRS}
+    ${GNURADIO_PMT_LIBRARY_DIRS}
     ${GNURADIO_OSMOSDR_LIBRARY_DIRS}
 )
 
@@ -148,3 +147,4 @@ add_subdirectory(libtools)
 add_subdirectory(LTE_fdd_dl_file_gen)
 add_subdirectory(LTE_fdd_dl_file_scan)
 add_subdirectory(LTE_fdd_dl_scan)
+add_subdirectory(LTE_file_recorder)

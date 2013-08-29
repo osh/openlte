@@ -36,6 +36,7 @@
                                    multiple decodes of the same channel.
     03/17/2013    Ben Wojtowicz    Added paging message printing.
     07/21/2013    Ben Wojtowicz    Using the latest LTE library.
+    08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7.
 
 *******************************************************************************/
 
@@ -47,9 +48,9 @@
 *******************************************************************************/
 
 #include "LTE_fdd_dl_fs_api.h"
-#include "gr_sync_block.h"
 #include "liblte_phy.h"
 #include "liblte_rrc.h"
+#include <gnuradio/sync_block.h>
 
 /*******************************************************************************
                               DEFINES
@@ -85,7 +86,7 @@ typedef enum{
 *******************************************************************************/
 
 LTE_FDD_DL_FS_API LTE_fdd_dl_fs_samp_buf_sptr LTE_fdd_dl_fs_make_samp_buf ();
-class LTE_FDD_DL_FS_API LTE_fdd_dl_fs_samp_buf : public gr_sync_block
+class LTE_FDD_DL_FS_API LTE_fdd_dl_fs_samp_buf : public gr::sync_block
 {
 public:
     ~LTE_fdd_dl_fs_samp_buf();

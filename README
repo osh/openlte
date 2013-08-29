@@ -12,6 +12,8 @@ LTE_fdd_dl_file_scan  A gnu-radio LTE FDD DL file scanner application
 LTE_fdd_dl_file_gen   A gnu-radio LTE FDD DL file generator application
 LTE_fdd_dl_scan       A gnu-radio LTE FDD DL scanner application that
                       currently supports rtl-sdr and hackrf hardware
+LTE_file_recorder     A gnu-radio LTE file recording application that
+                      currently supports rtl-sdr and hackrf hardware
 
 To build the C++ and python code use the following:
 
@@ -71,6 +73,18 @@ plug in rtl-sdr or hackrf hardware, run LTE_fdd_dl_scan, and connect
 Scan parameters can be changed and scan results can be observed
 on the control port.  For a list of parameters simply type help
 on the control port.
+
+###################
+#  FILE RECORDER  #
+###################
+To use the installed C++ file recorder, make sure LD_LIBRARY_PATH
+is set to /usr/local/lib (export LD_LIBRARY_PATH=/usr/local/lib),
+plug in rtl-sdr or hackrf hardware, run LTE_file_recorder, and connect
+(via telnet, nc, etc) to the control port at port number 25000.
+Recording parameters can be changed on the control port.  For a list
+of parameters simply type help on the control port.  NOTE: This does
+not currently support recording files for use with the file scanner
+application.
 
 ############
 #  OCTAVE  #

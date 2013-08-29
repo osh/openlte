@@ -23,6 +23,7 @@
 % Outputs:     prach_bb - PRACH baseband signal
 % Spec:        3GPP TS 36.211 section 5.7.3 v10.1.0
 % Rev History: Ben Wojtowicz 07/21/2013 Created
+%              Ben Wojtowicz 08/26/2013 Fixed a bug in the frequency domain conversion
 %
 function [prach_bb] = lte_prach_bb_gen(x_u_v, prach_freq_offset, pre_format, N_ul_rb)
 
@@ -30,9 +31,11 @@ function [prach_bb] = lte_prach_bb_gen(x_u_v, prach_freq_offset, pre_format, N_u
     if(pre_format >= 0 && pre_format <= 3)
         delta_f_RA = 1250;
         N_zc       = 839;
+        phi        = 7;
     else
         delta_f_RA = 7500;
         N_zc       = 139;
+        phi        = 2;
     endif
 
     % Determine the FFT, sequence, and cyclic prefix lengths
@@ -70,8 +73,9 @@ function [prach_bb] = lte_prach_bb_gen(x_u_v, prach_freq_offset, pre_format, N_u
     x_fd_sig = fftshift(fft(x_u_v));
 
     % Construct full frequency domain signal
-    fd_sig = zeros(1,T_fft);
-    fd_sig(k_0*K+1:k_0*K+N_zc-1+1) = x_fd_sig;
+    fd_sig                         = zeros(1,T_fft);
+    start                          = phi+K*(k_0+0.5);
+    fd_sig(start+1:start+N_zc-1+1) = x_fd_sig;
 
     % Construct output sequence
     out_seq = ifft(ifftshift(fd_sig));

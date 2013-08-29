@@ -3,11 +3,11 @@ PKG_CHECK_MODULES(PC_HACKRF libhackrf)
 
 FIND_PATH(
     HACKRF_INCLUDE_DIRS
-    NAMES hackrf.h
+    NAMES libhackrf/hackrf.h
     HINTS $ENV{HACKRF_DIR}/include
         ${PC_HACKRF_INCLUDEDIR}
-    PATHS /usr/local/include/libhackrf
-          /usr/include/libhackrf
+    PATHS /usr/local/include
+          /usr/include
 )
 
 FIND_LIBRARY(

@@ -33,6 +33,7 @@
     01/07/2013    Ben Wojtowicz    Moved from automake to cmake
     03/03/2013    Ben Wojtowicz    Added support for a test load.
     07/21/2013    Ben Wojtowicz    Using the latest LTE library.
+    08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7.
 
 *******************************************************************************/
 
@@ -44,9 +45,9 @@
 *******************************************************************************/
 
 #include "LTE_fdd_dl_fg_api.h"
-#include "gr_sync_block.h"
 #include "liblte_phy.h"
 #include "liblte_rrc.h"
+#include <gnuradio/sync_block.h>
 
 /*******************************************************************************
                               DEFINES
@@ -92,7 +93,7 @@ typedef boost::shared_ptr<LTE_fdd_dl_fg_samp_buf> LTE_fdd_dl_fg_samp_buf_sptr;
 *******************************************************************************/
 
 LTE_FDD_DL_FG_API LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf();
-class LTE_FDD_DL_FG_API LTE_fdd_dl_fg_samp_buf : public gr_sync_block
+class LTE_FDD_DL_FG_API LTE_fdd_dl_fg_samp_buf : public gr::sync_block
 {
 public:
     ~LTE_fdd_dl_fg_samp_buf();

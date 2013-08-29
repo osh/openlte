@@ -68,6 +68,9 @@
     07/03/2013    Ben Wojtowicz    Fixed two indexing bugs.
     07/21/2013    Ben Wojtowicz    Added routines for determining TBS, MCS,
                                    N_prb, and N_cce.
+    08/26/2013    Ben Wojtowicz    Added PRACH generation and detection support
+                                   and changed ambiguous routines/variables to
+                                   be non-ambiguous.
 
 *******************************************************************************/
 
@@ -93,6 +96,101 @@
 /*******************************************************************************
                               GLOBAL VARIABLES
 *******************************************************************************/
+
+// PRACH N_cs unrestricted set values from 3GPP TS 36.211 v10.1.0 table 5.7.2-2
+uint32 PRACH_5_7_2_2_URS[16] = {0,13,15,18,22,26,32,38,46,59,76,93,119,167,279,419};
+
+// PRACH N_cs restricted set values from 3GPP TS 36.211 v10.1.0 table 5.7.2-2
+uint32 PRACH_5_7_2_2_RS[15] = {15,18,22,26,32,38,46,55,68,82,100,128,158,202,237};
+
+// PRACH N_cs values from 3GPP TS 36.211 v10.1.0 table 5.7.2-3
+uint32 PRACH_5_7_2_3[7] = {2,4,6,8,10,12,15};
+
+// PRACH root Zadoff-Chu sequence values from 3GPP TS 36.211 v10.1.0 table 5.7.2-4
+uint32 PRACH_5_7_2_4[838] = {129, 710, 140, 699, 120, 719, 210, 629, 168, 671,  84, 755,
+                             105, 734,  93, 746,  70, 769,  60, 779,   2, 837,   1, 838,
+                              56, 783, 112, 727, 148, 691,  80, 759,  42, 797,  40, 799,
+                              35, 804,  73, 766, 146, 693,  31, 808,  28, 811,  30, 809,
+                              27, 812,  29, 810,  24, 815,  48, 791,  68, 771,  74, 765,
+                             178, 661, 136, 703,  86, 753,  78, 761,  43, 796,  39, 800,
+                              20, 819,  21, 818,  95, 744, 202, 637, 190, 649, 181, 658,
+                             137, 702, 125, 714, 151, 688, 217, 622, 128, 711, 142, 697,
+                             122, 717, 203, 636, 118, 721, 110, 729,  89, 750, 103, 736,
+                              61, 778,  55, 784,  15, 824,  14, 825,  12, 827,  23, 816,
+                              34, 805,  37, 802,  46, 793, 207, 632, 179, 660, 145, 694,
+                             130, 709, 223, 616, 228, 611, 227, 612, 132, 707, 133, 706,
+                             143, 696, 135, 704, 161, 678, 201, 638, 173, 666, 106, 733,
+                              83, 756,  91, 748,  66, 773,  53, 786,  10, 829,   9, 830,
+                               7, 832,   8, 831,  16, 823,  47, 792,  64, 775,  57, 782,
+                             104, 735, 101, 738, 108, 731, 208, 631, 184, 655, 197, 642,
+                             191, 648, 121, 718, 141, 698, 149, 690, 216, 623, 218, 621,
+                             152, 687, 144, 695, 134, 705, 138, 701, 199, 640, 162, 677,
+                             176, 663, 119, 720, 158, 681, 164, 675, 174, 665, 171, 668,
+                             170, 669,  87, 752, 169, 670,  88, 751, 107, 732,  81, 758,
+                              82, 757, 100, 739,  98, 741,  71, 768,  59, 780,  65, 774,
+                              50, 789,  49, 790,  26, 813,  17, 822,  13, 826,   6, 833,
+                               5, 834,  33, 806,  51, 788,  75, 764,  99, 740,  96, 743,
+                              97, 742, 166, 673, 172, 667, 175, 664, 187, 652, 163, 676,
+                             185, 654, 200, 639, 114, 725, 189, 650, 115, 724, 194, 645,
+                             195, 644, 192, 647, 182, 657, 157, 682, 156, 683, 211, 628,
+                             154, 685, 123, 716, 139, 700, 212, 627, 153, 686, 213, 626,
+                             215, 624, 150, 689, 225, 614, 224, 615, 221, 618, 220, 619,
+                             127, 712, 147, 692, 124, 715, 193, 646, 205, 634, 206, 633,
+                             116, 723, 160, 679, 186, 653, 167, 672,  79, 760,  85, 754,
+                              77, 762,  92, 747,  58, 781,  62, 777,  69, 770,  54, 785,
+                              36, 803,  32, 807,  25, 814,  18, 821,  11, 828,   4, 835,
+                               3, 836,  19, 820,  22, 817,  41, 798,  38, 801,  44, 795,
+                              52, 787,  45, 794,  63, 776,  67, 772,  72, 767,  76, 763,
+                              94, 745, 102, 737,  90, 749, 109, 730, 165, 674, 111, 728,
+                             209, 630, 204, 635, 117, 722, 188, 651, 159, 680, 198, 641,
+                             113, 726, 183, 656, 180, 659, 177, 662, 196, 643, 155, 684,
+                             214, 625, 126, 713, 131, 708, 219, 620, 222, 617, 226, 613,
+                             230, 609, 232, 607, 262, 577, 252, 587, 418, 421, 416, 423,
+                             413, 426, 411, 428, 376, 463, 395, 444, 283, 556, 285, 554,
+                             379, 460, 390, 449, 363, 476, 384, 455, 388, 451, 386, 453,
+                             361, 478, 387, 452, 360, 479, 310, 529, 354, 485, 328, 511,
+                             315, 524, 337, 502, 349, 490, 335, 504, 324, 515, 323, 516,
+                             320, 519, 334, 505, 359, 480, 295, 544, 385, 454, 292, 547,
+                             291, 548, 381, 458, 399, 440, 380, 459, 397, 442, 369, 470,
+                             377, 462, 410, 429, 407, 432, 281, 558, 414, 425, 247, 592,
+                             277, 562, 271, 568, 272, 567, 264, 575, 259, 580, 237, 602,
+                             239, 600, 244, 595, 243, 596, 275, 564, 278, 561, 250, 589,
+                             246, 593, 417, 422, 248, 591, 394, 445, 393, 446, 370, 469,
+                             365, 474, 300, 539, 299, 540, 364, 475, 362, 477, 298, 541,
+                             312, 527, 313, 526, 314, 525, 353, 486, 352, 487, 343, 496,
+                             327, 512, 350, 489, 326, 513, 319, 520, 332, 507, 333, 506,
+                             348, 491, 347, 492, 322, 517, 330, 509, 338, 501, 341, 498,
+                             340, 499, 342, 497, 301, 538, 366, 473, 401, 438, 371, 468,
+                             408, 431, 375, 464, 249, 590, 269, 570, 238, 601, 234, 605,
+                             257, 582, 273, 566, 255, 584, 254, 585, 245, 594, 251, 588,
+                             412, 427, 372, 467, 282, 557, 403, 436, 396, 443, 392, 447,
+                             391, 448, 382, 457, 389, 450, 294, 545, 297, 542, 311, 528,
+                             344, 495, 345, 494, 318, 521, 331, 508, 325, 514, 321, 518,
+                             346, 493, 339, 500, 351, 488, 306, 533, 289, 550, 400, 439,
+                             378, 461, 374, 465, 415, 424, 270, 569, 241, 598, 231, 608,
+                             260, 579, 268, 571, 276, 563, 409, 430, 398, 441, 290, 549,
+                             304, 535, 308, 531, 358, 481, 316, 523, 293, 546, 288, 551,
+                             284, 555, 368, 471, 253, 586, 256, 583, 263, 576, 242, 597,
+                             274, 565, 402, 437, 383, 456, 357, 482, 329, 510, 317, 522,
+                             307, 532, 286, 553, 287, 552, 266, 573, 261, 578, 236, 603,
+                             303, 536, 356, 483, 355, 484, 405, 434, 404, 435, 406, 433,
+                             235, 604, 267, 572, 302, 537, 309, 530, 265, 574, 233, 606,
+                             367, 472, 296, 543, 336, 503, 305, 534, 373, 466, 280, 559,
+                             279, 560, 419, 420, 240, 599, 258, 581, 229, 610};
+
+// PRACH root Zadoff-Chu sequence values from 3GPP TS 36.211 v10.1.0 table 5.7.2-5
+uint32 PRACH_5_7_2_5[138] = {   1, 138,   2, 137,   3, 136,   4, 135,   5, 134,   6, 133,
+                                7, 132,   8, 131,   9, 130,  10, 129,  11, 128,  12, 127,
+                               13, 126,  14, 125,  15, 124,  16, 123,  17, 122,  18, 121,
+                               19, 120,  20, 119,  21, 118,  22, 117,  23, 116,  24, 115,
+                               25, 114,  26, 113,  27, 112,  28, 111,  29, 110,  30, 109,
+                               31, 108,  32, 107,  33, 106,  34, 105,  35, 104,  36, 103,
+                               37, 102,  38, 101,  39, 100,  40,  99,  41,  98,  42,  97,
+                               43,  96,  44,  95,  45,  94,  46,  93,  47,  92,  48,  91,
+                               49,  90,  50,  89,  51,  88,  52,  87,  53,  86,  54,  85,
+                               55,  84,  56,  83,  57,  82,  58,  81,  59,  80,  60,  79,
+                               61,  78,  62,  77,  63,  76,  64,  75,  65,  74,  66,  73,
+                               67,  72,  68,  71,  69,  70};
 
 // Control Format Indicator
 uint8 CFI_BITS_1[32] = {0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1};
@@ -433,6 +531,23 @@ uint32 TBS_71721[27][110] = {{   16,   32,   56,   88,  120,  152,  176,  208,  
 /*******************************************************************************
                               LOCAL FUNCTION PROTOTYPES
 *******************************************************************************/
+
+/*********************************************************************
+    Name: prach_preamble_seq_gen
+
+    Description: Generates all 64 PRACH preamble sequences
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 5.7.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+void prach_preamble_seq_gen(LIBLTE_PHY_STRUCT *phy_struct,
+                            uint32             root_seq_idx,
+                            uint32             pre_format,
+                            uint32             zczc,
+                            bool               hs_flag);
 
 /*********************************************************************
     Name: layer_mapper
@@ -1395,10 +1510,16 @@ LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT  **phy_struct,
                                   uint8                N_ant,
                                   uint32               N_rb_dl,
                                   uint32               N_sc_rb,
-                                  float                phich_res)
+                                  float                phich_res,
+                                  uint32               prach_root_seq_idx,
+                                  uint32               prach_preamble_format,
+                                  uint32               prach_zczc,
+                                  bool                 prach_hs_flag)
 {
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
     uint32            i;
+    uint32            j;
+    uint32            idx;
 
     if(phy_struct != NULL)
     {
@@ -1456,6 +1577,92 @@ LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT  **phy_struct,
         (*phy_struct)->N_sc_rb = N_sc_rb;
         liblte_phy_update_n_rb_dl((*phy_struct), N_rb_dl);
 
+        // PRACH
+        prach_preamble_seq_gen((*phy_struct),
+                               prach_root_seq_idx,
+                               prach_preamble_format,
+                               prach_zczc,
+                               prach_hs_flag);
+
+        switch(prach_preamble_format)
+        {
+        case 0:
+            (*phy_struct)->prach_T_fft      = 24576/(30720000/(*phy_struct)->fs);
+            (*phy_struct)->prach_T_seq      = 24576/(30720000/(*phy_struct)->fs);
+            (*phy_struct)->prach_T_cp       = 3168/(30720000/(*phy_struct)->fs);
+            (*phy_struct)->prach_delta_f_RA = 1250;
+            (*phy_struct)->prach_phi        = 7;
+            break;
+        case 1:
+            (*phy_struct)->prach_T_fft      = 24576/(30720000/(*phy_struct)->fs);
+            (*phy_struct)->prach_T_seq      = 24576/(30720000/(*phy_struct)->fs);
+            (*phy_struct)->prach_T_cp       = 21024/(30720000/(*phy_struct)->fs);
+            (*phy_struct)->prach_delta_f_RA = 1250;
+            (*phy_struct)->prach_phi        = 7;
+            break;
+        case 2:
+            (*phy_struct)->prach_T_fft      = 24576/(30720000/(*phy_struct)->fs);
+            (*phy_struct)->prach_T_seq      = 2*24576/(30720000/(*phy_struct)->fs);
+            (*phy_struct)->prach_T_cp       = 6240/(30720000/(*phy_struct)->fs);
+            (*phy_struct)->prach_delta_f_RA = 1250;
+            (*phy_struct)->prach_phi        = 7;
+            break;
+        case 3:
+            (*phy_struct)->prach_T_fft      = 24576/(30720000/(*phy_struct)->fs);
+            (*phy_struct)->prach_T_seq      = 2*24576/(30720000/(*phy_struct)->fs);
+            (*phy_struct)->prach_T_cp       = 21024/(30720000/(*phy_struct)->fs);
+            (*phy_struct)->prach_delta_f_RA = 1250;
+            (*phy_struct)->prach_phi        = 7;
+            break;
+        case 4:
+        default:
+            (*phy_struct)->prach_T_fft      = 4096/(30720000/(*phy_struct)->fs);
+            (*phy_struct)->prach_T_seq      = 4096/(30720000/(*phy_struct)->fs);
+            (*phy_struct)->prach_T_cp       = 448/(30720000/(*phy_struct)->fs);
+            (*phy_struct)->prach_delta_f_RA = 7500;
+            (*phy_struct)->prach_phi        = 2;
+            break;
+        }
+        (*phy_struct)->prach_dft_in    = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex)*(*phy_struct)->prach_N_zc);
+        (*phy_struct)->prach_dft_out   = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex)*(*phy_struct)->prach_N_zc);
+        (*phy_struct)->prach_fft_in    = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex)*(*phy_struct)->prach_T_fft);
+        (*phy_struct)->prach_fft_out   = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex)*(*phy_struct)->prach_T_fft);
+        (*phy_struct)->prach_dft_plan  = fftwf_plan_dft_1d((*phy_struct)->prach_N_zc,
+                                                           (*phy_struct)->prach_dft_in,
+                                                           (*phy_struct)->prach_dft_out,
+                                                           FFTW_FORWARD,
+                                                           FFTW_MEASURE);
+        (*phy_struct)->prach_ifft_plan = fftwf_plan_dft_1d((*phy_struct)->prach_T_fft,
+                                                           (*phy_struct)->prach_fft_in,
+                                                           (*phy_struct)->prach_fft_out,
+                                                           FFTW_BACKWARD,
+                                                           FFTW_MEASURE);
+        (*phy_struct)->prach_fft_plan  = fftwf_plan_dft_1d((*phy_struct)->prach_T_fft,
+                                                           (*phy_struct)->prach_fft_in,
+                                                           (*phy_struct)->prach_fft_out,
+                                                           FFTW_FORWARD,
+                                                           FFTW_MEASURE);
+        (*phy_struct)->prach_idft_plan = fftwf_plan_dft_1d((*phy_struct)->prach_N_zc,
+                                                           (*phy_struct)->prach_dft_in,
+                                                           (*phy_struct)->prach_dft_out,
+                                                           FFTW_BACKWARD,
+                                                           FFTW_MEASURE);
+        for(i=0; i<(*phy_struct)->prach_N_x_u; i++)
+        {
+            for(j=0; j<(*phy_struct)->prach_N_zc; j++)
+            {
+                (*phy_struct)->prach_dft_in[j][0] = (*phy_struct)->prach_x_u_re[i][j];
+                (*phy_struct)->prach_dft_in[j][1] = (*phy_struct)->prach_x_u_im[i][j];
+            }
+            fftwf_execute((*phy_struct)->prach_dft_plan);
+            for(j=0; j<(*phy_struct)->prach_N_zc; j++)
+            {
+                idx                                   = (j+1+(*phy_struct)->prach_N_zc/2)%(*phy_struct)->prach_N_zc;
+                (*phy_struct)->prach_x_u_fft_re[i][j] = (*phy_struct)->prach_dft_out[idx][0];
+                (*phy_struct)->prach_x_u_fft_im[i][j] = (*phy_struct)->prach_dft_out[idx][1];
+            }
+        }
+
         // PDCCH Permutation
         pdcch_permute_pre_calc(*phy_struct,
                                N_ant,
@@ -1474,18 +1681,18 @@ LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT  **phy_struct,
         }
 
         // Samples to symbols
-        (*phy_struct)->s2s_in              = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex)*(*phy_struct)->N_samps_per_symb*20);
-        (*phy_struct)->s2s_out             = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex)*(*phy_struct)->N_samps_per_symb*20);
-        (*phy_struct)->symbs_to_samps_plan = fftwf_plan_dft_1d((*phy_struct)->N_samps_per_symb,
-                                                               (*phy_struct)->s2s_in,
-                                                               (*phy_struct)->s2s_out,
-                                                               FFTW_BACKWARD,
-                                                               FFTW_MEASURE);
-        (*phy_struct)->samps_to_symbs_plan = fftwf_plan_dft_1d((*phy_struct)->N_samps_per_symb,
-                                                               (*phy_struct)->s2s_in,
-                                                               (*phy_struct)->s2s_out,
-                                                               FFTW_FORWARD,
-                                                               FFTW_MEASURE);
+        (*phy_struct)->dl_s2s_in              = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex)*(*phy_struct)->N_samps_per_symb*20);
+        (*phy_struct)->dl_s2s_out             = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex)*(*phy_struct)->N_samps_per_symb*20);
+        (*phy_struct)->dl_symbs_to_samps_plan = fftwf_plan_dft_1d((*phy_struct)->N_samps_per_symb,
+                                                                  (*phy_struct)->dl_s2s_in,
+                                                                  (*phy_struct)->dl_s2s_out,
+                                                                  FFTW_BACKWARD,
+                                                                  FFTW_MEASURE);
+        (*phy_struct)->dl_samps_to_symbs_plan = fftwf_plan_dft_1d((*phy_struct)->N_samps_per_symb,
+                                                                  (*phy_struct)->dl_s2s_in,
+                                                                  (*phy_struct)->dl_s2s_out,
+                                                                  FFTW_FORWARD,
+                                                                  FFTW_MEASURE);
 
         err = LIBLTE_SUCCESS;
     }
@@ -1507,10 +1714,20 @@ LIBLTE_ERROR_ENUM liblte_phy_cleanup(LIBLTE_PHY_STRUCT *phy_struct)
     if(phy_struct != NULL)
     {
         // Samples to symbols
-        fftwf_destroy_plan(phy_struct->samps_to_symbs_plan);
-        fftwf_destroy_plan(phy_struct->symbs_to_samps_plan);
-        fftwf_free(phy_struct->s2s_in);
-        fftwf_free(phy_struct->s2s_out);
+        fftwf_destroy_plan(phy_struct->dl_samps_to_symbs_plan);
+        fftwf_destroy_plan(phy_struct->dl_symbs_to_samps_plan);
+        fftwf_free(phy_struct->dl_s2s_in);
+        fftwf_free(phy_struct->dl_s2s_out);
+
+        // PRACH
+        fftwf_destroy_plan(phy_struct->prach_idft_plan);
+        fftwf_destroy_plan(phy_struct->prach_fft_plan);
+        fftwf_destroy_plan(phy_struct->prach_ifft_plan);
+        fftwf_destroy_plan(phy_struct->prach_dft_plan);
+        fftwf_free(phy_struct->prach_dft_in);
+        fftwf_free(phy_struct->prach_dft_out);
+        fftwf_free(phy_struct->prach_fft_in);
+        fftwf_free(phy_struct->prach_fft_out);
 
         free(phy_struct);
         err = LIBLTE_SUCCESS;
@@ -1580,8 +1797,270 @@ LIBLTE_ERROR_ENUM liblte_phy_update_n_rb_dl(LIBLTE_PHY_STRUCT *phy_struct,
         if(LIBLTE_SUCCESS == err)
         {
             phy_struct->N_rb_dl      = N_rb_dl;
+            phy_struct->N_rb_ul      = N_rb_dl;
             phy_struct->FFT_pad_size = (phy_struct->FFT_size - used_subcarriers)/2;
         }
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    Name: liblte_phy_generate_prach
+
+    Description: Generates the baseband signal for a PRACH
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 5.7.3
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_phy_generate_prach(LIBLTE_PHY_STRUCT *phy_struct,
+                                            uint32             preamble_idx,
+                                            uint32             freq_offset,
+                                            float             *samps_re,
+                                            float             *samps_im)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+    uint32            idx;
+    uint32            N_ra_prb;
+    uint32            k_0;
+    uint32            K;
+    uint32            start;
+
+    if(phy_struct != NULL &&
+       samps_re   != NULL &&
+       samps_im   != NULL)
+    {
+        // Calculate PRACH parameters
+        N_ra_prb = freq_offset;
+        k_0      = N_ra_prb*phy_struct->N_sc_rb - phy_struct->N_rb_ul*phy_struct->N_sc_rb/2 + (phy_struct->FFT_size/2);
+        K        = 15000/phy_struct->prach_delta_f_RA;
+
+        for(i=0; i<phy_struct->prach_N_zc; i++)
+        {
+            phy_struct->prach_dft_in[i][0] = phy_struct->prach_x_u_v_re[preamble_idx][i];
+            phy_struct->prach_dft_in[i][1] = phy_struct->prach_x_u_v_im[preamble_idx][i];
+        }
+        fftwf_execute(phy_struct->prach_dft_plan);
+        for(i=0; i<phy_struct->prach_T_fft; i++)
+        {
+            phy_struct->prach_fft_in[i][0] = 0;
+            phy_struct->prach_fft_in[i][1] = 0;
+        }
+        start = phy_struct->prach_phi + (K*k_0) + (K/2);
+        for(i=0; i<phy_struct->prach_N_zc; i++)
+        {
+            idx                              = (i+start+phy_struct->prach_T_fft/2)%phy_struct->prach_T_fft;
+            phy_struct->prach_fft_in[idx][0] = phy_struct->prach_dft_out[(i+phy_struct->prach_N_zc/2)%phy_struct->prach_N_zc][0];
+            phy_struct->prach_fft_in[idx][1] = phy_struct->prach_dft_out[(i+phy_struct->prach_N_zc/2)%phy_struct->prach_N_zc][1];
+        }
+        fftwf_execute(phy_struct->prach_ifft_plan);
+        if(phy_struct->prach_T_fft == phy_struct->prach_T_seq)
+        {
+            for(i=0; i<phy_struct->prach_T_fft; i++)
+            {
+                samps_re[phy_struct->prach_T_cp+i] = phy_struct->prach_fft_out[i][0];
+                samps_im[phy_struct->prach_T_cp+i] = phy_struct->prach_fft_out[i][1];
+            }
+        }else{
+            for(i=0; i<phy_struct->prach_T_fft; i++)
+            {
+                samps_re[phy_struct->prach_T_cp+i]                         = phy_struct->prach_fft_out[i][0];
+                samps_im[phy_struct->prach_T_cp+i]                         = phy_struct->prach_fft_out[i][1];
+                samps_re[phy_struct->prach_T_cp+phy_struct->prach_T_fft+i] = phy_struct->prach_fft_out[i][0];
+                samps_im[phy_struct->prach_T_cp+phy_struct->prach_T_fft+i] = phy_struct->prach_fft_out[i][1];
+            }
+        }
+        for(i=0; i<phy_struct->prach_T_cp; i++)
+        {
+            samps_re[i] = samps_re[phy_struct->prach_T_seq+i];
+            samps_im[i] = samps_im[phy_struct->prach_T_seq+i];
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    Name: liblte_phy_detect_prach
+
+    Description: Detects PRACHs from baseband I/Q
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 5.7.2 and 5.7.3
+
+    Notes: Currently only supports detection of one preamble
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_phy_detect_prach(LIBLTE_PHY_STRUCT *phy_struct,
+                                          float             *samps_re,
+                                          float             *samps_im,
+                                          uint32             freq_offset,
+                                          uint32            *N_det_pre,
+                                          uint32            *det_pre,
+                                          uint32            *det_ta)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    float             max_val;
+    float             abs_corr;
+    float             ave_val;
+    int32             N_neg_RA_shift;
+    uint32            i;
+    uint32            j;
+    uint32            u;
+    uint32            N_cs;
+    uint32            p;
+    uint32            v_max;
+    uint32            d_u;
+    uint32            d_start;
+    uint32            N_RA_shift;
+    uint32            N_RA_group;
+    uint32            N_ra_prb;
+    uint32            k_0;
+    uint32            K;
+    uint32            start;
+    uint32            idx;
+    uint32            max_root;
+    uint32            max_offset;
+
+    if(phy_struct != NULL &&
+       samps_re   != NULL &&
+       samps_im   != NULL &&
+       N_det_pre  != NULL &&
+       det_pre    != NULL &&
+       det_ta     != NULL)
+    {
+        // Determine u
+        if(4 == phy_struct->prach_preamble_format)
+        {
+            u = PRACH_5_7_2_5[phy_struct->prach_root_seq_idx];
+        }else{
+            u = PRACH_5_7_2_4[phy_struct->prach_root_seq_idx];
+        }
+
+        // Determine N_cs
+        if(4 == phy_struct->prach_preamble_format)
+        {
+            N_cs = PRACH_5_7_2_3[phy_struct->prach_zczc];
+        }else{
+            if(phy_struct->prach_hs_flag)
+            {
+                N_cs = PRACH_5_7_2_2_RS[phy_struct->prach_zczc];
+            }else{
+                N_cs = PRACH_5_7_2_2_URS[phy_struct->prach_zczc];
+            }
+        }
+
+        // Determine v_max
+        if(phy_struct->prach_hs_flag)
+        {
+            // Determine d_u
+            for(p=1; p<=phy_struct->prach_N_zc; p++)
+            {
+                if(((p*u) % phy_struct->prach_N_zc) == 1)
+                {
+                    break;
+                }
+            }
+            if(p >= 0 && p < phy_struct->prach_N_zc/2)
+            {
+                d_u = p;
+            }else{
+                d_u = phy_struct->prach_N_zc - p;
+            }
+
+            // Determine N_RA_shift, d_start, N_RA_group, and N_neg_RA_shift
+            if(d_u >= N_cs && d_u < phy_struct->prach_N_zc/3)
+            {
+                N_RA_shift     = d_u/N_cs;
+                d_start        = 2*d_u + N_RA_shift*N_cs;
+                N_RA_group     = phy_struct->prach_N_zc/d_start;
+                N_neg_RA_shift = (phy_struct->prach_N_zc - 2*d_u - N_RA_group*d_start)/N_cs;
+                if(N_neg_RA_shift < 0)
+                {
+                    N_neg_RA_shift = 0;
+                }
+            }else{
+                N_RA_shift     = (phy_struct->prach_N_zc - 2*d_u)/N_cs;
+                d_start        = phy_struct->prach_N_zc - 2*d_u + N_RA_shift*N_cs;
+                N_RA_group     = d_u/d_start;
+                N_neg_RA_shift = (d_u - N_RA_group*d_start)/N_cs;
+                if(N_neg_RA_shift < 0)
+                {
+                    N_neg_RA_shift = 0;
+                }
+                if(N_neg_RA_shift > N_RA_shift)
+                {
+                    N_neg_RA_shift = N_RA_shift;
+                }
+            }
+
+            // Restricted set
+            v_max = N_RA_shift*N_RA_group + N_neg_RA_shift - 1;
+        }else{
+            // Unrestricted set
+            if(0 == N_cs)
+            {
+                v_max = 0;
+            }else{
+                v_max = (phy_struct->prach_N_zc/N_cs)-1;
+            }
+        }
+
+        // Calculate PRACH parameters
+        N_ra_prb = freq_offset;
+        k_0      = N_ra_prb*phy_struct->N_sc_rb - phy_struct->N_rb_ul*phy_struct->N_sc_rb/2 + (phy_struct->FFT_size/2);
+        K        = 15000/phy_struct->prach_delta_f_RA;
+
+        for(i=0; i<phy_struct->prach_T_fft; i++)
+        {
+            phy_struct->prach_fft_in[i][0] = samps_re[phy_struct->prach_T_cp+i];
+            phy_struct->prach_fft_in[i][1] = samps_im[phy_struct->prach_T_cp+i];
+        }
+        fftwf_execute(phy_struct->prach_fft_plan);
+        start = phy_struct->prach_phi + (K*k_0) + (K/2);
+        for(i=0; i<phy_struct->prach_N_zc; i++)
+        {
+            idx                           = (i+start+phy_struct->prach_T_fft/2)%phy_struct->prach_T_fft;
+            phy_struct->prach_x_hat_re[i] = phy_struct->prach_fft_out[idx][0];
+            phy_struct->prach_x_hat_im[i] = phy_struct->prach_fft_out[idx][1];
+        }
+
+        // Correlate with all available roots
+        ave_val = 0;
+        max_val = 0;
+        for(i=0; i<phy_struct->prach_N_x_u; i++)
+        {
+            for(j=0; j<phy_struct->prach_N_zc; j++)
+            {
+                phy_struct->prach_dft_in[j][0] = phy_struct->prach_x_u_fft_re[i][j]*phy_struct->prach_x_hat_re[j] + phy_struct->prach_x_u_fft_im[i][j]*phy_struct->prach_x_hat_im[j];
+                phy_struct->prach_dft_in[j][1] = phy_struct->prach_x_u_fft_im[i][j]*phy_struct->prach_x_hat_re[j] - phy_struct->prach_x_u_fft_re[i][j]*phy_struct->prach_x_hat_im[j];
+            }
+            fftwf_execute(phy_struct->prach_idft_plan);
+            for(j=0; j<phy_struct->prach_N_zc; j++)
+            {
+                abs_corr  = phy_struct->prach_dft_out[j][0]*phy_struct->prach_dft_out[j][0] + phy_struct->prach_dft_out[j][1]*phy_struct->prach_dft_out[j][1];
+                ave_val  += abs_corr;
+                if(abs_corr > max_val)
+                {
+                    max_val    = abs_corr;
+                    max_root   = i;
+                    max_offset = j;
+                }
+            }
+            ave_val /= phy_struct->prach_N_zc;
+        }
+
+        if(max_val >= 10*ave_val &&
+           max_val != 0)
+        {
+            *N_det_pre = 1;
+            *det_pre   = max_root*(v_max+1) + ((max_offset+N_cs)%phy_struct->prach_N_zc)/N_cs;
+            *det_ta    = ((N_cs - ((max_offset+N_cs)%phy_struct->prach_N_zc))%N_cs)*29.155/16;
+        }else{
+            *N_det_pre = 0;
+        }
+
+        err = LIBLTE_SUCCESS;
     }
 
     return(err);
@@ -3894,19 +4373,19 @@ LIBLTE_ERROR_ENUM liblte_phy_find_sss(LIBLTE_PHY_STRUCT *phy_struct,
 }
 
 /*********************************************************************
-    Name: liblte_phy_find_coarse_timing_and_freq_offset
+    Name: liblte_phy_dl_find_coarse_timing_and_freq_offset
 
     Description: Finds coarse time syncronization and frequency offset
                  by auto-correlating to find the cyclic prefix on
-                 reference signal symbols.
+                 reference signal symbols of the downlink
 
     Document Reference: 3GPP TS 36.211 v10.1.0
 *********************************************************************/
-LIBLTE_ERROR_ENUM liblte_phy_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUCT               *phy_struct,
-                                                                float                           *i_samps,
-                                                                float                           *q_samps,
-                                                                uint32                           N_slots,
-                                                                LIBLTE_PHY_COARSE_TIMING_STRUCT *timing_struct)
+LIBLTE_ERROR_ENUM liblte_phy_dl_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUCT               *phy_struct,
+                                                                   float                           *i_samps,
+                                                                   float                           *q_samps,
+                                                                   uint32                           N_slots,
+                                                                   LIBLTE_PHY_COARSE_TIMING_STRUCT *timing_struct)
 {
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
     float             corr_re;
@@ -3932,7 +4411,7 @@ LIBLTE_ERROR_ENUM liblte_phy_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUC
         // Timing correlation
         for(i=0; i<phy_struct->N_samps_per_slot; i++)
         {
-            phy_struct->timing_abs_corr[i] = 0;
+            phy_struct->dl_timing_abs_corr[i] = 0;
         }
         for(slot=0; slot<N_slots; slot++)
         {
@@ -3946,30 +4425,30 @@ LIBLTE_ERROR_ENUM liblte_phy_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUC
                     corr_re += i_samps[idx]*i_samps[idx+phy_struct->N_samps_per_symb] + q_samps[idx]*q_samps[idx+phy_struct->N_samps_per_symb];
                     corr_im += i_samps[idx]*q_samps[idx+phy_struct->N_samps_per_symb] - q_samps[idx]*i_samps[idx+phy_struct->N_samps_per_symb];
                 }
-                phy_struct->timing_abs_corr[i] += corr_re*corr_re + corr_im*corr_im;
+                phy_struct->dl_timing_abs_corr[i] += corr_re*corr_re + corr_im*corr_im;
             }
         }
 
         // Find mean of correlation and gate correlation results
         for(i=0; i<phy_struct->N_samps_per_slot; i++)
         {
-            corr_mean                                                   += phy_struct->timing_abs_corr[i];
-            phy_struct->timing_abs_corr[i+phy_struct->N_samps_per_slot]  = phy_struct->timing_abs_corr[i];
+            corr_mean                                                      += phy_struct->dl_timing_abs_corr[i];
+            phy_struct->dl_timing_abs_corr[i+phy_struct->N_samps_per_slot]  = phy_struct->dl_timing_abs_corr[i];
         }
         corr_mean /= phy_struct->N_samps_per_slot;
         for(i=0; i<phy_struct->N_samps_per_slot; i++)
         {
-            if(phy_struct->timing_abs_corr[i] <= corr_mean)
+            if(phy_struct->dl_timing_abs_corr[i] <= corr_mean)
             {
-                phy_struct->timing_abs_corr[i]                              = 0;
-                phy_struct->timing_abs_corr[i+phy_struct->N_samps_per_slot] = 0;
+                phy_struct->dl_timing_abs_corr[i]                              = 0;
+                phy_struct->dl_timing_abs_corr[i+phy_struct->N_samps_per_slot] = 0;
             }
         }
 
         // Multiply to get (first_symbol * fourth_symbol)
         for(i=0; i<phy_struct->N_samps_per_slot; i++)
         {
-            phy_struct->timing_abs_corr[i] *= phy_struct->timing_abs_corr[(phy_struct->N_samps_per_symb+phy_struct->N_samps_cp_l_0+(phy_struct->N_samps_per_symb+phy_struct->N_samps_cp_l_else)*3)+i];
+            phy_struct->dl_timing_abs_corr[i] *= phy_struct->dl_timing_abs_corr[(phy_struct->N_samps_per_symb+phy_struct->N_samps_cp_l_0+(phy_struct->N_samps_per_symb+phy_struct->N_samps_cp_l_else)*3)+i];
         }
 
         // Search for all of the eNB signals
@@ -3980,9 +4459,9 @@ LIBLTE_ERROR_ENUM liblte_phy_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUC
             abs_corr_idx[i] = 0;
             for(j=0; j<phy_struct->N_samps_per_slot; j++)
             {
-                if(phy_struct->timing_abs_corr[j] > abs_corr_max)
+                if(phy_struct->dl_timing_abs_corr[j] > abs_corr_max)
                 {
-                    abs_corr_max    = phy_struct->timing_abs_corr[j];
+                    abs_corr_max    = phy_struct->dl_timing_abs_corr[j];
                     abs_corr_idx[i] = j;
                 }
             }
@@ -4007,7 +4486,7 @@ LIBLTE_ERROR_ENUM liblte_phy_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUC
                         if(idx >= 0 &&
                            idx <= (LIBLTE_PHY_N_SAMPS_PER_SLOT_30_72MHZ*2))
                         {
-                            phy_struct->timing_abs_corr[idx] = 0;
+                            phy_struct->dl_timing_abs_corr[idx] = 0;
                         }
                     }
                 }
@@ -4056,18 +4535,18 @@ LIBLTE_ERROR_ENUM liblte_phy_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUC
 }
 
 /*********************************************************************
-    Name: liblte_phy_create_subframe
+    Name: liblte_phy_create_dl_subframe
 
     Description: Creates the baseband signal for a particular
-                 subframe
+                 downlink subframe
 
     Document Reference: 3GPP TS 36.211 v10.1.0
 *********************************************************************/
-LIBLTE_ERROR_ENUM liblte_phy_create_subframe(LIBLTE_PHY_STRUCT          *phy_struct,
-                                             LIBLTE_PHY_SUBFRAME_STRUCT *subframe,
-                                             uint8                       ant,
-                                             float                      *i_samps,
-                                             float                      *q_samps)
+LIBLTE_ERROR_ENUM liblte_phy_create_dl_subframe(LIBLTE_PHY_STRUCT          *phy_struct,
+                                                LIBLTE_PHY_SUBFRAME_STRUCT *subframe,
+                                                uint8                       ant,
+                                                float                      *i_samps,
+                                                float                      *q_samps)
 {
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
     uint32            i;
@@ -4099,21 +4578,21 @@ LIBLTE_ERROR_ENUM liblte_phy_create_subframe(LIBLTE_PHY_STRUCT          *phy_str
 }
 
 /*********************************************************************
-    Name: liblte_phy_get_subframe_and_ce
+    Name: liblte_phy_get_dl_subframe_and_ce
 
     Description: Resolves all symbols and channel estimates for a
-                 particular subframe
+                 particular downlink subframe
 
     Document Reference: 3GPP TS 36.211 v10.1.0
 *********************************************************************/
-LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy_struct,
-                                                 float                      *i_samps,
-                                                 float                      *q_samps,
-                                                 uint32                      frame_start_idx,
-                                                 uint8                       subfr_num,
-                                                 uint32                      N_id_cell,
-                                                 uint8                       N_ant,
-                                                 LIBLTE_PHY_SUBFRAME_STRUCT *subframe)
+LIBLTE_ERROR_ENUM liblte_phy_get_dl_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy_struct,
+                                                    float                      *i_samps,
+                                                    float                      *q_samps,
+                                                    uint32                      frame_start_idx,
+                                                    uint8                       subfr_num,
+                                                    uint32                      N_id_cell,
+                                                    uint8                       N_ant,
+                                                    LIBLTE_PHY_SUBFRAME_STRUCT *subframe)
 {
     LIBLTE_ERROR_ENUM  err = LIBLTE_ERROR_INVALID_INPUTS;
     float             *sym_re;
@@ -4161,14 +4640,14 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
         }
 
         // Generate cell specific reference signals
-        generate_crs((subfr_num*2+0)%20, 0, N_id_cell, phy_struct->N_sc_rb, phy_struct->ce_crs_re[0],  phy_struct->ce_crs_im[0]);
-        generate_crs((subfr_num*2+0)%20, 1, N_id_cell, phy_struct->N_sc_rb, phy_struct->ce_crs_re[1],  phy_struct->ce_crs_im[1]);
-        generate_crs((subfr_num*2+0)%20, 4, N_id_cell, phy_struct->N_sc_rb, phy_struct->ce_crs_re[4],  phy_struct->ce_crs_im[4]);
-        generate_crs((subfr_num*2+1)%20, 0, N_id_cell, phy_struct->N_sc_rb, phy_struct->ce_crs_re[7],  phy_struct->ce_crs_im[7]);
-        generate_crs((subfr_num*2+1)%20, 1, N_id_cell, phy_struct->N_sc_rb, phy_struct->ce_crs_re[8],  phy_struct->ce_crs_im[8]);
-        generate_crs((subfr_num*2+1)%20, 4, N_id_cell, phy_struct->N_sc_rb, phy_struct->ce_crs_re[11], phy_struct->ce_crs_im[11]);
-        generate_crs((subfr_num*2+2)%20, 0, N_id_cell, phy_struct->N_sc_rb, phy_struct->ce_crs_re[14], phy_struct->ce_crs_im[14]);
-        generate_crs((subfr_num*2+2)%20, 1, N_id_cell, phy_struct->N_sc_rb, phy_struct->ce_crs_re[15], phy_struct->ce_crs_im[15]);
+        generate_crs((subfr_num*2+0)%20, 0, N_id_cell, phy_struct->N_sc_rb, phy_struct->dl_ce_crs_re[0],  phy_struct->dl_ce_crs_im[0]);
+        generate_crs((subfr_num*2+0)%20, 1, N_id_cell, phy_struct->N_sc_rb, phy_struct->dl_ce_crs_re[1],  phy_struct->dl_ce_crs_im[1]);
+        generate_crs((subfr_num*2+0)%20, 4, N_id_cell, phy_struct->N_sc_rb, phy_struct->dl_ce_crs_re[4],  phy_struct->dl_ce_crs_im[4]);
+        generate_crs((subfr_num*2+1)%20, 0, N_id_cell, phy_struct->N_sc_rb, phy_struct->dl_ce_crs_re[7],  phy_struct->dl_ce_crs_im[7]);
+        generate_crs((subfr_num*2+1)%20, 1, N_id_cell, phy_struct->N_sc_rb, phy_struct->dl_ce_crs_re[8],  phy_struct->dl_ce_crs_im[8]);
+        generate_crs((subfr_num*2+1)%20, 4, N_id_cell, phy_struct->N_sc_rb, phy_struct->dl_ce_crs_re[11], phy_struct->dl_ce_crs_im[11]);
+        generate_crs((subfr_num*2+2)%20, 0, N_id_cell, phy_struct->N_sc_rb, phy_struct->dl_ce_crs_re[14], phy_struct->dl_ce_crs_im[14]);
+        generate_crs((subfr_num*2+2)%20, 1, N_id_cell, phy_struct->N_sc_rb, phy_struct->dl_ce_crs_re[15], phy_struct->dl_ce_crs_im[15]);
 
         // Determine channel estimates
         for(p=0; p<N_ant; p++)
@@ -4221,30 +4700,30 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
             {
                 sym_re = &subframe->rx_symb_re[sym[i]][0];
                 sym_im = &subframe->rx_symb_im[sym[i]][0];
-                rs_re  = &phy_struct->ce_crs_re[sym[i]][0];
-                rs_im  = &phy_struct->ce_crs_im[sym[i]][0];
+                rs_re  = &phy_struct->dl_ce_crs_re[sym[i]][0];
+                rs_im  = &phy_struct->dl_ce_crs_im[sym[i]][0];
 
                 for(j=0; j<2*phy_struct->N_rb_dl; j++)
                 {
-                    k                        = 6*j + (v[i] + v_shift)%6;
-                    m_prime                  = j + LIBLTE_PHY_N_RB_DL_MAX - phy_struct->N_rb_dl;
-                    tmp_re                   = sym_re[k]*rs_re[m_prime] + sym_im[k]*rs_im[m_prime];
-                    tmp_im                   = sym_im[k]*rs_re[m_prime] - sym_re[k]*rs_im[m_prime];
-                    phy_struct->ce_mag[i][k] = sqrt(tmp_re*tmp_re + tmp_im*tmp_im);
-                    phy_struct->ce_ang[i][k] = atan2f(tmp_im, tmp_re);
+                    k                           = 6*j + (v[i] + v_shift)%6;
+                    m_prime                     = j + LIBLTE_PHY_N_RB_DL_MAX - phy_struct->N_rb_dl;
+                    tmp_re                      = sym_re[k]*rs_re[m_prime] + sym_im[k]*rs_im[m_prime];
+                    tmp_im                      = sym_im[k]*rs_re[m_prime] - sym_re[k]*rs_im[m_prime];
+                    phy_struct->dl_ce_mag[i][k] = sqrt(tmp_re*tmp_re + tmp_im*tmp_im);
+                    phy_struct->dl_ce_ang[i][k] = atan2f(tmp_im, tmp_re);
 
                     // Unwrap phase
                     if(j > 0)
                     {
-                        wrap_phase(&phy_struct->ce_ang[i][k], phy_struct->ce_ang[i][k-6]);
+                        wrap_phase(&phy_struct->dl_ce_ang[i][k], phy_struct->dl_ce_ang[i][k-6]);
 
                         // Linearly interpolate between CRSs
-                        frac_mag = (phy_struct->ce_mag[i][k] - phy_struct->ce_mag[i][k-6])/6;
-                        frac_ang = (phy_struct->ce_ang[i][k] - phy_struct->ce_ang[i][k-6])/6;
+                        frac_mag = (phy_struct->dl_ce_mag[i][k] - phy_struct->dl_ce_mag[i][k-6])/6;
+                        frac_ang = (phy_struct->dl_ce_ang[i][k] - phy_struct->dl_ce_ang[i][k-6])/6;
                         for(z=1; z<6; z++)
                         {
-                            phy_struct->ce_mag[i][k-z] = phy_struct->ce_mag[i][k-(z-1)] - frac_mag;
-                            phy_struct->ce_ang[i][k-z] = phy_struct->ce_ang[i][k-(z-1)] - frac_ang;
+                            phy_struct->dl_ce_mag[i][k-z] = phy_struct->dl_ce_mag[i][k-(z-1)] - frac_mag;
+                            phy_struct->dl_ce_ang[i][k-z] = phy_struct->dl_ce_ang[i][k-(z-1)] - frac_ang;
                         }
                     }
 
@@ -4253,8 +4732,8 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
                     {
                         for(z=1; z<((v[i] + v_shift)%6)+1; z++)
                         {
-                            phy_struct->ce_mag[i][k-6-z] = phy_struct->ce_mag[i][k-6-(z-1)] - frac_mag;
-                            phy_struct->ce_ang[i][k-6-z] = phy_struct->ce_ang[i][k-6-(z-1)] - frac_ang;
+                            phy_struct->dl_ce_mag[i][k-6-z] = phy_struct->dl_ce_mag[i][k-6-(z-1)] - frac_mag;
+                            phy_struct->dl_ce_ang[i][k-6-z] = phy_struct->dl_ce_ang[i][k-6-(z-1)] - frac_ang;
                         }
                     }
                 }
@@ -4262,8 +4741,8 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
                 // Linearly interpolate after last CRS
                 for(z=1; z<(5-(v[i] + v_shift)%6)+1; z++)
                 {
-                    phy_struct->ce_mag[i][k+z] = phy_struct->ce_mag[i][k+(z-1)] - frac_mag;
-                    phy_struct->ce_ang[i][k+z] = phy_struct->ce_ang[i][k+(z-1)] - frac_ang;
+                    phy_struct->dl_ce_mag[i][k+z] = phy_struct->dl_ce_mag[i][k+(z-1)] - frac_mag;
+                    phy_struct->dl_ce_ang[i][k+z] = phy_struct->dl_ce_ang[i][k+(z-1)] - frac_ang;
                 }
             }
 
@@ -4273,19 +4752,19 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
                 for(j=0; j<phy_struct->N_rb_dl*phy_struct->N_sc_rb; j++)
                 {
                     // Construct symbol 1 and 8 channel estimates directly
-                    subframe->rx_ce_re[p][1][j] = phy_struct->ce_mag[0][j]*cosf(phy_struct->ce_ang[0][j]);
-                    subframe->rx_ce_im[p][1][j] = phy_struct->ce_mag[0][j]*sinf(phy_struct->ce_ang[0][j]);
-                    subframe->rx_ce_re[p][8][j] = phy_struct->ce_mag[1][j]*cosf(phy_struct->ce_ang[1][j]);
-                    subframe->rx_ce_im[p][8][j] = phy_struct->ce_mag[1][j]*sinf(phy_struct->ce_ang[1][j]);
+                    subframe->rx_ce_re[p][1][j] = phy_struct->dl_ce_mag[0][j]*cosf(phy_struct->dl_ce_ang[0][j]);
+                    subframe->rx_ce_im[p][1][j] = phy_struct->dl_ce_mag[0][j]*sinf(phy_struct->dl_ce_ang[0][j]);
+                    subframe->rx_ce_re[p][8][j] = phy_struct->dl_ce_mag[1][j]*cosf(phy_struct->dl_ce_ang[1][j]);
+                    subframe->rx_ce_im[p][8][j] = phy_struct->dl_ce_mag[1][j]*sinf(phy_struct->dl_ce_ang[1][j]);
 
                     // Interpolate for symbol 2, 3, 4, 5, 6, and 7 channel estimates
-                    frac_mag = (phy_struct->ce_mag[1][j] - phy_struct->ce_mag[0][j])/7;
-                    wrap_phase(&phy_struct->ce_ang[1][j], phy_struct->ce_ang[0][j]);
-                    frac_ang = (phy_struct->ce_ang[1][j] - phy_struct->ce_ang[0][j]);
+                    frac_mag = (phy_struct->dl_ce_mag[1][j] - phy_struct->dl_ce_mag[0][j])/7;
+                    wrap_phase(&phy_struct->dl_ce_ang[1][j], phy_struct->dl_ce_ang[0][j]);
+                    frac_ang = (phy_struct->dl_ce_ang[1][j] - phy_struct->dl_ce_ang[0][j]);
                     wrap_phase(&frac_ang, 0);
                     frac_ang /= 7;
-                    ce_mag    = phy_struct->ce_mag[1][j];
-                    ce_ang    = phy_struct->ce_ang[1][j];
+                    ce_mag    = phy_struct->dl_ce_mag[1][j];
+                    ce_ang    = phy_struct->dl_ce_ang[1][j];
                     for(z=7; z>1; z--)
                     {
                         ce_mag                      -= frac_mag;
@@ -4296,19 +4775,19 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
 
                     // Interpolate for symbol 0 channel estimate
                     // FIXME: Use previous slot to do this correctly
-                    ce_mag                      = phy_struct->ce_mag[0][j] - frac_mag;
-                    ce_ang                      = phy_struct->ce_ang[0][j] - frac_ang;
+                    ce_mag                      = phy_struct->dl_ce_mag[0][j] - frac_mag;
+                    ce_ang                      = phy_struct->dl_ce_ang[0][j] - frac_ang;
                     subframe->rx_ce_re[p][0][j] = ce_mag*cosf(ce_ang);
                     subframe->rx_ce_im[p][0][j] = ce_mag*sinf(ce_ang);
 
                     // Interpolate for symbol 9, 10, 11, 12, and 13 channel estimates
-                    frac_mag = (phy_struct->ce_mag[2][j] - phy_struct->ce_mag[1][j])/7;
-                    wrap_phase(&phy_struct->ce_ang[2][j], phy_struct->ce_ang[1][j]);
-                    frac_ang = (phy_struct->ce_ang[2][j] - phy_struct->ce_ang[1][j]);
+                    frac_mag = (phy_struct->dl_ce_mag[2][j] - phy_struct->dl_ce_mag[1][j])/7;
+                    wrap_phase(&phy_struct->dl_ce_ang[2][j], phy_struct->dl_ce_ang[1][j]);
+                    frac_ang = (phy_struct->dl_ce_ang[2][j] - phy_struct->dl_ce_ang[1][j]);
                     wrap_phase(&frac_ang, 0);
                     frac_ang /= 7;
-                    ce_mag    = phy_struct->ce_mag[2][j] - frac_mag;
-                    ce_ang    = phy_struct->ce_ang[2][j] - frac_ang;
+                    ce_mag    = phy_struct->dl_ce_mag[2][j] - frac_mag;
+                    ce_ang    = phy_struct->dl_ce_ang[2][j] - frac_ang;
                     for(z=13; z>8; z--)
                     {
                         ce_mag                      -= frac_mag;
@@ -4321,23 +4800,23 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
                 for(j=0; j<phy_struct->N_rb_dl*phy_struct->N_sc_rb; j++)
                 {
                     // Construct symbol 0, 4, 7, and 11 channel estimates directly
-                    subframe->rx_ce_re[p][0][j]  = phy_struct->ce_mag[0][j]*cosf(phy_struct->ce_ang[0][j]);
-                    subframe->rx_ce_im[p][0][j]  = phy_struct->ce_mag[0][j]*sinf(phy_struct->ce_ang[0][j]);
-                    subframe->rx_ce_re[p][4][j]  = phy_struct->ce_mag[1][j]*cosf(phy_struct->ce_ang[1][j]);
-                    subframe->rx_ce_im[p][4][j]  = phy_struct->ce_mag[1][j]*sinf(phy_struct->ce_ang[1][j]);
-                    subframe->rx_ce_re[p][7][j]  = phy_struct->ce_mag[2][j]*cosf(phy_struct->ce_ang[2][j]);
-                    subframe->rx_ce_im[p][7][j]  = phy_struct->ce_mag[2][j]*sinf(phy_struct->ce_ang[2][j]);
-                    subframe->rx_ce_re[p][11][j] = phy_struct->ce_mag[3][j]*cosf(phy_struct->ce_ang[3][j]);
-                    subframe->rx_ce_im[p][11][j] = phy_struct->ce_mag[3][j]*sinf(phy_struct->ce_ang[3][j]);
+                    subframe->rx_ce_re[p][0][j]  = phy_struct->dl_ce_mag[0][j]*cosf(phy_struct->dl_ce_ang[0][j]);
+                    subframe->rx_ce_im[p][0][j]  = phy_struct->dl_ce_mag[0][j]*sinf(phy_struct->dl_ce_ang[0][j]);
+                    subframe->rx_ce_re[p][4][j]  = phy_struct->dl_ce_mag[1][j]*cosf(phy_struct->dl_ce_ang[1][j]);
+                    subframe->rx_ce_im[p][4][j]  = phy_struct->dl_ce_mag[1][j]*sinf(phy_struct->dl_ce_ang[1][j]);
+                    subframe->rx_ce_re[p][7][j]  = phy_struct->dl_ce_mag[2][j]*cosf(phy_struct->dl_ce_ang[2][j]);
+                    subframe->rx_ce_im[p][7][j]  = phy_struct->dl_ce_mag[2][j]*sinf(phy_struct->dl_ce_ang[2][j]);
+                    subframe->rx_ce_re[p][11][j] = phy_struct->dl_ce_mag[3][j]*cosf(phy_struct->dl_ce_ang[3][j]);
+                    subframe->rx_ce_im[p][11][j] = phy_struct->dl_ce_mag[3][j]*sinf(phy_struct->dl_ce_ang[3][j]);
 
                     // Interpolate for symbol 1, 2, and 3 channel estimates
-                    frac_mag = (phy_struct->ce_mag[1][j] - phy_struct->ce_mag[0][j])/4;
-                    wrap_phase(&phy_struct->ce_ang[1][j], phy_struct->ce_ang[0][j]);
-                    frac_ang = (phy_struct->ce_ang[1][j] - phy_struct->ce_ang[0][j]);
+                    frac_mag = (phy_struct->dl_ce_mag[1][j] - phy_struct->dl_ce_mag[0][j])/4;
+                    wrap_phase(&phy_struct->dl_ce_ang[1][j], phy_struct->dl_ce_ang[0][j]);
+                    frac_ang = (phy_struct->dl_ce_ang[1][j] - phy_struct->dl_ce_ang[0][j]);
                     wrap_phase(&frac_ang, 0);
                     frac_ang /= 4;
-                    ce_mag    = phy_struct->ce_mag[1][j];
-                    ce_ang    = phy_struct->ce_ang[1][j];
+                    ce_mag    = phy_struct->dl_ce_mag[1][j];
+                    ce_ang    = phy_struct->dl_ce_ang[1][j];
                     for(z=3; z>0; z--)
                     {
                         ce_mag                      -= frac_mag;
@@ -4347,13 +4826,13 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
                     }
 
                     // Interpolate for symbol 5 and 6 channel estimates
-                    frac_mag = (phy_struct->ce_mag[2][j] - phy_struct->ce_mag[1][j])/3;
-                    wrap_phase(&phy_struct->ce_ang[2][j], phy_struct->ce_ang[1][j]);
-                    frac_ang = (phy_struct->ce_ang[2][j] - phy_struct->ce_ang[1][j]);
+                    frac_mag = (phy_struct->dl_ce_mag[2][j] - phy_struct->dl_ce_mag[1][j])/3;
+                    wrap_phase(&phy_struct->dl_ce_ang[2][j], phy_struct->dl_ce_ang[1][j]);
+                    frac_ang = (phy_struct->dl_ce_ang[2][j] - phy_struct->dl_ce_ang[1][j]);
                     wrap_phase(&frac_ang, 0);
                     frac_ang /= 3;
-                    ce_mag    = phy_struct->ce_mag[2][j];
-                    ce_ang    = phy_struct->ce_ang[2][j];
+                    ce_mag    = phy_struct->dl_ce_mag[2][j];
+                    ce_ang    = phy_struct->dl_ce_ang[2][j];
                     for(z=6; z>4; z--)
                     {
                         ce_mag                      -= frac_mag;
@@ -4363,13 +4842,13 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
                     }
 
                     // Interpolate for symbol 8, 9, and 10 channel estimates
-                    frac_mag = (phy_struct->ce_mag[3][j] - phy_struct->ce_mag[2][j])/4;
-                    wrap_phase(&phy_struct->ce_ang[3][j], phy_struct->ce_ang[2][j]);
-                    frac_ang = (phy_struct->ce_ang[3][j] - phy_struct->ce_ang[2][j]);
+                    frac_mag = (phy_struct->dl_ce_mag[3][j] - phy_struct->dl_ce_mag[2][j])/4;
+                    wrap_phase(&phy_struct->dl_ce_ang[3][j], phy_struct->dl_ce_ang[2][j]);
+                    frac_ang = (phy_struct->dl_ce_ang[3][j] - phy_struct->dl_ce_ang[2][j]);
                     wrap_phase(&frac_ang, 0);
                     frac_ang /= 4;
-                    ce_mag    = phy_struct->ce_mag[3][j];
-                    ce_ang    = phy_struct->ce_ang[3][j];
+                    ce_mag    = phy_struct->dl_ce_mag[3][j];
+                    ce_ang    = phy_struct->dl_ce_ang[3][j];
                     for(z=10; z>7; z--)
                     {
                         ce_mag                      -= frac_mag;
@@ -4379,13 +4858,13 @@ LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy
                     }
 
                     // Interpolate for symbol 12 and 13 channel estimates
-                    frac_mag = (phy_struct->ce_mag[4][j] - phy_struct->ce_mag[3][j])/3;
-                    wrap_phase(&phy_struct->ce_ang[4][j], phy_struct->ce_ang[3][j]);
-                    frac_ang = (phy_struct->ce_ang[4][j] - phy_struct->ce_ang[3][j]);
+                    frac_mag = (phy_struct->dl_ce_mag[4][j] - phy_struct->dl_ce_mag[3][j])/3;
+                    wrap_phase(&phy_struct->dl_ce_ang[4][j], phy_struct->dl_ce_ang[3][j]);
+                    frac_ang = (phy_struct->dl_ce_ang[4][j] - phy_struct->dl_ce_ang[3][j]);
                     wrap_phase(&frac_ang, 0);
                     frac_ang /= 3;
-                    ce_mag    = phy_struct->ce_mag[4][j];
-                    ce_ang    = phy_struct->ce_ang[4][j];
+                    ce_mag    = phy_struct->dl_ce_mag[4][j];
+                    ce_ang    = phy_struct->dl_ce_ang[4][j];
                     for(z=13; z>11; z--)
                     {
                         ce_mag                      -= frac_mag;
@@ -4525,6 +5004,160 @@ LIBLTE_ERROR_ENUM liblte_phy_get_n_cce(LIBLTE_PHY_STRUCT *phy_struct,
 /*******************************************************************************
                               LOCAL FUNCTIONS
 *******************************************************************************/
+
+/*********************************************************************
+    Name: prach_preamble_seq_gen
+
+    Description: Generates all 64 PRACH preamble sequences
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 5.7.2
+*********************************************************************/
+void prach_preamble_seq_gen(LIBLTE_PHY_STRUCT *phy_struct,
+                            uint32             root_seq_idx,
+                            uint32             pre_format,
+                            uint32             zczc,
+                            bool               hs_flag)
+{
+    double phase;
+    uint32 N_gen_pre = 0;
+    uint32 u;
+    uint32 N_cs;
+    uint32 i;
+    uint32 p;
+    uint32 v;
+    uint32 v_max;
+    uint32 d_u;
+    uint32 d_start;
+    uint32 N_RA_shift;
+    uint32 N_RA_group;
+    uint32 N_neg_RA_shift;
+    uint32 C_v;
+
+    phy_struct->prach_root_seq_idx    = root_seq_idx;
+    phy_struct->prach_preamble_format = pre_format;
+    phy_struct->prach_zczc            = zczc;
+    phy_struct->prach_hs_flag         = hs_flag;
+
+    phy_struct->prach_N_x_u = 0;
+    while(N_gen_pre < 64)
+    {
+        // Determine u and N_zc
+        if(4 == pre_format)
+        {
+            u                      = PRACH_5_7_2_5[root_seq_idx+phy_struct->prach_N_x_u];
+            phy_struct->prach_N_zc = 139;
+        }else{
+            u                      = PRACH_5_7_2_4[root_seq_idx+phy_struct->prach_N_x_u];
+            phy_struct->prach_N_zc = 839;
+        }
+
+        // Generate x_u
+        for(i=0; i<phy_struct->prach_N_zc; i++)
+        {
+            phase                                                = -M_PI*u*i*(i+1)/phy_struct->prach_N_zc;
+            phy_struct->prach_x_u_re[phy_struct->prach_N_x_u][i] = cos(phase);
+            phy_struct->prach_x_u_im[phy_struct->prach_N_x_u][i] = sin(phase);
+        }
+
+        // Determine N_cs
+        if(4 == pre_format)
+        {
+            N_cs = PRACH_5_7_2_3[zczc];
+        }else{
+            if(hs_flag)
+            {
+                N_cs = PRACH_5_7_2_2_RS[zczc];
+            }else{
+                N_cs = PRACH_5_7_2_2_URS[zczc];
+            }
+        }
+
+        // Determine v_max
+        if(hs_flag)
+        {
+            // Determine d_u
+            for(p=1; p<=phy_struct->prach_N_zc; p++)
+            {
+                if(((p*u) % phy_struct->prach_N_zc) == 1)
+                {
+                    break;
+                }
+            }
+            if(p >= 0 && p < phy_struct->prach_N_zc/2)
+            {
+                d_u = p;
+            }else{
+                d_u = phy_struct->prach_N_zc - p;
+            }
+
+            // Determine N_RA_shift, d_start, N_RA_group, and N_neg_RA_shift
+            if(d_u >= N_cs && d_u < phy_struct->prach_N_zc/3)
+            {
+                N_RA_shift     = d_u/N_cs;
+                d_start        = 2*d_u + N_RA_shift*N_cs;
+                N_RA_group     = phy_struct->prach_N_zc/d_start;
+                N_neg_RA_shift = (phy_struct->prach_N_zc - 2*d_u - N_RA_group*d_start)/N_cs;
+                if(N_neg_RA_shift < 0)
+                {
+                    N_neg_RA_shift = 0;
+                }
+            }else{
+                N_RA_shift     = (phy_struct->prach_N_zc - 2*d_u)/N_cs;
+                d_start        = phy_struct->prach_N_zc - 2*d_u + N_RA_shift*N_cs;
+                N_RA_group     = d_u/d_start;
+                N_neg_RA_shift = (d_u - N_RA_group*d_start)/N_cs;
+                if(N_neg_RA_shift < 0)
+                {
+                    N_neg_RA_shift = 0;
+                }
+                if(N_neg_RA_shift > N_RA_shift)
+                {
+                    N_neg_RA_shift = N_RA_shift;
+                }
+            }
+
+            // Restricted set
+            v_max = N_RA_shift*N_RA_group + N_neg_RA_shift - 1;
+        }else{
+            // Unrestricted set
+            if(0 == N_cs)
+            {
+                v_max = 0;
+            }else{
+                v_max = (phy_struct->prach_N_zc/N_cs)-1;
+            }
+        }
+
+        // Generate x_u_v
+        for(v=0; v<=v_max; v++)
+        {
+            if(hs_flag)
+            {
+                // Restricted set
+                C_v = d_start*floor(v/N_RA_shift) + (v % N_RA_shift)*N_cs;
+            }else{
+                // Unrestricted set
+                C_v = v*N_cs;
+            }
+
+            for(i=0; i<phy_struct->prach_N_zc; i++)
+            {
+                phy_struct->prach_x_u_v_re[N_gen_pre][i] = phy_struct->prach_x_u_re[phy_struct->prach_N_x_u][(i+C_v) % phy_struct->prach_N_zc];
+                phy_struct->prach_x_u_v_im[N_gen_pre][i] = phy_struct->prach_x_u_im[phy_struct->prach_N_x_u][(i+C_v) % phy_struct->prach_N_zc];
+            }
+
+            // Determine if enough preambles are generated
+            N_gen_pre++;
+            if(N_gen_pre >= 64)
+            {
+                break;
+            }
+        }
+
+        // Move to the next root sequence
+        phy_struct->prach_N_x_u++;
+    }
+}
 
 /*********************************************************************
     Name: layer_mapper
@@ -5363,24 +5996,24 @@ void symbols_to_samples(LIBLTE_PHY_STRUCT *phy_struct,
 
     for(i=0; i<phy_struct->N_samps_per_symb; i++)
     {
-        phy_struct->s2s_in[i][0] = 0;
-        phy_struct->s2s_in[i][1] = 0;
+        phy_struct->dl_s2s_in[i][0] = 0;
+        phy_struct->dl_s2s_in[i][1] = 0;
     }
     for(i=0; i<(phy_struct->FFT_size/2)-phy_struct->FFT_pad_size; i++)
     {
         // Positive spectrum
-        phy_struct->s2s_in[i+1][0] = symb_re[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)];
-        phy_struct->s2s_in[i+1][1] = symb_im[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)];
+        phy_struct->dl_s2s_in[i+1][0] = symb_re[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)];
+        phy_struct->dl_s2s_in[i+1][1] = symb_im[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)];
 
         // Negative spectrum
-        phy_struct->s2s_in[phy_struct->N_samps_per_symb-i-1][0] = symb_re[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1];
-        phy_struct->s2s_in[phy_struct->N_samps_per_symb-i-1][1] = symb_im[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1];
+        phy_struct->dl_s2s_in[phy_struct->N_samps_per_symb-i-1][0] = symb_re[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1];
+        phy_struct->dl_s2s_in[phy_struct->N_samps_per_symb-i-1][1] = symb_im[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1];
     }
-    fftwf_execute(phy_struct->symbs_to_samps_plan);
+    fftwf_execute(phy_struct->dl_symbs_to_samps_plan);
     for(i=0; i<phy_struct->N_samps_per_symb; i++)
     {
-        samps_re[CP_len+i] = phy_struct->s2s_out[i][0];
-        samps_im[CP_len+i] = phy_struct->s2s_out[i][1];
+        samps_re[CP_len+i] = phy_struct->dl_s2s_out[i][0];
+        samps_im[CP_len+i] = phy_struct->dl_s2s_out[i][1];
     }
     for(i=0; i<CP_len; i++)
     {
@@ -5426,19 +6059,19 @@ void samples_to_symbols(LIBLTE_PHY_STRUCT *phy_struct,
 
     for(i=0; i<phy_struct->N_samps_per_symb; i++)
     {
-        phy_struct->s2s_in[i][0] = samps_re[index+CP_len-1+i];
-        phy_struct->s2s_in[i][1] = samps_im[index+CP_len-1+i];
+        phy_struct->dl_s2s_in[i][0] = samps_re[index+CP_len-1+i];
+        phy_struct->dl_s2s_in[i][1] = samps_im[index+CP_len-1+i];
     }
-    fftwf_execute(phy_struct->samps_to_symbs_plan);
+    fftwf_execute(phy_struct->dl_samps_to_symbs_plan);
     for(i=0; i<(phy_struct->FFT_size/2)-phy_struct->FFT_pad_size; i++)
     {
         // Positive spectrum
-        symb_re[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)] = phy_struct->s2s_out[i+1][0];
-        symb_im[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)] = phy_struct->s2s_out[i+1][1];
+        symb_re[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)] = phy_struct->dl_s2s_out[i+1][0];
+        symb_im[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)] = phy_struct->dl_s2s_out[i+1][1];
 
         // Negative spectrum
-        symb_re[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1] = phy_struct->s2s_out[phy_struct->N_samps_per_symb-i-1][0];
-        symb_im[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1] = phy_struct->s2s_out[phy_struct->N_samps_per_symb-i-1][1];
+        symb_re[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1] = phy_struct->dl_s2s_out[phy_struct->N_samps_per_symb-i-1][0];
+        symb_im[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1] = phy_struct->dl_s2s_out[phy_struct->N_samps_per_symb-i-1][1];
     }
 
     if(scale == 1)

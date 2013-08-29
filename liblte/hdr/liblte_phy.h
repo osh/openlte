@@ -47,6 +47,9 @@
     03/17/2013    Ben Wojtowicz    Moved to single float version of fftw.
     07/21/2013    Ben Wojtowicz    Added routines for determining TBS, MCS,
                                    N_prb, and N_cce.
+    08/26/2013    Ben Wojtowicz    Added PRACH generation and detection support
+                                   and changed ambiguous routines/variables to
+                                   be non-ambiguous.
 
 *******************************************************************************/
 
@@ -198,6 +201,35 @@ typedef struct{
 // Enums
 // Structs
 typedef struct{
+    // PRACH
+    fftwf_complex *prach_dft_in;
+    fftwf_complex *prach_dft_out;
+    fftwf_complex *prach_fft_in;
+    fftwf_complex *prach_fft_out;
+    fftwf_plan     prach_dft_plan;
+    fftwf_plan     prach_ifft_plan;
+    fftwf_plan     prach_fft_plan;
+    fftwf_plan     prach_idft_plan;
+    float          prach_x_u_v_re[64][839];
+    float          prach_x_u_v_im[64][839];
+    float          prach_x_u_re[64][839];
+    float          prach_x_u_im[64][839];
+    float          prach_x_u_fft_re[64][839];
+    float          prach_x_u_fft_im[64][839];
+    float          prach_x_hat_re[839];
+    float          prach_x_hat_im[839];
+    uint32         prach_zczc;
+    uint32         prach_preamble_format;
+    uint32         prach_root_seq_idx;
+    uint32         prach_N_x_u;
+    uint32         prach_N_zc;
+    uint32         prach_T_fft;
+    uint32         prach_T_seq;
+    uint32         prach_T_cp;
+    uint32         prach_delta_f_RA;
+    uint32         prach_phi;
+    bool           prach_hs_flag;
+
     // PDSCH
     float  pdsch_y_est_re[5000];
     float  pdsch_y_est_im[5000];
@@ -285,10 +317,10 @@ typedef struct{
     // CRS & Channel Estimate
     float crs_re[14][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
     float crs_im[14][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
-    float ce_crs_re[16][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
-    float ce_crs_im[16][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
-    float ce_mag[5][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
-    float ce_ang[5][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
+    float dl_ce_crs_re[16][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
+    float dl_ce_crs_im[16][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
+    float dl_ce_mag[5][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
+    float dl_ce_ang[5][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
 
     // PSS
     float pss_mod_re_n1[3][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
@@ -321,7 +353,7 @@ typedef struct{
     int8  sss_z1_m1[31];
 
     // Timing
-    float timing_abs_corr[LIBLTE_PHY_N_SAMPS_PER_SLOT_30_72MHZ*2];
+    float dl_timing_abs_corr[LIBLTE_PHY_N_SAMPS_PER_SLOT_30_72MHZ*2];
 
     // CRS Storage
     float  crs_re_storage[20][3][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP];
@@ -329,10 +361,10 @@ typedef struct{
     uint32 N_id_cell_crs;
 
     // Samples to Symbols & Symbols to Samples
-    fftwf_complex *s2s_in;
-    fftwf_complex *s2s_out;
-    fftwf_plan     symbs_to_samps_plan;
-    fftwf_plan     samps_to_symbs_plan;
+    fftwf_complex *dl_s2s_in;
+    fftwf_complex *dl_s2s_out;
+    fftwf_plan     dl_symbs_to_samps_plan;
+    fftwf_plan     dl_samps_to_symbs_plan;
 
     // Viterbi decode
     float vd_path_metric[128][2048];
@@ -424,6 +456,7 @@ typedef struct{
     uint32 N_samps_per_subfr;
     uint32 N_samps_per_frame;
     uint32 N_rb_dl;
+    uint32 N_rb_ul;
     uint32 N_sc_rb;
     uint32 FFT_pad_size;
     uint32 FFT_size;
@@ -435,7 +468,11 @@ LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT  **phy_struct,
                                   uint8                N_ant,
                                   uint32               N_rb_dl,
                                   uint32               N_sc_rb,
-                                  float                phich_res);
+                                  float                phich_res,
+                                  uint32               prach_root_seq_idx,
+                                  uint32               prach_preamble_format,
+                                  uint32               prach_zczc,
+                                  bool                 prach_hs_flag);
 
 /*********************************************************************
     Name: liblte_phy_cleanup
@@ -463,6 +500,42 @@ LIBLTE_ERROR_ENUM liblte_phy_cleanup(LIBLTE_PHY_STRUCT *phy_struct);
 // Functions
 LIBLTE_ERROR_ENUM liblte_phy_update_n_rb_dl(LIBLTE_PHY_STRUCT *phy_struct,
                                             uint32             N_rb_dl);
+
+/*********************************************************************
+    Name: liblte_phy_generate_prach
+
+    Description: Generates the baseband signal for a PRACH
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 5.7.3
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_phy_generate_prach(LIBLTE_PHY_STRUCT *phy_struct,
+                                            uint32             preamble_idx,
+                                            uint32             freq_offset,
+                                            float             *samps_re,
+                                            float             *samps_im);
+
+/*********************************************************************
+    Name: liblte_phy_detect_prach
+
+    Description: Detects PRACHs from baseband I/Q
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 5.7.2 and 5.7.3
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_phy_detect_prach(LIBLTE_PHY_STRUCT *phy_struct,
+                                          float             *samps_re,
+                                          float             *samps_im,
+                                          uint32             freq_offset,
+                                          uint32            *N_det_pre,
+                                          uint32            *det_pre,
+                                          uint32            *det_ta);
 
 /*********************************************************************
     Name: liblte_phy_pdsch_channel_encode
@@ -716,11 +789,11 @@ LIBLTE_ERROR_ENUM liblte_phy_find_sss(LIBLTE_PHY_STRUCT *phy_struct,
                                       uint32            *frame_start_idx);
 
 /*********************************************************************
-    Name: liblte_phy_find_coarse_timing_and_freq_offset
+    Name: liblte_phy_dl_find_coarse_timing_and_freq_offset
 
     Description: Finds coarse time syncronization and frequency offset
                  by auto-correlating to find the cyclic prefix on
-                 reference signal symbols.
+                 reference signal symbols of the downlink
 
     Document Reference: 3GPP TS 36.211 v10.1.0
 *********************************************************************/
@@ -734,17 +807,17 @@ typedef struct{
     uint32 n_corr_peaks;
 }LIBLTE_PHY_COARSE_TIMING_STRUCT;
 // Functions
-LIBLTE_ERROR_ENUM liblte_phy_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUCT               *phy_struct,
-                                                                float                           *i_samps,
-                                                                float                           *q_samps,
-                                                                uint32                           N_slots,
-                                                                LIBLTE_PHY_COARSE_TIMING_STRUCT *timing_struct);
+LIBLTE_ERROR_ENUM liblte_phy_dl_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUCT               *phy_struct,
+                                                                   float                           *i_samps,
+                                                                   float                           *q_samps,
+                                                                   uint32                           N_slots,
+                                                                   LIBLTE_PHY_COARSE_TIMING_STRUCT *timing_struct);
 
 /*********************************************************************
-    Name: liblte_phy_create_subframe
+    Name: liblte_phy_create_dl_subframe
 
     Description: Creates the baseband signal for a particular
-                 subframe
+                 downlink subframe
 
     Document Reference: 3GPP TS 36.211 v10.1.0
 *********************************************************************/
@@ -752,17 +825,17 @@ LIBLTE_ERROR_ENUM liblte_phy_find_coarse_timing_and_freq_offset(LIBLTE_PHY_STRUC
 // Enums
 // Structs
 // Functions
-LIBLTE_ERROR_ENUM liblte_phy_create_subframe(LIBLTE_PHY_STRUCT          *phy_struct,
-                                             LIBLTE_PHY_SUBFRAME_STRUCT *subframe,
-                                             uint8                       ant,
-                                             float                      *i_samps,
-                                             float                      *q_samps);
+LIBLTE_ERROR_ENUM liblte_phy_create_dl_subframe(LIBLTE_PHY_STRUCT          *phy_struct,
+                                                LIBLTE_PHY_SUBFRAME_STRUCT *subframe,
+                                                uint8                       ant,
+                                                float                      *i_samps,
+                                                float                      *q_samps);
 
 /*********************************************************************
-    Name: liblte_phy_get_subframe_and_ce
+    Name: liblte_phy_get_dl_subframe_and_ce
 
     Description: Resolves all symbols and channel estimates for a
-                 particular subframe
+                 particular downlink subframe
 
     Document Reference: 3GPP TS 36.211 v10.1.0
 *********************************************************************/
@@ -770,14 +843,14 @@ LIBLTE_ERROR_ENUM liblte_phy_create_subframe(LIBLTE_PHY_STRUCT          *phy_str
 // Enums
 // Structs
 // Functions
-LIBLTE_ERROR_ENUM liblte_phy_get_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy_struct,
-                                                 float                      *i_samps,
-                                                 float                      *q_samps,
-                                                 uint32                      frame_start_idx,
-                                                 uint8                       subfr_num,
-                                                 uint32                      N_id_cell,
-                                                 uint8                       N_ant,
-                                                 LIBLTE_PHY_SUBFRAME_STRUCT *subframe);
+LIBLTE_ERROR_ENUM liblte_phy_get_dl_subframe_and_ce(LIBLTE_PHY_STRUCT          *phy_struct,
+                                                    float                      *i_samps,
+                                                    float                      *q_samps,
+                                                    uint32                      frame_start_idx,
+                                                    uint8                       subfr_num,
+                                                    uint32                      N_id_cell,
+                                                    uint8                       N_ant,
+                                                    LIBLTE_PHY_SUBFRAME_STRUCT *subframe);
 
 /*********************************************************************
     Name: liblte_phy_get_tbs_mcs_and_n_prb_for_dl

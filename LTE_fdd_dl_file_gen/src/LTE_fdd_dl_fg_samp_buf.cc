@@ -37,6 +37,8 @@
     03/03/2013    Ben Wojtowicz    Added support for a test load and using the
                                    latest libraries.
     07/21/2013    Ben Wojtowicz    Using the latest LTE library.
+    08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7 and the
+                                   latest LTE library.
 
 *******************************************************************************/
 
@@ -46,7 +48,7 @@
 
 #include "LTE_fdd_dl_fg_samp_buf.h"
 #include "liblte_mac.h"
-#include "gr_io_signature.h"
+#include <gnuradio/io_signature.h>
 #include <errno.h>
 
 /*******************************************************************************
@@ -79,9 +81,9 @@ LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf()
 }
 
 LTE_fdd_dl_fg_samp_buf::LTE_fdd_dl_fg_samp_buf()
-    : gr_sync_block ("samp_buf",
-                     gr_make_io_signature(MIN_IN,  MAX_IN,  sizeof(int8)),
-                     gr_make_io_signature(MIN_OUT, MAX_OUT, sizeof(int8)))
+    : gr::sync_block ("samp_buf",
+                      gr::io_signature::make(MIN_IN,  MAX_IN,  sizeof(int8)),
+                      gr::io_signature::make(MIN_OUT, MAX_OUT, sizeof(int8)))
 {
     // Initialize the LTE parameters
     // General
@@ -273,7 +275,11 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                             N_ant,
                             N_rb_dl,
                             LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                            phich_res);
+                            phich_res,
+                            0,
+                            0,
+                            1,
+                            false);
         }
     }
     free(line);
@@ -525,11 +531,11 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                 // Construct the output
                 for(p=0; p<N_ant; p++)
                 {
-                    liblte_phy_create_subframe(phy_struct,
-                                               &subframe,
-                                               p,
-                                               &i_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + (subframe.num*30720)],
-                                               &q_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + (subframe.num*30720)]);
+                    liblte_phy_create_dl_subframe(phy_struct,
+                                                  &subframe,
+                                                  p,
+                                                  &i_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + (subframe.num*30720)],
+                                                  &q_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + (subframe.num*30720)]);
                 }
             }
         }else{

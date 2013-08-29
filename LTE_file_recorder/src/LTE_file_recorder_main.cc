@@ -17,31 +17,24 @@
 
 *******************************************************************************
 
-    File: LTE_fdd_dl_scan_flowgraph.h
+    File: LTE_file_recorder_main.cc
 
-    Description: Contains all the definitions for the LTE FDD DL Scanner
-                 gnuradio flowgraph.
+    Description: Contains all the implementations for the LTE file recorder
+                 main loop.
 
     Revision History
     ----------    -------------    --------------------------------------------
-    02/26/2013    Ben Wojtowicz    Created file
-    07/21/2013    Ben Wojtowicz    Added support for HackRF Jawbreaker
-    08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7.
+    08/26/2013    Ben Wojtowicz    Created file
 
 *******************************************************************************/
-
-#ifndef __LTE_FDD_DL_SCAN_FLOWGRAPH_H__
-#define __LTE_FDD_DL_SCAN_FLOWGRAPH_H__
 
 /*******************************************************************************
                               INCLUDES
 *******************************************************************************/
 
-#include "LTE_fdd_dl_scan_interface.h"
-#include "LTE_fdd_dl_scan_state_machine.h"
-#include <boost/thread/mutex.hpp>
-#include <gnuradio/top_block.h>
-#include <osmosdr/source.h>
+#include "LTE_file_recorder_interface.h"
+#include "LTE_file_recorder_flowgraph.h"
+#include <unistd.h>
 
 /*******************************************************************************
                               DEFINES
@@ -49,54 +42,39 @@
 
 
 /*******************************************************************************
-                              FORWARD DECLARATIONS
-*******************************************************************************/
-
-
-/*******************************************************************************
                               TYPEDEFS
 *******************************************************************************/
 
-typedef enum{
-    LTE_FDD_DL_SCAN_HW_TYPE_RTL_SDR = 0,
-    LTE_FDD_DL_SCAN_HW_TYPE_HACKRF,
-    LTE_FDD_DL_SCAN_HW_TYPE_UNKNOWN,
-}LTE_FDD_DL_SCAN_HW_TYPE_ENUM;
 
 /*******************************************************************************
-                              CLASS DECLARATIONS
+                              GLOBAL VARIABLES
 *******************************************************************************/
 
-class LTE_fdd_dl_scan_flowgraph
+
+/*******************************************************************************
+                              CLASS IMPLEMENTATIONS
+*******************************************************************************/
+
+int main(int argc, char *argv[])
 {
-public:
-    // Singleton
-    static LTE_fdd_dl_scan_flowgraph* get_instance(void);
-    static void cleanup(void);
+    LTE_file_recorder_interface *interface = LTE_file_recorder_interface::get_instance();
+    LTE_file_recorder_flowgraph *flowgraph = LTE_file_recorder_flowgraph::get_instance();
 
-    // Flowgraph
-    bool is_started(void);
-    LTE_FDD_DL_SCAN_STATUS_ENUM start(uint16 dl_earfcn);
-    LTE_FDD_DL_SCAN_STATUS_ENUM stop(void);
-    void update_center_freq(uint16 dl_earfcn);
+    interface->set_ctrl_port(LTE_FILE_RECORDER_DEFAULT_CTRL_PORT);
+    interface->start_ctrl_port();
 
-private:
-    // Singleton
-    static LTE_fdd_dl_scan_flowgraph *instance;
-    LTE_fdd_dl_scan_flowgraph();
-    ~LTE_fdd_dl_scan_flowgraph();
+    printf("*** LTE File Recorder ***\n");
+    printf("Please connect to control port %u\n", LTE_FILE_RECORDER_DEFAULT_CTRL_PORT);
 
-    // Run
-    static void* run_thread(void *inputs);
+    while(!interface->get_shutdown())
+    {
+        sleep(1);
+    }
 
-    // Variables
-    gr::top_block_sptr                 top_block;
-    osmosdr::source::sptr              samp_src;
-    LTE_fdd_dl_scan_state_machine_sptr state_machine;
-
-    pthread_t    start_thread;
-    boost::mutex start_mutex;
-    bool         started;
-};
-
-#endif /* __LTE_FDD_DL_SCAN_FLOWGRAPH_H__ */
+    if(flowgraph->is_started())
+    {
+        flowgraph->stop();
+    }
+    flowgraph->cleanup();
+    interface->cleanup();
+}

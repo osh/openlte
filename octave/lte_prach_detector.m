@@ -28,6 +28,9 @@
 %              det_ta       - Detected timing advance of the preambles
 % Spec:        3GPP TS 36.211 section 5.7.2 v10.1.0
 % Rev History: Ben Wojtowicz 07/21/2013 Created
+%              Ben Wojtowicz 08/26/2013 Fixed a bug in the frequency domain conversion,
+%                                       added support for all sampling rates, and added
+%                                       a qualification metric
 %
 function [det_preamble, det_ta] = lte_prach_detector(x_u, prach_bb, root_seq_idx, pre_format, zczc, hs_flag, prach_freq_offset, N_ul_rb)
 
@@ -49,9 +52,11 @@ function [det_preamble, det_ta] = lte_prach_detector(x_u, prach_bb, root_seq_idx
     if(pre_format >= 0 && pre_format <= 3)
         delta_f_RA = 1250;
         N_zc       = 839;
+        phi        = 7;
     else
         delta_f_RA = 7500;
         N_zc       = 139;
+        phi        = 2;
     endif
 
     % Determine v_max and N_cs
@@ -127,10 +132,33 @@ function [det_preamble, det_ta] = lte_prach_detector(x_u, prach_bb, root_seq_idx
     endif
 
     % Parameters
-    % FIXME: Only supports 30.72MHz sampling rate
+    if(100 == N_ul_rb)
+        FFT_size = 2048;
+    elseif(75 == N_ul_rb)
+        FFT_size = 2048;
+    elseif(50 == N_ul_rb)
+        FFT_size = 1024;
+        T_fft    = T_fft/2;
+        T_seq    = T_seq/2;
+        T_cp     = T_cp/2;
+    elseif(25 == N_ul_rb)
+        FFT_size = 512;
+        T_fft    = T_fft/4;
+        T_seq    = T_seq/4;
+        T_cp     = T_cp/4;
+    elseif(15 == N_ul_rb)
+        FFT_size = 256;
+        T_fft    = T_fft/8;
+        T_seq    = T_seq/8;
+        T_cp     = T_cp/8;
+    else % 6 == N_ul_rb
+        FFT_size = 6;
+        T_fft    = T_fft/16;
+        T_seq    = T_seq/16;
+        T_cp     = T_cp/16;
+    endif
     N_ra_prb = prach_freq_offset;
     N_sc_rb  = 12;
-    FFT_size = 2048;
     k_0      = N_ra_prb*N_sc_rb - N_ul_rb*N_sc_rb/2 + (FFT_size/2);
     K        = 15000/delta_f_RA;
 
@@ -138,7 +166,8 @@ function [det_preamble, det_ta] = lte_prach_detector(x_u, prach_bb, root_seq_idx
     fd_sig = fftshift(fft(prach_bb(T_cp:T_cp+T_fft-1)));
 
     % Recover the PRACH signal
-    x_fd_sig = fd_sig(k_0*K+1:k_0*K+N_zc-1+1);
+    start    = phi+K*(k_0+0.5);
+    x_fd_sig = fd_sig(start+1:start+N_zc-1+1);
 
     % Correlate with all the available roots
     [N_roots, root_len] = size(x_u);
@@ -157,18 +186,27 @@ function [det_preamble, det_ta] = lte_prach_detector(x_u, prach_bb, root_seq_idx
     max_val    = 0;
     max_root   = 0;
     max_offset = 0;
+    ave_val    = 0;
     for(n=1:N_roots)
         for(m=1:root_len)
+            ave_val = ave_val + abs(corr_vec(n,m));
             if(abs(corr_vec(n,m)) > max_val)
                 max_val    = abs(corr_vec(n,m));
+                max_phase  = angle(corr_vec(n,m));
                 max_root   = n;
                 max_offset = m;
             endif
         endfor
+        ave_val = ave_val/root_len;
     endfor
 
-    det_preamble = floor((max_root-1)*(v_max+1) + (mod(max_offset+N_cs-1, N_zc))/N_cs);
-    det_ta       = floor(mod(N_cs - mod(max_offset+N_cs-1, N_zc), N_cs)*29.155/16);
+    if(max_val >= 10*ave_val)
+        det_preamble = floor((max_root-1)*(v_max+1) + (mod(max_offset+N_cs-1, N_zc))/N_cs);
+        det_ta       = floor(mod(N_cs - mod(max_offset+N_cs-1, N_zc), N_cs)*29.155/16);
+    else
+        det_preamble = -1;
+        det_ta       = -1;
+    endif
 
     % FIXME: Use phase angle to determine more fine grain timing
 

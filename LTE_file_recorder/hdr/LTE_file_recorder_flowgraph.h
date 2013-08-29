@@ -17,31 +17,29 @@
 
 *******************************************************************************
 
-    File: LTE_fdd_dl_scan_flowgraph.h
+    File: LTE_file_recorder_flowgraph.h
 
-    Description: Contains all the definitions for the LTE FDD DL Scanner
+    Description: Contains all the definitions for the LTE file recorder
                  gnuradio flowgraph.
 
     Revision History
     ----------    -------------    --------------------------------------------
-    02/26/2013    Ben Wojtowicz    Created file
-    07/21/2013    Ben Wojtowicz    Added support for HackRF Jawbreaker
-    08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7.
+    08/26/2013    Ben Wojtowicz    Created file
 
 *******************************************************************************/
 
-#ifndef __LTE_FDD_DL_SCAN_FLOWGRAPH_H__
-#define __LTE_FDD_DL_SCAN_FLOWGRAPH_H__
+#ifndef __LTE_FILE_RECORDER_FLOWGRAPH_H__
+#define __LTE_FILE_RECORDER_FLOWGRAPH_H__
 
 /*******************************************************************************
                               INCLUDES
 *******************************************************************************/
 
-#include "LTE_fdd_dl_scan_interface.h"
-#include "LTE_fdd_dl_scan_state_machine.h"
+#include "LTE_file_recorder_interface.h"
 #include <boost/thread/mutex.hpp>
 #include <gnuradio/top_block.h>
 #include <osmosdr/source.h>
+#include <gnuradio/blocks/file_sink.h>
 
 /*******************************************************************************
                               DEFINES
@@ -58,45 +56,44 @@
 *******************************************************************************/
 
 typedef enum{
-    LTE_FDD_DL_SCAN_HW_TYPE_RTL_SDR = 0,
-    LTE_FDD_DL_SCAN_HW_TYPE_HACKRF,
-    LTE_FDD_DL_SCAN_HW_TYPE_UNKNOWN,
-}LTE_FDD_DL_SCAN_HW_TYPE_ENUM;
+    LTE_FILE_RECORDER_HW_TYPE_RTL_SDR = 0,
+    LTE_FILE_RECORDER_HW_TYPE_HACKRF,
+    LTE_FILE_RECORDER_HW_TYPE_UNKNOWN,
+}LTE_FILE_RECORDER_HW_TYPE_ENUM;
 
 /*******************************************************************************
                               CLASS DECLARATIONS
 *******************************************************************************/
 
-class LTE_fdd_dl_scan_flowgraph
+class LTE_file_recorder_flowgraph
 {
 public:
     // Singleton
-    static LTE_fdd_dl_scan_flowgraph* get_instance(void);
+    static LTE_file_recorder_flowgraph* get_instance(void);
     static void cleanup(void);
 
     // Flowgraph
     bool is_started(void);
-    LTE_FDD_DL_SCAN_STATUS_ENUM start(uint16 dl_earfcn);
-    LTE_FDD_DL_SCAN_STATUS_ENUM stop(void);
-    void update_center_freq(uint16 dl_earfcn);
+    LTE_FILE_RECORDER_STATUS_ENUM start(uint16 earfcn, std::string file_name);
+    LTE_FILE_RECORDER_STATUS_ENUM stop(void);
 
 private:
     // Singleton
-    static LTE_fdd_dl_scan_flowgraph *instance;
-    LTE_fdd_dl_scan_flowgraph();
-    ~LTE_fdd_dl_scan_flowgraph();
+    static LTE_file_recorder_flowgraph *instance;
+    LTE_file_recorder_flowgraph();
+    ~LTE_file_recorder_flowgraph();
 
     // Run
     static void* run_thread(void *inputs);
 
     // Variables
-    gr::top_block_sptr                 top_block;
-    osmosdr::source::sptr              samp_src;
-    LTE_fdd_dl_scan_state_machine_sptr state_machine;
+    gr::top_block_sptr          top_block;
+    osmosdr::source::sptr       samp_src;
+    gr::blocks::file_sink::sptr file_sink;
 
     pthread_t    start_thread;
     boost::mutex start_mutex;
     bool         started;
 };
 
-#endif /* __LTE_FDD_DL_SCAN_FLOWGRAPH_H__ */
+#endif /* __LTE_FILE_RECORDER_FLOWGRAPH_H__ */

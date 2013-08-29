@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from gnuradio import gr
+from gnuradio import blocks
 from gnuradio.eng_option import eng_option
 from optparse import OptionParser
 import LTE_fdd_dl_fg
@@ -23,7 +24,7 @@ class LTE_fdd_dl_file_gen(gr.top_block):
 
         # Build flow graph
         self.samp_buf = LTE_fdd_dl_fg.samp_buf()
-        self.fsink = gr.file_sink(gr.sizeof_char, output_filename)
+        self.fsink = blocks.file_sink(gr.sizeof_char, output_filename)
         self.connect(self.samp_buf, self.fsink)
 
 if __name__ == '__main__':
