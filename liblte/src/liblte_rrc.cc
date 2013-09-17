@@ -36,6 +36,8 @@
                                    and paging packing and unpacking.
     07/21/2013    Ben Wojtowicz    Fixed several bugs and moved to the common
                                    message struct.
+    09/16/2013    Ben Wojtowicz    Added error checking on sizes passed to
+                                   memcpy.
 
 *******************************************************************************/
 
@@ -6457,21 +6459,31 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_bcch_dlsch_msg(LIBLTE_RRC_BCCH_DLSCH_MSG_STRUC
             // SIB1 Choice
             rrc_value_2_bits(1, &msg_ptr, 1);
 
-            liblte_rrc_pack_sys_info_block_type_1_msg((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *)&bcch_dlsch_msg->sibs[0].sib,
-                                                      &global_msg);
-            memcpy(msg_ptr, global_msg.msg, global_msg.N_bits);
-            msg->N_bits = global_msg.N_bits + 2;
+            err = liblte_rrc_pack_sys_info_block_type_1_msg((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *)&bcch_dlsch_msg->sibs[0].sib,
+                                                            &global_msg);
+            if(global_msg.N_bits <= (LIBLTE_MAX_MSG_SIZE - 2))
+            {
+                memcpy(msg_ptr, global_msg.msg, global_msg.N_bits);
+                msg->N_bits = global_msg.N_bits + 2;
+            }else{
+                msg->N_bits = 0;
+                err         = LIBLTE_ERROR_INVALID_INPUTS;
+            }
         }else{
             // SIB1 Choice
             rrc_value_2_bits(0, &msg_ptr, 1);
 
-            liblte_rrc_pack_sys_info_msg(bcch_dlsch_msg,
-                                         &global_msg);
-            memcpy(msg_ptr, global_msg.msg, global_msg.N_bits);
-            msg->N_bits = global_msg.N_bits + 2;
+            err = liblte_rrc_pack_sys_info_msg(bcch_dlsch_msg,
+                                               &global_msg);
+            if(global_msg.N_bits <= (LIBLTE_MAX_MSG_SIZE - 2))
+            {
+                memcpy(msg_ptr, global_msg.msg, global_msg.N_bits);
+                msg->N_bits = global_msg.N_bits + 2;
+            }else{
+                msg->N_bits = 0;
+                err         = LIBLTE_ERROR_INVALID_INPUTS;
+            }
         }
-
-        err = LIBLTE_SUCCESS;
     }
 
     return(err);
@@ -6495,16 +6507,22 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_dlsch_msg(LIBLTE_MSG_STRUCT            
         {
             bcch_dlsch_msg->N_sibs           = 1;
             bcch_dlsch_msg->sibs[0].sib_type = LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1;
-            memcpy(global_msg.msg, msg_ptr, msg->N_bits-(msg_ptr-msg->msg));
-            global_msg.N_bits = msg->N_bits-(msg_ptr-msg->msg);
-            err               = liblte_rrc_unpack_sys_info_block_type_1_msg(&global_msg,
-                                                                            (LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *)&bcch_dlsch_msg->sibs[0].sib,
-                                                                            &N_bits_used);
-            msg_ptr += N_bits_used;
+            if((msg->N_bits-(msg_ptr-msg->msg)) <= (LIBLTE_MAX_MSG_SIZE - 2))
+            {
+                memcpy(global_msg.msg, msg_ptr, msg->N_bits-(msg_ptr-msg->msg));
+                global_msg.N_bits = msg->N_bits-(msg_ptr-msg->msg);
+                err               = liblte_rrc_unpack_sys_info_block_type_1_msg(&global_msg,
+                                                                                (LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *)&bcch_dlsch_msg->sibs[0].sib,
+                                                                                &N_bits_used);
+                msg_ptr += N_bits_used;
+            }
         }else{
-            memcpy(global_msg.msg, msg_ptr, msg->N_bits-(msg_ptr-msg->msg));
-            err = liblte_rrc_unpack_sys_info_msg(&global_msg,
-                                                 bcch_dlsch_msg);
+            if((msg->N_bits-(msg_ptr-msg->msg)) <= (LIBLTE_MAX_MSG_SIZE - 2))
+            {
+                memcpy(global_msg.msg, msg_ptr, msg->N_bits-(msg_ptr-msg->msg));
+                err = liblte_rrc_unpack_sys_info_msg(&global_msg,
+                                                     bcch_dlsch_msg);
+            }
         }
     }
 
@@ -6535,8 +6553,14 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_pcch_msg(LIBLTE_RRC_PCCH_MSG_STRUCT *pcch_msg,
 
         err = liblte_rrc_pack_paging_msg(pcch_msg,
                                          &global_msg);
-        memcpy(msg_ptr, global_msg.msg, global_msg.N_bits);
-        msg->N_bits = global_msg.N_bits + 1;
+        if(global_msg.N_bits <= (LIBLTE_MAX_MSG_SIZE - 1))
+        {
+            memcpy(msg_ptr, global_msg.msg, global_msg.N_bits);
+            msg->N_bits = global_msg.N_bits + 1;
+        }else{
+            msg->N_bits = 0;
+            err         = LIBLTE_ERROR_INVALID_INPUTS;
+        }
     }
 
     return(err);
@@ -6554,9 +6578,12 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_pcch_msg(LIBLTE_MSG_STRUCT          *msg,
         // Paging choice
         rrc_bits_2_value(&msg_ptr, 1);
 
-        memcpy(global_msg.msg, msg_ptr, msg->N_bits-(msg_ptr-msg->msg));
-        err = liblte_rrc_unpack_paging_msg(&global_msg,
-                                           pcch_msg);
+        if((msg->N_bits-(msg_ptr-msg->msg)) <= (LIBLTE_MAX_MSG_SIZE - 1))
+        {
+            memcpy(global_msg.msg, msg_ptr, msg->N_bits-(msg_ptr-msg->msg));
+            err = liblte_rrc_unpack_paging_msg(&global_msg,
+                                               pcch_msg);
+        }
     }
 
     return(err);

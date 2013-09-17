@@ -34,6 +34,7 @@
     03/03/2013    Ben Wojtowicz    Added support for a test load.
     07/21/2013    Ben Wojtowicz    Using the latest LTE library.
     08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7.
+    09/16/2013    Ben Wojtowicz    Added support for changing the sample rate.
 
 *******************************************************************************/
 
@@ -53,7 +54,7 @@
                               DEFINES
 *******************************************************************************/
 
-#define LTE_FDD_DL_FG_SAMP_BUF_SIZE (307200)
+#define LTE_FDD_DL_FG_SAMP_BUF_SIZE (LIBLTE_PHY_N_SAMPS_PER_FRAME_30_72MHZ)
 
 // Configurable Parameters
 #define BANDWIDTH_PARAM          "bandwidth"
@@ -129,6 +130,7 @@ private:
     LIBLTE_PHY_PHICH_STRUCT                  phich;
     LIBLTE_PHY_PDCCH_STRUCT                  pdcch;
     LIBLTE_PHY_SUBFRAME_STRUCT               subframe;
+    LIBLTE_PHY_FS_ENUM                       fs;
     float                                    phich_res;
     float                                    bandwidth;
     uint32                                   sfn;

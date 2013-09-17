@@ -39,6 +39,7 @@
     07/21/2013    Ben Wojtowicz    Using the latest LTE library.
     08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7 and the
                                    latest LTE library.
+    09/16/2013    Ben Wojtowicz    Added support for changing the sample rate.
 
 *******************************************************************************/
 
@@ -87,8 +88,9 @@ LTE_fdd_dl_fg_samp_buf::LTE_fdd_dl_fg_samp_buf()
 {
     // Initialize the LTE parameters
     // General
-    bandwidth    = 10;
-    N_rb_dl      = LIBLTE_PHY_N_RB_DL_10MHZ;
+    bandwidth    = 20;
+    N_rb_dl      = LIBLTE_PHY_N_RB_DL_20MHZ;
+    fs           = LIBLTE_PHY_FS_30_72MHZ;
     sfn          = 0;
     N_frames     = 30;
     N_ant        = 1;
@@ -98,7 +100,7 @@ LTE_fdd_dl_fg_samp_buf::LTE_fdd_dl_fg_samp_buf()
     sib_tx_mode  = 1;
     percent_load = 0;
     // MIB
-    mib.dl_bw            = LIBLTE_RRC_DL_BANDWIDTH_50;
+    mib.dl_bw            = LIBLTE_RRC_DL_BANDWIDTH_100;
     mib.phich_config.dur = LIBLTE_RRC_PHICH_DURATION_NORMAL;
     mib.phich_config.res = LIBLTE_RRC_PHICH_RESOURCE_1;
     phich_res            = 1;
@@ -270,7 +272,7 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
         {
             // Initialize the LTE library
             liblte_phy_init(&phy_struct,
-                            LIBLTE_PHY_FS_30_72MHZ,
+                            fs,
                             N_id_cell,
                             N_ant,
                             N_rb_dl,
@@ -534,8 +536,8 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                     liblte_phy_create_dl_subframe(phy_struct,
                                                   &subframe,
                                                   p,
-                                                  &i_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + (subframe.num*30720)],
-                                                  &q_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + (subframe.num*30720)]);
+                                                  &i_buf[(p*phy_struct->N_samps_per_frame) + (subframe.num*phy_struct->N_samps_per_subfr)],
+                                                  &q_buf[(p*phy_struct->N_samps_per_frame) + (subframe.num*phy_struct->N_samps_per_subfr)]);
                 }
             }
         }else{
@@ -558,7 +560,7 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                 q_samp = 0;
                 for(p=0; p<N_ant; p++)
                 {
-                    q_samp += q_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + samp_buf_idx];
+                    q_samp += q_buf[(p*phy_struct->N_samps_per_frame) + samp_buf_idx];
                 }
                 out[out_idx++] = (int8)(q_samp);
                 samp_buf_idx++;
@@ -566,9 +568,9 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
             }
 
             // Determine how many full samples to write
-            if((LTE_FDD_DL_FG_SAMP_BUF_SIZE - samp_buf_idx) < ((noutput_items - act_noutput_items) / 2))
+            if((phy_struct->N_samps_per_frame - samp_buf_idx) < ((noutput_items - act_noutput_items) / 2))
             {
-                loop_cnt = (LTE_FDD_DL_FG_SAMP_BUF_SIZE - samp_buf_idx)*2;
+                loop_cnt = (phy_struct->N_samps_per_frame - samp_buf_idx)*2;
             }else{
                 loop_cnt = noutput_items - act_noutput_items;
             }
@@ -580,8 +582,8 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                 q_samp = 0;
                 for(p=0; p<N_ant; p++)
                 {
-                    i_samp += i_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + samp_buf_idx];
-                    q_samp += q_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + samp_buf_idx];
+                    i_samp += i_buf[(p*phy_struct->N_samps_per_frame) + samp_buf_idx];
+                    q_samp += q_buf[(p*phy_struct->N_samps_per_frame) + samp_buf_idx];
                 }
 
                 out[out_idx++] = (int8)(i_samp);
@@ -596,7 +598,7 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                 i_samp = 0;
                 for(p=0; p<N_ant; p++)
                 {
-                    i_samp += i_buf[(p*LTE_FDD_DL_FG_SAMP_BUF_SIZE) + samp_buf_idx];
+                    i_samp += i_buf[(p*phy_struct->N_samps_per_frame) + samp_buf_idx];
                 }
                 out[out_idx++] = (int8)(i_samp);
                 act_noutput_items++;
@@ -607,7 +609,7 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
         }
 
         // Check to see if we need more samples
-        if(samp_buf_idx >= LTE_FDD_DL_FG_SAMP_BUF_SIZE)
+        if(samp_buf_idx >= phy_struct->N_samps_per_frame)
         {
             samples_ready = false;
             samp_buf_idx  = 0;
@@ -926,26 +928,32 @@ bool LTE_fdd_dl_fg_samp_buf::set_bandwidth(char *char_value)
         bandwidth = 1.4;
         N_rb_dl   = LIBLTE_PHY_N_RB_DL_1_4MHZ;
         mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_6;
+        fs        = LIBLTE_PHY_FS_1_92MHZ;
     }else if(!strcasecmp(char_value, "3")){
         bandwidth = 3;
         N_rb_dl   = LIBLTE_PHY_N_RB_DL_3MHZ;
         mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_15;
+        fs        = LIBLTE_PHY_FS_3_84MHZ;
     }else if(!strcasecmp(char_value, "5")){
         bandwidth = 5;
         N_rb_dl   = LIBLTE_PHY_N_RB_DL_5MHZ;
         mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_25;
+        fs        = LIBLTE_PHY_FS_7_68MHZ;
     }else if(!strcasecmp(char_value, "10")){
         bandwidth = 10;
         N_rb_dl   = LIBLTE_PHY_N_RB_DL_10MHZ;
         mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_50;
+        fs        = LIBLTE_PHY_FS_15_36MHZ;
     }else if(!strcasecmp(char_value, "15")){
         bandwidth = 15;
         N_rb_dl   = LIBLTE_PHY_N_RB_DL_15MHZ;
         mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_75;
+        fs        = LIBLTE_PHY_FS_30_72MHZ;
     }else if(!strcasecmp(char_value, "20")){
         bandwidth = 20;
         N_rb_dl   = LIBLTE_PHY_N_RB_DL_20MHZ;
         mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_100;
+        fs        = LIBLTE_PHY_FS_30_72MHZ;
     }else{
         err = true;
     }

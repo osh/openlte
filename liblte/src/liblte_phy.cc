@@ -71,6 +71,9 @@
     08/26/2013    Ben Wojtowicz    Added PRACH generation and detection support
                                    and changed ambiguous routines/variables to
                                    be non-ambiguous.
+    09/16/2013    Ben Wojtowicz    Implemented routines for determining TBS,
+                                   MCS, N_prb, and N_cce.  Fixed a bug in the
+                                   RIV calculation of dci_1a_unpack.
 
 *******************************************************************************/
 
@@ -4890,6 +4893,8 @@ LIBLTE_ERROR_ENUM liblte_phy_get_dl_subframe_and_ce(LIBLTE_PHY_STRUCT          *
                  the specified number of DL bits
 
     Document Reference: 3GPP TS 36.213 v10.3.0 section 7.1.7
+
+    NOTES: Currently only supports DCI format 1A
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_dl(uint32  N_bits,
                                                           uint32  N_subframe,
@@ -4908,7 +4913,10 @@ LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_dl(uint32  N_bits,
        mcs   != NULL &&
        N_prb != NULL)
     {
-        if(LIBLTE_MAC_SI_RNTI == rnti)
+        if(LIBLTE_MAC_SI_RNTI        == rnti ||
+           LIBLTE_MAC_P_RNTI         == rnti ||
+           (LIBLTE_MAC_RA_RNTI_START <= rnti &&
+            LIBLTE_MAC_RA_RNTI_END   >= rnti))
         {
             // Choose N_prb == 2 to give the largest possible tbs
             N_prb_tmp = 2;
@@ -4956,16 +4964,48 @@ LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_dl(uint32  N_bits,
                  scheme
 
     Document Reference: 3GPP TS 36.213 v10.3.0 section 7.1.7
+
+    NOTES: Currently only supports single layer transport blocks
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_phy_get_tbs_and_n_prb_for_dl(uint32  N_bits,
-                                                      uint32  N_subframe,
                                                       uint32  N_rb_dl,
-                                                      uint16  rnti,
                                                       uint8   mcs,
                                                       uint32 *tbs,
                                                       uint32 *N_prb)
 {
-    // FIXME
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            I_tbs;
+    uint32            i;
+
+    if(tbs   != NULL &&
+       N_prb != NULL &&
+       mcs   <= 28)
+    {
+        // Determine I_tbs
+        if(9 >= mcs)
+        {
+            I_tbs = mcs;
+        }else if(16 >= mcs){
+            I_tbs = mcs - 1;
+        }else{
+            I_tbs = mcs - 2;
+        }
+
+        // Determine N_prb
+        for(i=0; i<N_rb_dl; i++)
+        {
+            if(N_bits < TBS_71721[I_tbs][i])
+            {
+                *tbs   = TBS_71721[I_tbs][i];
+                *N_prb = i + 1;
+                break;
+            }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
 }
 
 /*********************************************************************
@@ -4983,7 +5023,44 @@ LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_ul(uint32  N_bits,
                                                           uint8  *mcs,
                                                           uint32 *N_prb)
 {
-    // FIXME
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            I_tbs;
+    uint32            i;
+    uint32            j;
+
+    if(tbs   != NULL &&
+       mcs   != NULL &&
+       N_prb != NULL)
+    {
+        // Determine I_tbs and N_prb
+        for(i=0; i<27; i++)
+        {
+            for(j=0; j<N_rb_ul; j++)
+            {
+                if(N_bits < TBS_71721[i][j])
+                {
+                    I_tbs  = i;
+                    *tbs   = TBS_71721[i][j];
+                    *N_prb = j + 1;
+                    break;
+                }
+            }
+        }
+
+        // Determine mcs
+        if(10 >= I_tbs)
+        {
+            *mcs = I_tbs;
+        }else if(19 >= I_tbs){
+            *mcs = I_tbs + 1;
+        }else{
+            *mcs = I_tbs + 2;
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
 }
 
 /*********************************************************************
@@ -4995,10 +5072,33 @@ LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_ul(uint32  N_bits,
     Document Reference: 3GPP TS 36.211 v10.1.0 section 6.8.1
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_phy_get_n_cce(LIBLTE_PHY_STRUCT *phy_struct,
-                                       uint32             N_subframe,
+                                       float              phich_res,
+                                       uint32             N_pdcch_symbs,
+                                       uint8              N_ant,
                                        uint32            *N_cce)
 {
-    // FIXME
+    uint32 N_group_phich;
+    uint32 N_reg_phich;
+    uint32 N_reg_pcfich = 4;
+    uint32 N_reg_rb     = 3;
+    uint32 N_reg_pdcch;
+    uint32 N_reg_cce = 9;
+
+    // From liblte_phy_pdcch_channel_encode
+    if(LIBLTE_PHY_N_SC_RB_NORMAL_CP == phy_struct->N_sc_rb)
+    {
+        N_group_phich = (uint32)ceilf((float)phich_res*((float)phy_struct->N_rb_dl/(float)8));
+    }else{
+        N_group_phich = 2*(uint32)ceilf((float)phich_res*((float)phy_struct->N_rb_dl/(float)8));
+    }
+    N_reg_phich = N_group_phich*3;
+    N_reg_pdcch = N_pdcch_symbs*(phy_struct->N_rb_dl*N_reg_rb) - phy_struct->N_rb_dl - N_reg_pcfich - N_reg_phich;
+    if(N_ant == 4)
+    {
+        N_reg_pdcch -= phy_struct->N_rb_dl;
+    }
+
+    *N_cce = N_reg_pdcch/N_reg_cce;
 }
 
 /*******************************************************************************
@@ -9877,9 +9977,9 @@ void dci_1a_unpack(uint8                           *in_bits,
         // Find the RIV that was sent 3GPP TS 36.213 v10.3.0 section 7.1.6.3
         RIV_length = (uint32)ceilf(logf(N_rb_dl*(N_rb_dl+1)/2)/logf(2));
         RIV        = phy_bits_2_value(&dci, RIV_length);
-        for(i=0; i<N_rb_dl; i++)
+        for(i=1; i<=N_rb_dl; i++) // L_crb running variable (1 to N_rb_dl)
         {
-            for(j=0; j<(N_rb_dl-i); j++)
+            for(j=0; j<=(N_rb_dl-i); j++) // RB_start running variable (0 to N_rb_dl-L_crb)
             {
                 if((i-1) <= (N_rb_dl/2))
                 {

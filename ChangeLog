@@ -60,6 +60,11 @@ v00.08.03     Added MAC functionality to the LTE library, fixed bugs in RRC port
               of the LTE library, and added hackrf and SIB decode and print support
               to the scanner app.
 v00.09.00     Updated to support GnuRadio 3.7, added PRACH support to liblte_phy,
-              cleaned up PRACH support in octave, moved to using a socket select with
+              cleaned up PRACH support in octave, moved to using socket select with
               a timeout in libtools, added a new hardware discovery mechanism in
               LTE_fdd_dl_scan, and added a file recording application.
+v00.09.01     Implemented liblte_phy routines for determining TBS, MCS, N_prb, and
+              N_cce, fixed a bug in the RIV calculation of dci_1a_unpack, added error
+              checking on sizes passed to memcpy in liblte_rrc, added support for
+              changing the sample rate in the LTE_fdd_dl_file_gen app, and added
+              finding FFTW to cmake.

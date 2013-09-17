@@ -23,7 +23,7 @@
 ########################################################################
 cmake_minimum_required(VERSION 2.6)
 project(openLTE CXX C)
-set(openLTE_version 0.9.0)
+set(openLTE_version 0.9.1)
 enable_testing()
 
 #select the release build type by default to get optimization flags
@@ -93,6 +93,7 @@ find_package(Gnuradio "3.7.0")
 find_package(GnuradioOsmosdr)
 find_package(Rtlsdr)
 find_package(HackRf)
+find_package(FFTW3F)
 
 if(NOT GNURADIO_RUNTIME_FOUND)
     message(FATAL_ERROR "GNURadio required to compile openLTE")
@@ -110,11 +111,16 @@ if(NOT HACKRF_FOUND)
     message(FATAL_ERROR "HackRF required to compile openLTE (http://github.com/mossmann/hackrf/wiki)")
 endif()
 
+if(NOT FFTW3F_FOUND)
+    message(FATAL_ERROR "FFTW3 required to compile openLTE")
+endif()
+
 ########################################################################
 # Setup the include and linker paths
 ########################################################################
 include_directories(
     ${Boost_INCLUDE_DIRS}
+    ${FFTW3F_INCLUDE_DIRS}
     ${GNURADIO_RUNTIME_INCLUDE_DIRS}
     ${GNURADIO_PMT_INCLUDE_DIRS}
     ${GNURADIO_OSMOSDR_INCLUDE_DIRS}
@@ -122,6 +128,7 @@ include_directories(
 
 link_directories(
     ${Boost_LIBRARY_DIRS}
+    ${FFTW3F_LIBRARY_DIRS}
     ${GNURADIO_RUNTIME_LIBRARY_DIRS}
     ${GNURADIO_PMT_LIBRARY_DIRS}
     ${GNURADIO_OSMOSDR_LIBRARY_DIRS}

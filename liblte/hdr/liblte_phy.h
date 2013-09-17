@@ -50,6 +50,8 @@
     08/26/2013    Ben Wojtowicz    Added PRACH generation and detection support
                                    and changed ambiguous routines/variables to
                                    be non-ambiguous.
+    09/16/2013    Ben Wojtowicz    Implemented routines for determine TBS, MCS,
+                                   N_prb, and N_cce.
 
 *******************************************************************************/
 
@@ -860,6 +862,8 @@ LIBLTE_ERROR_ENUM liblte_phy_get_dl_subframe_and_ce(LIBLTE_PHY_STRUCT          *
                  the specified number of DL bits
 
     Document Reference: 3GPP TS 36.213 v10.3.0 section 7.1.7
+
+    NOTES: Currently only supports DCI format 1A
 *********************************************************************/
 // Defines
 // Enums
@@ -882,15 +886,15 @@ LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_dl(uint32  N_bits,
                  scheme
 
     Document Reference: 3GPP TS 36.213 v10.3.0 section 7.1.7
+
+    NOTES: Currently only supports single layer transport blocks
 *********************************************************************/
 // Defines
 // Enums
 // Structs
 // Functions
 LIBLTE_ERROR_ENUM liblte_phy_get_tbs_and_n_prb_for_dl(uint32  N_bits,
-                                                      uint32  N_subframe,
                                                       uint32  N_rb_dl,
-                                                      uint16  rnti,
                                                       uint8   mcs,
                                                       uint32 *tbs,
                                                       uint32 *N_prb);
@@ -927,7 +931,9 @@ LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_ul(uint32  N_bits,
 // Structs
 // Functions
 LIBLTE_ERROR_ENUM liblte_phy_get_n_cce(LIBLTE_PHY_STRUCT *phy_struct,
-                                       uint32             N_subframe,
+                                       float              phich_res,
+                                       uint32             N_pdcch_symbs,
+                                       uint8              N_ant,
                                        uint32            *N_cce);
 
 #endif /* __LIBLTE_PHY_H__ */
