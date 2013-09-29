@@ -45,6 +45,8 @@
     07/21/2013    Ben Wojtowicz    Fixed a bug and using the latest LTE library.
     08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7 and the
                                    latest LTE library.
+    09/28/2013    Ben Wojtowicz    Added support for setting the sample rate
+                                   and input data type.
 
 *******************************************************************************/
 
@@ -61,15 +63,13 @@
                               DEFINES
 *******************************************************************************/
 
-#define ONE_SUBFRAME_NUM_SAMPS               (LIBLTE_PHY_N_SAMPS_PER_SUBFR_30_72MHZ)
-#define ONE_FRAME_NUM_SAMPS                  (10 * ONE_SUBFRAME_NUM_SAMPS)
-#define COARSE_TIMING_N_SLOTS                (20)
-#define COARSE_TIMING_SEARCH_NUM_SAMPS       (((COARSE_TIMING_N_SLOTS/2)+2) * ONE_SUBFRAME_NUM_SAMPS)
-#define PSS_AND_FINE_TIMING_SEARCH_NUM_SAMPS (COARSE_TIMING_SEARCH_NUM_SAMPS)
-#define SSS_SEARCH_NUM_SAMPS                 (COARSE_TIMING_SEARCH_NUM_SAMPS)
-#define BCH_DECODE_NUM_SAMPS                 (2 * ONE_FRAME_NUM_SAMPS)
-#define PDSCH_DECODE_SIB1_NUM_SAMPS          (2 * ONE_FRAME_NUM_SAMPS)
-#define PDSCH_DECODE_SI_GENERIC_NUM_SAMPS    (ONE_FRAME_NUM_SAMPS)
+#define COARSE_TIMING_N_SLOTS                    (160)
+#define COARSE_TIMING_SEARCH_NUM_SUBFRAMES       ((COARSE_TIMING_N_SLOTS/2)+2)
+#define PSS_AND_FINE_TIMING_SEARCH_NUM_SUBFRAMES (COARSE_TIMING_SEARCH_NUM_SUBFRAMES)
+#define SSS_SEARCH_NUM_SUBFRAMES                 (COARSE_TIMING_SEARCH_NUM_SUBFRAMES)
+#define BCH_DECODE_NUM_FRAMES                    (2)
+#define PDSCH_DECODE_SIB1_NUM_FRAMES             (2)
+#define PDSCH_DECODE_SI_GENERIC_NUM_FRAMES       (1)
 
 /*******************************************************************************
                               TYPEDEFS
@@ -90,31 +90,33 @@ static const int32 MAX_OUT = 0;
                               CLASS IMPLEMENTATIONS
 *******************************************************************************/
 
-
-LTE_fdd_dl_fs_samp_buf_sptr LTE_fdd_dl_fs_make_samp_buf()
+LTE_fdd_dl_fs_samp_buf_sptr LTE_fdd_dl_fs_make_samp_buf(size_t in_size_val)
 {
-    return LTE_fdd_dl_fs_samp_buf_sptr(new LTE_fdd_dl_fs_samp_buf());
+    return LTE_fdd_dl_fs_samp_buf_sptr(new LTE_fdd_dl_fs_samp_buf(in_size_val));
 }
 
-LTE_fdd_dl_fs_samp_buf::LTE_fdd_dl_fs_samp_buf()
+LTE_fdd_dl_fs_samp_buf::LTE_fdd_dl_fs_samp_buf(size_t in_size_val)
     : gr::sync_block ("samp_buf",
-                      gr::io_signature::make(MIN_IN,  MAX_IN,  sizeof(int8)),
+                      gr::io_signature::make(MIN_IN,  MAX_IN,  in_size_val),
                       gr::io_signature::make(MIN_OUT, MAX_OUT, sizeof(int8)))
 {
     uint32 i;
 
-    // Initialize the LTE library
-    liblte_phy_init(&phy_struct,
-                    LIBLTE_PHY_FS_30_72MHZ,
-                    LIBLTE_PHY_INIT_N_ID_CELL_UNKNOWN,
-                    4,
-                    LIBLTE_PHY_N_RB_DL_20MHZ,
-                    LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                    liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1],
-                    0,
-                    0,
-                    1,
-                    false);
+    // Parse the inputs
+    if(in_size_val == sizeof(gr_complex))
+    {
+        in_size = LTE_FDD_DL_FS_IN_SIZE_GR_COMPLEX;
+    }else if(in_size_val == sizeof(int8)){
+        in_size = LTE_FDD_DL_FS_IN_SIZE_INT8;
+    }else{
+        in_size = LTE_FDD_DL_FS_IN_SIZE_INT8;
+    }
+
+    // Initialize the LTE parameters
+    fs = LIBLTE_PHY_FS_30_72MHZ;
+
+    // Initialize the configuration
+    need_config = true;
 
     // Initialize the sample buffer
     i_buf           = (float *)malloc(LTE_FDD_DL_FS_SAMP_BUF_SIZE*sizeof(float));
@@ -150,34 +152,84 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
     LIBLTE_PHY_PCFICH_STRUCT    pcfich;
     LIBLTE_PHY_PHICH_STRUCT     phich;
     LIBLTE_PHY_PDCCH_STRUCT     pdcch;
-    const int8                 *in  = (const int8 *)input_items[0];
     float                       pss_thresh;
     float                       freq_offset;
     int32                       done_flag = 0;
     uint32                      i;
     uint32                      pss_symb;
     uint32                      frame_start_idx;
-    uint32                      num_samps_needed = COARSE_TIMING_SEARCH_NUM_SAMPS;
+    uint32                      num_samps_needed = 0;
     uint32                      samps_to_copy;
     uint32                      N_rb_dl;
+    size_t                      line_size = LINE_MAX;
+    ssize_t                     N_line_chars;
+    char                       *line;
     uint8                       sfn_offset;
     bool                        process_samples = false;
     bool                        copy_input      = false;
 
-    if(samp_buf_w_idx < (LTE_FDD_DL_FS_SAMP_BUF_SIZE-((ninput_items+1)/2)))
+    line = (char *)malloc(line_size);
+    if(need_config)
     {
-        copy_input_to_samp_buf(in, ninput_items);
-
-        // Check if buffer is full enough
-        if(samp_buf_w_idx >= (LTE_FDD_DL_FS_SAMP_BUF_SIZE-((ninput_items+1)/2)))
+        print_config();
+    }
+    while(need_config)
+    {
+        N_line_chars         = getline(&line, &line_size, stdin);
+        line[strlen(line)-1] = '\0';
+        change_config(line);
+        if(!need_config)
         {
-            process_samples = true;
-            copy_input      = false;
+            // Initialize the LTE library
+            liblte_phy_init(&phy_struct,
+                            fs,
+                            LIBLTE_PHY_INIT_N_ID_CELL_UNKNOWN,
+                            4,
+                            LIBLTE_PHY_N_RB_DL_1_4MHZ,
+                            LIBLTE_PHY_N_SC_RB_NORMAL_CP,
+                            liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1],
+                            0,
+                            0,
+                            1,
+                            false);
+            num_samps_needed = phy_struct->N_samps_per_subfr * COARSE_TIMING_SEARCH_NUM_SUBFRAMES;
         }
-    }else{
-        // Buffer is too full process samples, then copy
-        process_samples = true;
-        copy_input      = true;
+    }
+    free(line);
+
+    if(LTE_FDD_DL_FS_IN_SIZE_INT8 == in_size)
+    {
+        if(samp_buf_w_idx < (LTE_FDD_DL_FS_SAMP_BUF_NUM_FRAMES*phy_struct->N_samps_per_frame - ((ninput_items+1)/2)))
+        {
+            copy_input_to_samp_buf(input_items, ninput_items);
+
+            // Check if buffer is full enough
+            if(samp_buf_w_idx >= (LTE_FDD_DL_FS_SAMP_BUF_NUM_FRAMES*phy_struct->N_samps_per_frame - ((ninput_items+1)/2)))
+            {
+                process_samples = true;
+                copy_input      = false;
+            }
+        }else{
+            // Buffer is too full process samples, then copy
+            process_samples = true;
+            copy_input      = true;
+        }
+    }else{ // LTE_FDD_DL_FS_IN_SIZE_GR_COMPLEX == in_size
+        if(samp_buf_w_idx < (LTE_FDD_DL_FS_SAMP_BUF_NUM_FRAMES*phy_struct->N_samps_per_frame - (ninput_items+1)))
+        {
+            copy_input_to_samp_buf(input_items, ninput_items);
+
+            // Check if buffer is full enough
+            if(samp_buf_w_idx >= (LTE_FDD_DL_FS_SAMP_BUF_NUM_FRAMES*phy_struct->N_samps_per_frame - (ninput_items+1)))
+            {
+                process_samples = true;
+                copy_input      = false;
+            }
+        }else{
+            // Buffer is too full process samples, then copy
+            process_samples = true;
+            copy_input      = true;
+        }
     }
 
     if(process_samples)
@@ -192,22 +244,22 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
         switch(state)
         {
         case LTE_FDD_DL_FS_SAMP_BUF_STATE_COARSE_TIMING_SEARCH:
-            num_samps_needed = COARSE_TIMING_SEARCH_NUM_SAMPS;
+            num_samps_needed = phy_struct->N_samps_per_subfr * COARSE_TIMING_SEARCH_NUM_SUBFRAMES;
             break;
         case LTE_FDD_DL_FS_SAMP_BUF_STATE_PSS_AND_FINE_TIMING_SEARCH:
-            num_samps_needed = PSS_AND_FINE_TIMING_SEARCH_NUM_SAMPS;
+            num_samps_needed = phy_struct->N_samps_per_subfr * PSS_AND_FINE_TIMING_SEARCH_NUM_SUBFRAMES;
             break;
         case LTE_FDD_DL_FS_SAMP_BUF_STATE_SSS_SEARCH:
-            num_samps_needed = SSS_SEARCH_NUM_SAMPS;
+            num_samps_needed = phy_struct->N_samps_per_subfr * SSS_SEARCH_NUM_SUBFRAMES;
             break;
         case LTE_FDD_DL_FS_SAMP_BUF_STATE_BCH_DECODE:
-            num_samps_needed = BCH_DECODE_NUM_SAMPS;
+            num_samps_needed = phy_struct->N_samps_per_frame * BCH_DECODE_NUM_FRAMES;
             break;
         case LTE_FDD_DL_FS_SAMP_BUF_STATE_PDSCH_DECODE_SIB1:
-            num_samps_needed = PDSCH_DECODE_SIB1_NUM_SAMPS;
+            num_samps_needed = phy_struct->N_samps_per_frame * PDSCH_DECODE_SIB1_NUM_FRAMES;
             break;
         case LTE_FDD_DL_FS_SAMP_BUF_STATE_PDSCH_DECODE_SI_GENERIC:
-            num_samps_needed = PDSCH_DECODE_SI_GENERIC_NUM_SAMPS;
+            num_samps_needed = phy_struct->N_samps_per_frame * PDSCH_DECODE_SI_GENERIC_NUM_FRAMES;
             break;
         }
 
@@ -243,15 +295,15 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
 
                         // Search for PSS and fine timing
                         state            = LTE_FDD_DL_FS_SAMP_BUF_STATE_PSS_AND_FINE_TIMING_SEARCH;
-                        num_samps_needed = PSS_AND_FINE_TIMING_SEARCH_NUM_SAMPS;
+                        num_samps_needed = phy_struct->N_samps_per_subfr * PSS_AND_FINE_TIMING_SEARCH_NUM_SUBFRAMES;
                     }else{
                         // No more peaks, so signal that we are done
                         done_flag = -1;
                     }
                 }else{
                     // Stay in coarse timing search
-                    samp_buf_r_idx   += COARSE_TIMING_SEARCH_NUM_SAMPS;
-                    num_samps_needed  = COARSE_TIMING_SEARCH_NUM_SAMPS;
+                    samp_buf_r_idx   += phy_struct->N_samps_per_subfr * COARSE_TIMING_SEARCH_NUM_SUBFRAMES;
+                    num_samps_needed  = phy_struct->N_samps_per_subfr * COARSE_TIMING_SEARCH_NUM_SUBFRAMES;
                 }
                 break;
             case LTE_FDD_DL_FS_SAMP_BUF_STATE_PSS_AND_FINE_TIMING_SEARCH:
@@ -264,14 +316,20 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                                                                          &pss_thresh,
                                                                          &freq_offset))
                 {
+                    if(fabs(freq_offset) > 100)
+                    {
+                        freq_shift(0, LTE_FDD_DL_FS_SAMP_BUF_SIZE, freq_offset);
+                        timing_struct.freq_offset[corr_peak_idx] += freq_offset;
+                    }
+
                     // Search for SSS
                     state            = LTE_FDD_DL_FS_SAMP_BUF_STATE_SSS_SEARCH;
-                    num_samps_needed = SSS_SEARCH_NUM_SAMPS;
+                    num_samps_needed = phy_struct->N_samps_per_subfr * SSS_SEARCH_NUM_SUBFRAMES;
                 }else{
                     // Go back to coarse timing search
                     state             = LTE_FDD_DL_FS_SAMP_BUF_STATE_COARSE_TIMING_SEARCH;
-                    samp_buf_r_idx   += COARSE_TIMING_SEARCH_NUM_SAMPS;
-                    num_samps_needed  = COARSE_TIMING_SEARCH_NUM_SAMPS;
+                    samp_buf_r_idx   += phy_struct->N_samps_per_subfr * COARSE_TIMING_SEARCH_NUM_SUBFRAMES;
+                    num_samps_needed  = phy_struct->N_samps_per_subfr * COARSE_TIMING_SEARCH_NUM_SUBFRAMES;
                 }
                 break;
             case LTE_FDD_DL_FS_SAMP_BUF_STATE_SSS_SEARCH:
@@ -304,16 +362,16 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                         state = LTE_FDD_DL_FS_SAMP_BUF_STATE_BCH_DECODE;
                         while(frame_start_idx < samp_buf_r_idx)
                         {
-                            frame_start_idx += ONE_FRAME_NUM_SAMPS;
+                            frame_start_idx += phy_struct->N_samps_per_frame;
                         }
                         samp_buf_r_idx   = frame_start_idx;
-                        num_samps_needed = BCH_DECODE_NUM_SAMPS;
+                        num_samps_needed = phy_struct->N_samps_per_frame * BCH_DECODE_NUM_FRAMES;
                     }
                 }else{
                     // Go back to coarse timing search
                     state             = LTE_FDD_DL_FS_SAMP_BUF_STATE_COARSE_TIMING_SEARCH;
-                    samp_buf_r_idx   += COARSE_TIMING_SEARCH_NUM_SAMPS;
-                    num_samps_needed  = COARSE_TIMING_SEARCH_NUM_SAMPS;
+                    samp_buf_r_idx   += phy_struct->N_samps_per_subfr * COARSE_TIMING_SEARCH_NUM_SUBFRAMES;
+                    num_samps_needed  = phy_struct->N_samps_per_subfr * COARSE_TIMING_SEARCH_NUM_SUBFRAMES;
                 }
                 break;
             case LTE_FDD_DL_FS_SAMP_BUF_STATE_BCH_DECODE:
@@ -372,15 +430,15 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                     state = LTE_FDD_DL_FS_SAMP_BUF_STATE_PDSCH_DECODE_SIB1;
                     if((sfn % 2) != 0)
                     {
-                        samp_buf_r_idx += 307200;
+                        samp_buf_r_idx += phy_struct->N_samps_per_frame;
                         sfn++;
                     }
-                    num_samps_needed = PDSCH_DECODE_SIB1_NUM_SAMPS;
+                    num_samps_needed = phy_struct->N_samps_per_frame * PDSCH_DECODE_SIB1_NUM_FRAMES;
                 }else{
                     // Go back to coarse timing search
                     state             = LTE_FDD_DL_FS_SAMP_BUF_STATE_COARSE_TIMING_SEARCH;
-                    samp_buf_r_idx   += COARSE_TIMING_SEARCH_NUM_SAMPS;
-                    num_samps_needed  = COARSE_TIMING_SEARCH_NUM_SAMPS;
+                    samp_buf_r_idx   += phy_struct->N_samps_per_subfr * COARSE_TIMING_SEARCH_NUM_SUBFRAMES;
+                    num_samps_needed  = phy_struct->N_samps_per_subfr * COARSE_TIMING_SEARCH_NUM_SUBFRAMES;
                 }
                 break;
             case LTE_FDD_DL_FS_SAMP_BUF_STATE_PDSCH_DECODE_SIB1:
@@ -421,12 +479,12 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                     // Decode all PDSCHs
                     state            = LTE_FDD_DL_FS_SAMP_BUF_STATE_PDSCH_DECODE_SI_GENERIC;
                     N_sfr            = 0;
-                    num_samps_needed = PDSCH_DECODE_SI_GENERIC_NUM_SAMPS;
+                    num_samps_needed = phy_struct->N_samps_per_frame * PDSCH_DECODE_SI_GENERIC_NUM_FRAMES;
                 }else{
                     // Try to decode SIB1 again
-                    samp_buf_r_idx   += PDSCH_DECODE_SIB1_NUM_SAMPS;
+                    samp_buf_r_idx   += phy_struct->N_samps_per_frame * PDSCH_DECODE_SIB1_NUM_FRAMES;
                     sfn              += 2;
-                    num_samps_needed  = PDSCH_DECODE_SIB1_NUM_SAMPS;
+                    num_samps_needed  = phy_struct->N_samps_per_frame * PDSCH_DECODE_SIB1_NUM_FRAMES;
                 }
                 break;
             case LTE_FDD_DL_FS_SAMP_BUF_STATE_PDSCH_DECODE_SI_GENERIC:
@@ -520,13 +578,13 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
 
                 // Keep trying to decode PDSCHs
                 state            = LTE_FDD_DL_FS_SAMP_BUF_STATE_PDSCH_DECODE_SI_GENERIC;
-                num_samps_needed = PDSCH_DECODE_SI_GENERIC_NUM_SAMPS;
+                num_samps_needed = phy_struct->N_samps_per_frame * PDSCH_DECODE_SI_GENERIC_NUM_FRAMES;
                 N_sfr++;
                 if(N_sfr >= 10)
                 {
                     N_sfr = 0;
                     sfn++;
-                    samp_buf_r_idx += PDSCH_DECODE_SI_GENERIC_NUM_SAMPS;
+                    samp_buf_r_idx += phy_struct->N_samps_per_frame * PDSCH_DECODE_SI_GENERIC_NUM_FRAMES;
                 }
                 break;
             }
@@ -551,7 +609,7 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
 
         if(true == copy_input)
         {
-            copy_input_to_samp_buf(in, ninput_items);
+            copy_input_to_samp_buf(input_items, ninput_items);
         }
     }
 
@@ -591,31 +649,42 @@ void LTE_fdd_dl_fs_samp_buf::init(void)
     sib8_expected           = false;
 }
 
-void LTE_fdd_dl_fs_samp_buf::copy_input_to_samp_buf(const int8 *in, int32 ninput_items)
+void LTE_fdd_dl_fs_samp_buf::copy_input_to_samp_buf(gr_vector_const_void_star &input_items, int32 ninput_items)
 {
-    uint32 i;
-    uint32 offset;
+    const gr_complex *gr_complex_in = (gr_complex *)input_items[0];
+    uint32            i;
+    uint32            offset;
+    const int8       *int8_in = (int8 *)input_items[0];
 
-    if(true == last_samp_was_i)
+    if(LTE_FDD_DL_FS_IN_SIZE_INT8 == in_size)
     {
-        q_buf[samp_buf_w_idx++] = (float)in[0];
-        offset                  = 1;
-    }else{
-        offset = 0;
-    }
+        if(true == last_samp_was_i)
+        {
+            q_buf[samp_buf_w_idx++] = (float)int8_in[0];
+            offset                  = 1;
+        }else{
+            offset = 0;
+        }
 
-    for(i=0; i<(ninput_items-offset)/2; i++)
-    {
-        i_buf[samp_buf_w_idx]   = (float)in[i*2+offset];
-        q_buf[samp_buf_w_idx++] = (float)in[i*2+offset+1];
-    }
+        for(i=0; i<(ninput_items-offset)/2; i++)
+        {
+            i_buf[samp_buf_w_idx]   = (float)int8_in[i*2+offset];
+            q_buf[samp_buf_w_idx++] = (float)int8_in[i*2+offset+1];
+        }
 
-    if(((ninput_items-offset) % 2) != 0)
-    {
-        i_buf[samp_buf_w_idx] = (float)in[ninput_items-1];
-        last_samp_was_i       = true;
-    }else{
-        last_samp_was_i = false;
+        if(((ninput_items-offset) % 2) != 0)
+        {
+            i_buf[samp_buf_w_idx] = (float)int8_in[ninput_items-1];
+            last_samp_was_i       = true;
+        }else{
+            last_samp_was_i = false;
+        }
+    }else{ // LTE_FDD_DL_FS_IN_SIZE_GR_COMPLEX == in_size
+        for(i=0; i<ninput_items; i++)
+        {
+            i_buf[samp_buf_w_idx]   = gr_complex_in[i].real();
+            q_buf[samp_buf_w_idx++] = gr_complex_in[i].imag();
+        }
     }
 }
 
@@ -629,8 +698,8 @@ void LTE_fdd_dl_fs_samp_buf::freq_shift(uint32 start_idx, uint32 num_samps, floa
 
     for(i=start_idx; i<(start_idx+num_samps); i++)
     {
-        f_samp_re = cosf((i+1)*(freq_offset)*2*M_PI*(0.0005/15360));
-        f_samp_im = sinf((i+1)*(freq_offset)*2*M_PI*(0.0005/15360));
+        f_samp_re = cosf((i+1)*(freq_offset)*2*M_PI/phy_struct->fs);
+        f_samp_im = sinf((i+1)*(freq_offset)*2*M_PI/phy_struct->fs);
         tmp_i     = i_buf[i];
         tmp_q     = q_buf[i];
         i_buf[i]  = tmp_i*f_samp_re + tmp_q*f_samp_im;
@@ -1662,4 +1731,84 @@ void LTE_fdd_dl_fs_samp_buf::print_page(LIBLTE_RRC_PAGING_STRUCT *page)
     {
         printf("\t\t%-40s=%20s\n", "ETWS Indication", liblte_rrc_etws_indication_text[page->etws_indication]);
     }
+}
+
+void LTE_fdd_dl_fs_samp_buf::print_config(void)
+{
+    uint32 i;
+
+    printf("***System Configuration Parameters***\n");
+    printf("\tType 'help' to reprint this menu\n");
+    printf("\tHit enter to finish config and scan file\n");
+    printf("\tSet parameters using <param>=<value> format\n");
+
+    // FS
+    printf("\t%-30s = %10s, values = [",
+           FS_PARAM,
+           liblte_phy_fs_text[fs]);
+    for(i=0; i<LIBLTE_PHY_FS_N_ITEMS; i++)
+    {
+        if(0 != i)
+        {
+            printf(", ");
+        }
+        printf("%s", liblte_phy_fs_text[i]);
+    }
+    printf("]\n");
+}
+
+void LTE_fdd_dl_fs_samp_buf::change_config(char *line)
+{
+    char *param;
+    char *value;
+    bool  err = false;
+
+    param = strtok(line, "=");
+    value = strtok(NULL, "=");
+
+    if(param == NULL)
+    {
+        need_config = false;
+    }else{
+        if(!strcasecmp(param, "help"))
+        {
+            print_config();
+        }else if(value != NULL){
+            if(!strcasecmp(param, FS_PARAM))
+            {
+                err = set_fs(value);
+            }else{
+                printf("Invalid parameter (%s)\n", param);
+            }
+
+            if(err)
+            {
+                printf("Invalid value\n");
+            }
+        }else{
+            printf("Invalid value\n");
+        }
+    }
+}
+
+bool LTE_fdd_dl_fs_samp_buf::set_fs(char *char_value)
+{
+    bool err = false;
+
+    if(!strcasecmp(char_value, "30.72"))
+    {
+        fs = LIBLTE_PHY_FS_30_72MHZ;
+    }else if(!strcasecmp(char_value, "15.36")){
+        fs = LIBLTE_PHY_FS_15_36MHZ;
+    }else if(!strcasecmp(char_value, "7.68")){
+        fs = LIBLTE_PHY_FS_7_68MHZ;
+    }else if(!strcasecmp(char_value, "3.84")){
+        fs = LIBLTE_PHY_FS_3_84MHZ;
+    }else if(!strcasecmp(char_value, "1.92")){
+        fs = LIBLTE_PHY_FS_1_92MHZ;
+    }else{
+        err = true;
+    }
+
+    return(err);
 }

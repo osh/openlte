@@ -52,6 +52,8 @@
                                    be non-ambiguous.
     09/16/2013    Ben Wojtowicz    Implemented routines for determine TBS, MCS,
                                    N_prb, and N_cce.
+    09/28/2013    Ben Wojtowicz    Reordered sample rate enum and added a text
+                                   version.
 
 *******************************************************************************/
 
@@ -148,12 +150,14 @@
 *******************************************************************************/
 
 typedef enum{
-    LIBLTE_PHY_FS_30_72MHZ = 0, // 20MHz and 15MHz bandwidths
-    LIBLTE_PHY_FS_15_36MHZ,     // 10MHz bandwidth
-    LIBLTE_PHY_FS_7_68MHZ,      // 5MHz bandwidth
-    LIBLTE_PHY_FS_3_84MHZ,      // 3MHz bandwidth
-    LIBLTE_PHY_FS_1_92MHZ,      // 1.4MHz bandwidth
+    LIBLTE_PHY_FS_1_92MHZ = 0, // 1.4MHz bandwidth
+    LIBLTE_PHY_FS_3_84MHZ,     // 3MHz bandwidth
+    LIBLTE_PHY_FS_7_68MHZ,     // 5MHz bandwidth
+    LIBLTE_PHY_FS_15_36MHZ,    // 10MHz bandwidth
+    LIBLTE_PHY_FS_30_72MHZ,    // 20MHz and 15MHz bandwidths
+    LIBLTE_PHY_FS_N_ITEMS,
 }LIBLTE_PHY_FS_ENUM;
+static const char liblte_phy_fs_text[LIBLTE_PHY_FS_N_ITEMS][20] = {"1.92", "3.84", "7.68", "15.36", "30.72"};
 
 typedef enum{
     LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY = 0,

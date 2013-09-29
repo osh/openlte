@@ -37,6 +37,8 @@
     03/17/2013    Ben Wojtowicz    Added paging message printing.
     07/21/2013    Ben Wojtowicz    Using the latest LTE library.
     08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7.
+    09/28/2013    Ben Wojtowicz    Added support for setting the sample rate
+                                   and input data type.
 
 *******************************************************************************/
 
@@ -56,9 +58,13 @@
                               DEFINES
 *******************************************************************************/
 
-#define LTE_FDD_DL_FS_SAMP_BUF_SIZE (307200*10)
+#define LTE_FDD_DL_FS_SAMP_BUF_SIZE       (LIBLTE_PHY_N_SAMPS_PER_FRAME_30_72MHZ*10)
+#define LTE_FDD_DL_FS_SAMP_BUF_NUM_FRAMES (10)
 
 #define LTE_FDD_DL_FS_SAMP_BUF_N_DECODED_CHANS_MAX 10
+
+// Configurable Parameters
+#define FS_PARAM "fs"
 
 /*******************************************************************************
                               FORWARD DECLARATIONS
@@ -73,6 +79,11 @@ class LTE_fdd_dl_fs_samp_buf;
 typedef boost::shared_ptr<LTE_fdd_dl_fs_samp_buf> LTE_fdd_dl_fs_samp_buf_sptr;
 
 typedef enum{
+    LTE_FDD_DL_FS_IN_SIZE_INT8 = 0,
+    LTE_FDD_DL_FS_IN_SIZE_GR_COMPLEX,
+}LTE_FDD_DL_FS_IN_SIZE_ENUM;
+
+typedef enum{
     LTE_FDD_DL_FS_SAMP_BUF_STATE_COARSE_TIMING_SEARCH = 0,
     LTE_FDD_DL_FS_SAMP_BUF_STATE_PSS_AND_FINE_TIMING_SEARCH,
     LTE_FDD_DL_FS_SAMP_BUF_STATE_SSS_SEARCH,
@@ -85,7 +96,7 @@ typedef enum{
                               CLASS DECLARATIONS
 *******************************************************************************/
 
-LTE_FDD_DL_FS_API LTE_fdd_dl_fs_samp_buf_sptr LTE_fdd_dl_fs_make_samp_buf ();
+LTE_FDD_DL_FS_API LTE_fdd_dl_fs_samp_buf_sptr LTE_fdd_dl_fs_make_samp_buf(size_t in_size_val);
 class LTE_FDD_DL_FS_API LTE_fdd_dl_fs_samp_buf : public gr::sync_block
 {
 public:
@@ -96,9 +107,12 @@ public:
                gr_vector_void_star       &output_items);
 
 private:
-    friend LTE_FDD_DL_FS_API LTE_fdd_dl_fs_samp_buf_sptr LTE_fdd_dl_fs_make_samp_buf();
+    friend LTE_FDD_DL_FS_API LTE_fdd_dl_fs_samp_buf_sptr LTE_fdd_dl_fs_make_samp_buf(size_t in_size_val);
 
-    LTE_fdd_dl_fs_samp_buf();
+    LTE_fdd_dl_fs_samp_buf(size_t in_size_val);
+
+    // Input parameters
+    LTE_FDD_DL_FS_IN_SIZE_ENUM in_size;
 
     // LTE library
     LIBLTE_PHY_STRUCT                *phy_struct;
@@ -107,6 +121,7 @@ private:
     LIBLTE_RRC_MIB_STRUCT             mib;
     LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT  bcch_dlsch_msg;
     LIBLTE_RRC_PCCH_MSG_STRUCT        pcch_msg;
+    LIBLTE_PHY_FS_ENUM                fs;
 
     // Sample buffer
     float  *i_buf;
@@ -147,7 +162,7 @@ private:
 
     // Helpers
     void init(void);
-    void copy_input_to_samp_buf(const int8 *in, int32 ninput_items);
+    void copy_input_to_samp_buf(gr_vector_const_void_star &input_items, int32 ninput_items);
     void freq_shift(uint32 start_idx, uint32 num_samps, float freq_offset);
     void print_mib(LIBLTE_RRC_MIB_STRUCT *mib);
     void print_sib1(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *sib1);
@@ -159,6 +174,12 @@ private:
     void print_sib7(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7_STRUCT *sib7);
     void print_sib8(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT *sib8);
     void print_page(LIBLTE_RRC_PAGING_STRUCT *page);
+
+    // Configuration
+    void print_config(void);
+    void change_config(char *line);
+    bool set_fs(char *char_value);
+    bool need_config;
 };
 
 #endif /* __LTE_FDD_DL_FS_SAMP_BUF_H__ */

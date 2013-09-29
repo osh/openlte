@@ -68,3 +68,9 @@ v00.09.01     Implemented liblte_phy routines for determining TBS, MCS, N_prb, a
               checking on sizes passed to memcpy in liblte_rrc, added support for
               changing the sample rate in the LTE_fdd_dl_file_gen app, and added
               finding FFTW to cmake.
+v00.09.02     Added support for setting the sample rate and output data type in the
+              LTE_fdd_dl_file_gen app and the sample rate and input data type in the
+              LTE_fdd_dl_file_scan app to make the LTE_fdd_dl_file_gen,
+              LTE_fdd_dl_file_scan, and LTE_file_recorder applications compatible,
+              added uplink demodulation reference signal generation to the octave
+              code.

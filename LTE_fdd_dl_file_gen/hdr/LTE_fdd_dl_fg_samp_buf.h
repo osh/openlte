@@ -35,6 +35,8 @@
     07/21/2013    Ben Wojtowicz    Using the latest LTE library.
     08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7.
     09/16/2013    Ben Wojtowicz    Added support for changing the sample rate.
+    09/28/2013    Ben Wojtowicz    Added support for setting the sample rate
+                                   and output data type.
 
 *******************************************************************************/
 
@@ -58,6 +60,7 @@
 
 // Configurable Parameters
 #define BANDWIDTH_PARAM          "bandwidth"
+#define FS_PARAM                 "fs"
 #define FREQ_BAND_PARAM          "freq_band"
 #define N_FRAMES_PARAM           "n_frames"
 #define N_ANT_PARAM              "n_ant"
@@ -89,11 +92,16 @@ class LTE_fdd_dl_fg_samp_buf;
 
 typedef boost::shared_ptr<LTE_fdd_dl_fg_samp_buf> LTE_fdd_dl_fg_samp_buf_sptr;
 
+typedef enum{
+    LTE_FDD_DL_FG_OUT_SIZE_INT8 = 0,
+    LTE_FDD_DL_FG_OUT_SIZE_GR_COMPLEX,
+}LTE_FDD_DL_FG_OUT_SIZE_ENUM;
+
 /*******************************************************************************
                               CLASS DECLARATIONS
 *******************************************************************************/
 
-LTE_FDD_DL_FG_API LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf();
+LTE_FDD_DL_FG_API LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf(size_t out_size_val);
 class LTE_FDD_DL_FG_API LTE_fdd_dl_fg_samp_buf : public gr::sync_block
 {
 public:
@@ -104,9 +112,12 @@ public:
                gr_vector_void_star       &output_items);
 
 private:
-    friend LTE_FDD_DL_FG_API LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf();
+    friend LTE_FDD_DL_FG_API LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf(size_t out_size_val);
 
-    LTE_fdd_dl_fg_samp_buf();
+    LTE_fdd_dl_fg_samp_buf(size_t out_size_val);
+
+    // Input parameters
+    LTE_FDD_DL_FG_OUT_SIZE_ENUM out_size;
 
     // Sample buffer
     float  *i_buf;
@@ -152,6 +163,7 @@ private:
     void print_config(void);
     void change_config(char *line);
     bool set_bandwidth(char *char_value);
+    bool set_fs(char *char_value);
     bool set_n_ant(char *char_value);
     bool set_n_id_cell(char *char_value);
     bool set_mcc(char *char_value);

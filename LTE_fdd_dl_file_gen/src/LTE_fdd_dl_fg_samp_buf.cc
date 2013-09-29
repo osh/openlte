@@ -40,6 +40,8 @@
     08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7 and the
                                    latest LTE library.
     09/16/2013    Ben Wojtowicz    Added support for changing the sample rate.
+    09/28/2013    Ben Wojtowicz    Added support for setting the sample rate
+                                   and output data type.
 
 *******************************************************************************/
 
@@ -76,16 +78,26 @@ static const int32 MAX_OUT = 1;
                               CLASS IMPLEMENTATIONS
 *******************************************************************************/
 
-LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf()
+LTE_fdd_dl_fg_samp_buf_sptr LTE_fdd_dl_fg_make_samp_buf(size_t out_size_val)
 {
-    return LTE_fdd_dl_fg_samp_buf_sptr(new LTE_fdd_dl_fg_samp_buf());
+    return LTE_fdd_dl_fg_samp_buf_sptr(new LTE_fdd_dl_fg_samp_buf(out_size_val));
 }
 
-LTE_fdd_dl_fg_samp_buf::LTE_fdd_dl_fg_samp_buf()
+LTE_fdd_dl_fg_samp_buf::LTE_fdd_dl_fg_samp_buf(size_t out_size_val)
     : gr::sync_block ("samp_buf",
                       gr::io_signature::make(MIN_IN,  MAX_IN,  sizeof(int8)),
-                      gr::io_signature::make(MIN_OUT, MAX_OUT, sizeof(int8)))
+                      gr::io_signature::make(MIN_OUT, MAX_OUT, out_size_val))
 {
+    // Parse the inputs
+    if(out_size_val == sizeof(gr_complex))
+    {
+        out_size = LTE_FDD_DL_FG_OUT_SIZE_GR_COMPLEX;
+    }else if(out_size_val == sizeof(int8)){
+        out_size = LTE_FDD_DL_FG_OUT_SIZE_INT8;
+    }else{
+        out_size = LTE_FDD_DL_FG_OUT_SIZE_INT8;
+    }
+
     // Initialize the LTE parameters
     // General
     bandwidth    = 20;
@@ -240,23 +252,24 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                                    gr_vector_const_void_star &input_items,
                                    gr_vector_void_star       &output_items)
 {
-    float    i_samp;
-    float    q_samp;
-    int32    act_noutput_items;
-    uint32   out_idx;
-    uint32   loop_cnt;
-    uint32   i;
-    uint32   j;
-    uint32   k;
-    uint32   p;
-    uint32   N_sfr;
-    uint32   last_prb;
-    uint32   max_N_prb;
-    size_t   line_size = LINE_MAX;
-    ssize_t  N_line_chars;
-    int8    *out = (int8 *)output_items[0];
-    char    *line;
-    bool     done = false;
+    gr_complex *gr_complex_out = (gr_complex *)output_items[0];
+    float       i_samp;
+    float       q_samp;
+    int32       act_noutput_items;
+    uint32      out_idx;
+    uint32      loop_cnt;
+    uint32      i;
+    uint32      j;
+    uint32      k;
+    uint32      p;
+    uint32      N_sfr;
+    uint32      last_prb;
+    uint32      max_N_prb;
+    size_t      line_size = LINE_MAX;
+    ssize_t     N_line_chars;
+    int8       *int8_out = (int8 *)output_items[0];
+    char       *line;
+    bool        done = false;
 
     line = (char *)malloc(line_size);
     if(need_config)
@@ -265,7 +278,7 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
     }
     while(need_config)
     {
-        N_line_chars = getline(&line, &line_size, stdin);
+        N_line_chars         = getline(&line, &line_size, stdin);
         line[strlen(line)-1] = '\0';
         change_config(line);
         if(!need_config)
@@ -554,57 +567,83 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
         out_idx           = 0;
         if(noutput_items > 0)
         {
-            // Write out the first half sample if needed
-            if(true == last_samp_was_i)
+            if(LTE_FDD_DL_FG_OUT_SIZE_INT8 == out_size)
             {
-                q_samp = 0;
-                for(p=0; p<N_ant; p++)
+                // Write out the first half sample if needed
+                if(true == last_samp_was_i)
                 {
-                    q_samp += q_buf[(p*phy_struct->N_samps_per_frame) + samp_buf_idx];
-                }
-                out[out_idx++] = (int8)(q_samp);
-                samp_buf_idx++;
-                act_noutput_items++;
-            }
-
-            // Determine how many full samples to write
-            if((phy_struct->N_samps_per_frame - samp_buf_idx) < ((noutput_items - act_noutput_items) / 2))
-            {
-                loop_cnt = (phy_struct->N_samps_per_frame - samp_buf_idx)*2;
-            }else{
-                loop_cnt = noutput_items - act_noutput_items;
-            }
-
-            // Write out the full samples
-            for(i=0; i<loop_cnt/2; i++)
-            {
-                i_samp = 0;
-                q_samp = 0;
-                for(p=0; p<N_ant; p++)
-                {
-                    i_samp += i_buf[(p*phy_struct->N_samps_per_frame) + samp_buf_idx];
-                    q_samp += q_buf[(p*phy_struct->N_samps_per_frame) + samp_buf_idx];
+                    q_samp = 0;
+                    for(p=0; p<N_ant; p++)
+                    {
+                        q_samp += q_buf[(p*phy_struct->N_samps_per_frame) + samp_buf_idx];
+                    }
+                    int8_out[out_idx++] = (int8)(q_samp);
+                    samp_buf_idx++;
+                    act_noutput_items++;
                 }
 
-                out[out_idx++] = (int8)(i_samp);
-                out[out_idx++] = (int8)(q_samp);
-                samp_buf_idx++;
-                act_noutput_items += 2;
-            }
-
-            // Write out the last half sample if needed
-            if((noutput_items - act_noutput_items) == 1)
-            {
-                i_samp = 0;
-                for(p=0; p<N_ant; p++)
+                // Determine how many full samples to write
+                if((phy_struct->N_samps_per_frame - samp_buf_idx) < ((noutput_items - act_noutput_items) / 2))
                 {
-                    i_samp += i_buf[(p*phy_struct->N_samps_per_frame) + samp_buf_idx];
+                    loop_cnt = (phy_struct->N_samps_per_frame - samp_buf_idx)*2;
+                }else{
+                    loop_cnt = noutput_items - act_noutput_items;
                 }
-                out[out_idx++] = (int8)(i_samp);
-                act_noutput_items++;
-                last_samp_was_i = true;
-            }else{
-                last_samp_was_i = false;
+
+                // Write out the full samples
+                for(i=0; i<loop_cnt/2; i++)
+                {
+                    i_samp = 0;
+                    q_samp = 0;
+                    for(p=0; p<N_ant; p++)
+                    {
+                        i_samp += i_buf[(p*phy_struct->N_samps_per_frame) + samp_buf_idx];
+                        q_samp += q_buf[(p*phy_struct->N_samps_per_frame) + samp_buf_idx];
+                    }
+
+                    int8_out[out_idx++] = (int8)(i_samp);
+                    int8_out[out_idx++] = (int8)(q_samp);
+                    samp_buf_idx++;
+                    act_noutput_items += 2;
+                }
+
+                // Write out the last half sample if needed
+                if((noutput_items - act_noutput_items) == 1)
+                {
+                    i_samp = 0;
+                    for(p=0; p<N_ant; p++)
+                    {
+                        i_samp += i_buf[(p*phy_struct->N_samps_per_frame) + samp_buf_idx];
+                    }
+                    int8_out[out_idx++] = (int8)(i_samp);
+                    act_noutput_items++;
+                    last_samp_was_i = true;
+                }else{
+                    last_samp_was_i = false;
+                }
+            }else{ // LTE_FDD_DL_FG_OUT_SIZE_GR_COMPLEX == out_size
+                // Determine how many samples to write
+                if((phy_struct->N_samps_per_frame - samp_buf_idx) < noutput_items)
+                {
+                    loop_cnt = phy_struct->N_samps_per_frame - samp_buf_idx;
+                }else{
+                    loop_cnt = noutput_items;
+                }
+
+                // Write out samples
+                for(i=0; i<loop_cnt; i++)
+                {
+                    i_samp = 0;
+                    q_samp = 0;
+                    for(p=0; p<N_ant; p++)
+                    {
+                        i_samp += i_buf[(p*phy_struct->N_samps_per_frame) + samp_buf_idx];
+                        q_samp += q_buf[(p*phy_struct->N_samps_per_frame) + samp_buf_idx];
+                    }
+                    gr_complex_out[out_idx++] = gr_complex(i_samp, q_samp);
+                    samp_buf_idx++;
+                    act_noutput_items++;
+                }
             }
         }
 
@@ -733,6 +772,20 @@ void LTE_fdd_dl_fg_samp_buf::print_config(void)
         break;
     }
     printf(", values = [1.4, 3, 5, 10, 15, 20]\n");
+
+    // FS
+    printf("\t%-30s = %10s, values = [",
+           FS_PARAM,
+           liblte_phy_fs_text[fs]);
+    for(i=0; i<LIBLTE_PHY_FS_N_ITEMS; i++)
+    {
+        if(0 != i)
+        {
+            printf(", ");
+        }
+        printf("%s", liblte_phy_fs_text[i]);
+    }
+    printf("]\n");
 
     // FREQ_BAND
     printf("\t%-30s = %10u, bounds = [1, 25]\n",
@@ -865,6 +918,8 @@ void LTE_fdd_dl_fg_samp_buf::change_config(char *line)
             if(!strcasecmp(param, BANDWIDTH_PARAM))
             {
                 err = set_bandwidth(value);
+            }else if(!strcasecmp(param, FS_PARAM)){
+                err = set_fs(value);
             }else if(!strcasecmp(param, FREQ_BAND_PARAM)){
                 err = set_param(&sib1.freq_band_indicator, value, 1, 25);
             }else if(!strcasecmp(param, N_FRAMES_PARAM)){
@@ -928,37 +983,62 @@ bool LTE_fdd_dl_fg_samp_buf::set_bandwidth(char *char_value)
         bandwidth = 1.4;
         N_rb_dl   = LIBLTE_PHY_N_RB_DL_1_4MHZ;
         mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_6;
-        fs        = LIBLTE_PHY_FS_1_92MHZ;
-    }else if(!strcasecmp(char_value, "3")){
+    }else if(!strcasecmp(char_value, "3") &&
+             fs >= LIBLTE_PHY_FS_3_84MHZ){
         bandwidth = 3;
         N_rb_dl   = LIBLTE_PHY_N_RB_DL_3MHZ;
         mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_15;
-        fs        = LIBLTE_PHY_FS_3_84MHZ;
-    }else if(!strcasecmp(char_value, "5")){
+    }else if(!strcasecmp(char_value, "5") &&
+             fs >= LIBLTE_PHY_FS_7_68MHZ){
         bandwidth = 5;
         N_rb_dl   = LIBLTE_PHY_N_RB_DL_5MHZ;
         mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_25;
-        fs        = LIBLTE_PHY_FS_7_68MHZ;
-    }else if(!strcasecmp(char_value, "10")){
+    }else if(!strcasecmp(char_value, "10") &&
+             fs >= LIBLTE_PHY_FS_15_36MHZ){
         bandwidth = 10;
         N_rb_dl   = LIBLTE_PHY_N_RB_DL_10MHZ;
         mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_50;
-        fs        = LIBLTE_PHY_FS_15_36MHZ;
-    }else if(!strcasecmp(char_value, "15")){
+    }else if(!strcasecmp(char_value, "15") &&
+             fs == LIBLTE_PHY_FS_30_72MHZ){
         bandwidth = 15;
         N_rb_dl   = LIBLTE_PHY_N_RB_DL_15MHZ;
         mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_75;
-        fs        = LIBLTE_PHY_FS_30_72MHZ;
-    }else if(!strcasecmp(char_value, "20")){
+    }else if(!strcasecmp(char_value, "20") &&
+             fs == LIBLTE_PHY_FS_30_72MHZ){
         bandwidth = 20;
         N_rb_dl   = LIBLTE_PHY_N_RB_DL_20MHZ;
         mib.dl_bw = LIBLTE_RRC_DL_BANDWIDTH_100;
-        fs        = LIBLTE_PHY_FS_30_72MHZ;
     }else{
         err = true;
     }
 
     recreate_sched_info();
+
+    return(err);
+}
+
+bool LTE_fdd_dl_fg_samp_buf::set_fs(char *char_value)
+{
+    bool err = false;
+
+    if(!strcasecmp(char_value, "1.92") &&
+       N_rb_dl == LIBLTE_PHY_N_RB_DL_1_4MHZ)
+    {
+        fs = LIBLTE_PHY_FS_1_92MHZ;
+    }else if(!strcasecmp(char_value, "3.84") &&
+             bandwidth <= 3){
+        fs = LIBLTE_PHY_FS_3_84MHZ;
+    }else if(!strcasecmp(char_value, "7.68") &&
+             bandwidth <= 5){
+        fs = LIBLTE_PHY_FS_7_68MHZ;
+    }else if(!strcasecmp(char_value, "15.36") &&
+             bandwidth <= 10){
+        fs = LIBLTE_PHY_FS_15_36MHZ;
+    }else if(!strcasecmp(char_value, "30.72")){
+        fs = LIBLTE_PHY_FS_30_72MHZ;
+    }else{
+        err = true;
+    }
 
     return(err);
 }
