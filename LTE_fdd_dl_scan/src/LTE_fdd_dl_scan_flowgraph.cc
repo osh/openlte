@@ -28,6 +28,7 @@
     07/21/2013    Ben Wojtowicz    Added support for HackRF Jawbreaker
     08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7 and added a
                                    new hardware discovery mechanism.
+    11/13/2013    Ben Wojtowicz    Added support for USRP B2X0.
 
 *******************************************************************************/
 
@@ -36,6 +37,7 @@
 *******************************************************************************/
 
 #include "LTE_fdd_dl_scan_flowgraph.h"
+#include "uhd/usrp/multi_usrp.hpp"
 
 /*******************************************************************************
                               DEFINES
@@ -107,9 +109,11 @@ bool LTE_fdd_dl_scan_flowgraph::is_started(void)
 LTE_FDD_DL_SCAN_STATUS_ENUM LTE_fdd_dl_scan_flowgraph::start(uint16 dl_earfcn)
 {
     boost::mutex::scoped_lock     lock(start_mutex);
-    LTE_fdd_dl_scan_interface    *interface     = LTE_fdd_dl_scan_interface::get_instance();
+    LTE_fdd_dl_scan_interface    *interface = LTE_fdd_dl_scan_interface::get_instance();
+    uhd::device_addr_t            hint;
     LTE_FDD_DL_SCAN_STATUS_ENUM   err           = LTE_FDD_DL_SCAN_STATUS_FAIL;
     LTE_FDD_DL_SCAN_HW_TYPE_ENUM  hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_UNKNOWN;
+    double                        mcr;
 
     if(!started)
     {
@@ -119,19 +123,32 @@ LTE_FDD_DL_SCAN_STATUS_ENUM LTE_fdd_dl_scan_flowgraph::start(uint16 dl_earfcn)
         }
         if(NULL == samp_src.get())
         {
-            osmosdr::source::sptr tmp_src1 = osmosdr::source::make("hackrf");
-            if(0 != tmp_src1->get_sample_rates().size())
+            osmosdr::source::sptr tmp_src0 = osmosdr::source::make("uhd");
+            BOOST_FOREACH(const uhd::device_addr_t &dev, uhd::device::find(hint))
             {
-                hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_HACKRF;
-                samp_src      = tmp_src1;
+                uhd::usrp::multi_usrp::make(dev)->set_master_clock_rate(30720000);
+                mcr = uhd::usrp::multi_usrp::make(dev)->get_master_clock_rate();
+            }
+            if(0 != tmp_src0->get_sample_rates().size() &&
+               1 >= fabs(mcr - 30720000))
+            {
+                hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_USRP;
+                samp_src      = tmp_src0;
             }else{
-                osmosdr::source::sptr tmp_src2 = osmosdr::source::make("rtl=0");
-                if(0 != tmp_src2->get_sample_rates().size())
+                osmosdr::source::sptr tmp_src1 = osmosdr::source::make("hackrf");
+                if(0 != tmp_src1->get_sample_rates().size())
                 {
-                    hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_RTL_SDR;
-                    samp_src      = tmp_src2;
+                    hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_HACKRF;
+                    samp_src      = tmp_src1;
                 }else{
-                    samp_src = osmosdr::source::make();
+                    osmosdr::source::sptr tmp_src2 = osmosdr::source::make("rtl=0");
+                    if(0 != tmp_src2->get_sample_rates().size())
+                    {
+                        hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_RTL_SDR;
+                        samp_src      = tmp_src2;
+                    }else{
+                        samp_src = osmosdr::source::make();
+                    }
                 }
             }
         }
@@ -139,6 +156,9 @@ LTE_FDD_DL_SCAN_STATUS_ENUM LTE_fdd_dl_scan_flowgraph::start(uint16 dl_earfcn)
         {
             switch(hardware_type)
             {
+            case LTE_FDD_DL_SCAN_HW_TYPE_USRP:
+                state_machine = LTE_fdd_dl_scan_make_state_machine(15360000);
+                break;
             case LTE_FDD_DL_SCAN_HW_TYPE_HACKRF:
                 state_machine = LTE_fdd_dl_scan_make_state_machine(15360000);
                 break;
@@ -159,6 +179,12 @@ LTE_FDD_DL_SCAN_STATUS_ENUM LTE_fdd_dl_scan_flowgraph::start(uint16 dl_earfcn)
             {
                 switch(hardware_type)
                 {
+                case LTE_FDD_DL_SCAN_HW_TYPE_USRP:
+                    samp_src->set_sample_rate(15360000);
+                    samp_src->set_gain_mode(false);
+                    samp_src->set_gain(35);
+                    samp_src->set_bandwidth(10000000);
+                    break;
                 case LTE_FDD_DL_SCAN_HW_TYPE_HACKRF:
                     samp_src->set_sample_rate(15360000);
                     samp_src->set_gain_mode(false);

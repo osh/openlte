@@ -25,6 +25,8 @@
     Revision History
     ----------    -------------    --------------------------------------------
     02/26/2013    Ben Wojtowicz    Created file.
+    11/13/2013    Ben Wojtowicz    Added functions for getting corresponding
+                                   EARFCNs for FDD configuration
 
 *******************************************************************************/
 
@@ -110,6 +112,25 @@ uint32 liblte_interface_dl_earfcn_to_frequency(uint16 dl_earfcn)
 
     return(F_dl);
 }
+uint16 liblte_interface_get_corresponding_dl_earfcn(uint16 ul_earfcn)
+{
+    uint16 dl_earfcn = LIBLTE_INTERFACE_DL_EARFCN_INVALID;
+
+    if(0 != liblte_interface_ul_earfcn_to_frequency(ul_earfcn))
+    {
+        if(liblte_interface_first_ul_earfcn[0] <= ul_earfcn &&
+           liblte_interface_last_ul_earfcn[22] >= ul_earfcn)
+        {
+            // FDD
+            dl_earfcn = ul_earfcn - 18000;
+        }else{
+            // TDD
+            dl_earfcn = ul_earfcn;
+        }
+    }
+
+    return(dl_earfcn);
+}
 
 /*********************************************************************
     Parameter Name: UL_EARFCN
@@ -155,7 +176,25 @@ uint32 liblte_interface_ul_earfcn_to_frequency(uint16 ul_earfcn)
 
     return(F_ul);
 }
+uint16 liblte_interface_get_corresponding_ul_earfcn(uint16 dl_earfcn)
+{
+    uint16 ul_earfcn = LIBLTE_INTERFACE_UL_EARFCN_INVALID;
 
+    if(0 != liblte_interface_dl_earfcn_to_frequency(dl_earfcn))
+    {
+        if(liblte_interface_first_dl_earfcn[0] <= dl_earfcn &&
+           liblte_interface_last_dl_earfcn[22] >= dl_earfcn)
+        {
+            // FDD
+            ul_earfcn = dl_earfcn + 18000;
+        }else{
+            // TDD
+            ul_earfcn = dl_earfcn;
+        }
+    }
+
+    return(ul_earfcn);
+}
 
 /*******************************************************************************
                               LOCAL FUNCTIONS

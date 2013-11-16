@@ -16,7 +16,7 @@
 %
 % Function:    lte_generate_dmrs_pusch
 % Description: Generates LTE demodulation reference signal for PUSCH
-% Inputs:      N_s                      - Slot number within a radio frame
+% Inputs:      N_subfr                  - Subframe number within a radio frame
 %              N_id_cell                - Physical layer cell identity
 %              delta_ss                 - Configurable portion of the sequence-shift pattern for PUSCH (sib2 groupAssignmentPUSCH)
 %              group_hopping_enabled    - Boolean value determining if group hopping is enabled (sib2 groupHoppingEnabled)
@@ -30,8 +30,9 @@
 % Spec:        3GPP TS 36.211 section 5.5.2.1 v10.1.0
 % Notes:       Currently only handles normal CP
 % Rev History: Ben Wojtowicz 09/28/2013 Created
+%              Ben Wojtowicz 11/13/2013 Bug fix for second slot reference signal
 %
-function [r] = lte_generate_dmrs_pusch(N_s, N_id_cell, delta_ss, group_hopping_enabled, sequence_hopping_enabled, cyclic_shift, cyclic_shift_dci, w_config, N_prbs, layer)
+function [r] = lte_generate_dmrs_pusch(N_subfr, N_id_cell, delta_ss, group_hopping_enabled, sequence_hopping_enabled, cyclic_shift, cyclic_shift_dci, w_config, N_prbs, layer)
 
     % Defines
     N_rb_ul_max            = 110;
@@ -55,9 +56,9 @@ function [r] = lte_generate_dmrs_pusch(N_s, N_id_cell, delta_ss, group_hopping_e
     W_VECTOR(6+1,:,:)      = [ 1,-1; 1,-1; 1,-1; 1,-1];
     W_VECTOR(7+1,:,:)      = [ 1, 1; 1, 1; 1,-1; 1,-1];
 
-    % Validate N_s
-    if(~(N_s >= 0 && N_s <= 19))
-        printf("ERROR: Invalid N_s (%u)\n", N_s);
+    % Validate N_subfr
+    if(~(N_subfr >= 0 && N_subfr <= 9))
+        printf("ERROR: Invalid N_subfr (%u)\n", N_subfr);
         r = 0;
         return;
     endif
@@ -125,6 +126,9 @@ function [r] = lte_generate_dmrs_pusch(N_s, N_id_cell, delta_ss, group_hopping_e
         return;
     endif
 
+    % Calculate N_s
+    N_s = N_subfr*2;
+
     % Set lambda
     lambda = layer;
 
@@ -136,9 +140,11 @@ function [r] = lte_generate_dmrs_pusch(N_s, N_id_cell, delta_ss, group_hopping_e
     c      = lte_generate_prs_c(c_init, 8*N_ul_symb*20);
 
     % Calculate n_pn_ns
-    n_pn_ns = 0;
+    n_pn_ns_1 = 0;
+    n_pn_ns_2 = 0;
     for(n=0:7)
-        n_pn_ns = n_pn_ns + c(8*N_ul_symb*N_s + n + 1)*2^n;
+        n_pn_ns_1 = n_pn_ns_1 + c(8*N_ul_symb*N_s + n + 1)*2^n;
+        n_pn_ns_2 = n_pn_ns_2 + c(8*N_ul_symb*(N_s+1) + n + 1)*2^n;
     endfor
 
     % Determine n_1_dmrs
@@ -148,13 +154,16 @@ function [r] = lte_generate_dmrs_pusch(N_s, N_id_cell, delta_ss, group_hopping_e
     n_2_dmrs_lambda = N_2_DMRS_LAMBDA(cyclic_shift_dci+1, lambda+1);
 
     % Calculate n_cs_lambda
-    n_cs_lambda = mod(n_1_dmrs + n_2_dmrs_lambda + n_pn_ns, 12);
+    n_cs_lambda_1 = mod(n_1_dmrs + n_2_dmrs_lambda + n_pn_ns_1, 12);
+    n_cs_lambda_2 = mod(n_1_dmrs + n_2_dmrs_lambda + n_pn_ns_2, 12);
 
     % Calculate alpha_lambda
-    alpha_lambda = 2*pi*n_cs_lambda/12;
+    alpha_lambda_1 = 2*pi*n_cs_lambda_1/12;
+    alpha_lambda_2 = 2*pi*n_cs_lambda_2/12;
 
     % Generate the base reference signal
-    r_u_v_alpha_lambda = lte_generate_ul_rs(N_s, N_id_cell, "pusch", delta_ss, group_hopping_enabled, sequence_hopping_enabled, alpha_lambda, N_prbs);
+    r_u_v_alpha_lambda(1,:) = lte_generate_ul_rs(N_s, N_id_cell, "pusch", delta_ss, group_hopping_enabled, sequence_hopping_enabled, alpha_lambda_1, N_prbs);
+    r_u_v_alpha_lambda(2,:) = lte_generate_ul_rs(N_s+1, N_id_cell, "pusch", delta_ss, group_hopping_enabled, sequence_hopping_enabled, alpha_lambda_2, N_prbs);
 
     % Determine w vector
     if(w_config == "fixed")
@@ -169,7 +178,7 @@ function [r] = lte_generate_dmrs_pusch(N_s, N_id_cell, delta_ss, group_hopping_e
     % Generate the PUSCH demodulation reference signal sequence
     for(m=0:1)
         for(n=0:M_sc_rb-1)
-            r(m*M_sc_rb + n + 1) = w_vector(m+1)*r_u_v_alpha_lambda(n+1);
+            r(m*M_sc_rb + n + 1) = w_vector(m+1)*r_u_v_alpha_lambda(m+1,n+1);
         endfor
     endfor
 endfunction

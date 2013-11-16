@@ -74,3 +74,7 @@ v00.09.02     Added support for setting the sample rate and output data type in 
               LTE_fdd_dl_file_scan, and LTE_file_recorder applications compatible,
               added uplink demodulation reference signal generation to the octave
               code.
+v00.10.00     Added LTE_fdd_enodeb application using a USRP B2X0 currently with
+              DL transmit only, added support for USRP B2X0 in LTE_fdd_dl_scan
+              and LTE_file_recorder, and fixed a bug genererating the references
+              for the second slot in lte_generate_dmrs_pusch.m.

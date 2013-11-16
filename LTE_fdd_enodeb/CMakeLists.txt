@@ -1,0 +1,23 @@
+include(GrPlatform)
+include_directories(hdr
+  ${CMAKE_SOURCE_DIR}/liblte/hdr
+  ${CMAKE_SOURCE_DIR}/libtools/hdr
+  ${CMAKE_SOURCE_DIR}/cmn_hdr
+)
+add_executable(LTE_fdd_enodeb
+  src/LTE_fdd_enb_main.cc
+  src/LTE_fdd_enb_interface.cc
+  src/LTE_fdd_enb_cnfg_db.cc
+  src/LTE_fdd_enb_msgq.cc
+  src/LTE_fdd_enb_user.cc
+  src/LTE_fdd_enb_user_mgr.cc
+  src/LTE_fdd_enb_radio.cc
+  src/LTE_fdd_enb_phy.cc
+  src/LTE_fdd_enb_mac.cc
+  src/LTE_fdd_enb_rlc.cc
+  src/LTE_fdd_enb_pdcp.cc
+  src/LTE_fdd_enb_rrc.cc
+  src/LTE_fdd_enb_mme.cc
+)
+target_link_libraries(LTE_fdd_enodeb lte fftw3f uhd tools pthread rt ${Boost_LIBRARIES} ${GNURADIO_RUNTIME_LIBRARIES} ${GNURADIO_PMT_LIBRARIES})
+install(TARGETS LTE_fdd_enodeb DESTINATION bin)

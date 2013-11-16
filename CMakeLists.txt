@@ -23,7 +23,7 @@
 ########################################################################
 cmake_minimum_required(VERSION 2.6)
 project(openLTE CXX C)
-set(openLTE_version 0.9.2)
+set(openLTE_version 0.10.0)
 enable_testing()
 
 #select the release build type by default to get optimization flags
@@ -93,6 +93,7 @@ find_package(Gnuradio "3.7.0")
 find_package(GnuradioOsmosdr)
 find_package(Rtlsdr)
 find_package(HackRf)
+find_package(Uhd)
 find_package(FFTW3F)
 
 if(NOT GNURADIO_RUNTIME_FOUND)
@@ -111,6 +112,10 @@ if(NOT HACKRF_FOUND)
     message(FATAL_ERROR "HackRF required to compile openLTE (http://github.com/mossmann/hackrf/wiki)")
 endif()
 
+if(NOT UHD_FOUND)
+    message(FATAL_ERROR "UHD required to compile openLTE (http://code.ettus.com/redmine/ettus/projects/uhd/wiki)")
+endif()
+
 if(NOT FFTW3F_FOUND)
     message(FATAL_ERROR "FFTW3 required to compile openLTE")
 endif()
@@ -124,6 +129,8 @@ include_directories(
     ${GNURADIO_RUNTIME_INCLUDE_DIRS}
     ${GNURADIO_PMT_INCLUDE_DIRS}
     ${GNURADIO_OSMOSDR_INCLUDE_DIRS}
+    ${GR_UHD_INCLUDE_DIRS}
+    ${UHD_INCLUDE_DIRS}
 )
 
 link_directories(
@@ -132,6 +139,7 @@ link_directories(
     ${GNURADIO_RUNTIME_LIBRARY_DIRS}
     ${GNURADIO_PMT_LIBRARY_DIRS}
     ${GNURADIO_OSMOSDR_LIBRARY_DIRS}
+    ${UHD_LIBRARY_DIRS}
 )
 
 ########################################################################
@@ -155,3 +163,4 @@ add_subdirectory(LTE_fdd_dl_file_gen)
 add_subdirectory(LTE_fdd_dl_file_scan)
 add_subdirectory(LTE_fdd_dl_scan)
 add_subdirectory(LTE_file_recorder)
+add_subdirectory(LTE_fdd_enodeb)

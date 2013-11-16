@@ -54,6 +54,7 @@
                                    N_prb, and N_cce.
     09/28/2013    Ben Wojtowicz    Reordered sample rate enum and added a text
                                    version.
+    11/13/2013    Ben Wojtowicz    Started adding PUSCH functionality.
 
 *******************************************************************************/
 
@@ -367,10 +368,10 @@ typedef struct{
     uint32 N_id_cell_crs;
 
     // Samples to Symbols & Symbols to Samples
-    fftwf_complex *dl_s2s_in;
-    fftwf_complex *dl_s2s_out;
-    fftwf_plan     dl_symbs_to_samps_plan;
-    fftwf_plan     dl_samps_to_symbs_plan;
+    fftwf_complex *s2s_in;
+    fftwf_complex *s2s_out;
+    fftwf_plan     symbs_to_samps_plan;
+    fftwf_plan     samps_to_symbs_plan;
 
     // Viterbi decode
     float vd_path_metric[128][2048];
@@ -508,6 +509,47 @@ LIBLTE_ERROR_ENUM liblte_phy_update_n_rb_dl(LIBLTE_PHY_STRUCT *phy_struct,
                                             uint32             N_rb_dl);
 
 /*********************************************************************
+    Name: liblte_phy_pusch_channel_encode
+
+    Description: Encodes and modulates the Physical Uplink Shared
+                 Channel
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 5.3
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    Name: liblte_phy_pusch_channel_decode
+
+    Description: Demodulates and decodes the Physical Uplink Shared
+                 Channel
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 5.3
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+typedef struct{
+    LIBLTE_MSG_STRUCT               msg;
+    LIBLTE_PHY_PRE_CODER_TYPE_ENUM  pre_coder_type;
+    LIBLTE_PHY_MODULATION_TYPE_ENUM mod_type;
+    uint32                          tbs;
+    uint32                          rv_idx;
+    uint32                          N_prb;
+    uint32                          prb[LIBLTE_PHY_N_RB_DL_MAX];
+    uint32                          N_codewords;
+    uint32                          tx_mode;
+    uint16                          rnti;
+    uint8                           mcs;
+}LIBLTE_PHY_ALLOCATION_STRUCT;
+// Functions
+// FIXME
+
+/*********************************************************************
     Name: liblte_phy_generate_prach
 
     Description: Generates the baseband signal for a PRACH
@@ -555,20 +597,6 @@ LIBLTE_ERROR_ENUM liblte_phy_detect_prach(LIBLTE_PHY_STRUCT *phy_struct,
 #define LIBLTE_PHY_PDCCH_MAX_ALLOC 10
 // Enums
 // Structs
-typedef struct{
-    LIBLTE_MSG_STRUCT               msg;
-    LIBLTE_PHY_PRE_CODER_TYPE_ENUM  pre_coder_type;
-    LIBLTE_PHY_MODULATION_TYPE_ENUM mod_type;
-    uint32                          tbs;
-    uint32                          rv_idx;
-    uint32                          N_prb;
-    uint32                          prb[LIBLTE_PHY_N_RB_DL_MAX];
-    uint32                          N_codewords;
-    uint32                          tx_mode;
-    uint16                          rnti;
-    uint8                           mcs;
-}LIBLTE_PHY_ALLOCATION_STRUCT;
-
 typedef struct{
     LIBLTE_PHY_ALLOCATION_STRUCT alloc[LIBLTE_PHY_PDCCH_MAX_ALLOC];
     uint32                       N_symbs;
@@ -857,6 +885,22 @@ LIBLTE_ERROR_ENUM liblte_phy_get_dl_subframe_and_ce(LIBLTE_PHY_STRUCT          *
                                                     uint32                      N_id_cell,
                                                     uint8                       N_ant,
                                                     LIBLTE_PHY_SUBFRAME_STRUCT *subframe);
+
+/*********************************************************************
+    Name: liblte_phy_get_ul_subframe
+
+    Description: Resolves all symbols for a particular uplink subframe
+
+    Document Reference: 3GPP TS 36.211 v10.1.0
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+LIBLTE_ERROR_ENUM liblte_phy_get_ul_subframe(LIBLTE_PHY_STRUCT          *phy_struct,
+                                             float                      *i_samps,
+                                             float                      *q_samps,
+                                             LIBLTE_PHY_SUBFRAME_STRUCT *subframe);
 
 /*********************************************************************
     Name: liblte_phy_get_tbs_mcs_and_n_prb_for_dl

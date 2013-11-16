@@ -24,6 +24,8 @@
     Revision History
     ----------    -------------    --------------------------------------------
     02/23/2013    Ben Wojtowicz    Created file
+    11/13/2013    Ben Wojtowicz    Added functions for getting corresponding
+                                   EARFCNs for FDD configuration
 
 *******************************************************************************/
 
@@ -134,6 +136,7 @@ static const uint16 liblte_interface_last_dl_earfcn[LIBLTE_INTERFACE_BAND_N_ITEM
 // Structs
 // Functions
 uint32 liblte_interface_dl_earfcn_to_frequency(uint16 dl_earfcn);
+uint16 liblte_interface_get_corresponding_dl_earfcn(uint16 ul_earfcn);
 
 /*********************************************************************
     Parameter Name: UL_EARFCN
@@ -159,5 +162,6 @@ static const uint16 liblte_interface_last_ul_earfcn[LIBLTE_INTERFACE_BAND_N_ITEM
 // Structs
 // Functions
 uint32 liblte_interface_ul_earfcn_to_frequency(uint16 ul_earfcn);
+uint16 liblte_interface_get_corresponding_ul_earfcn(uint16 dl_earfcn);
 
 #endif /* __LIBLTE_INTERFACE_H__ */

@@ -74,6 +74,7 @@
     09/16/2013    Ben Wojtowicz    Implemented routines for determining TBS,
                                    MCS, N_prb, and N_cce.  Fixed a bug in the
                                    RIV calculation of dci_1a_unpack.
+    11/13/2013    Ben Wojtowicz    Started adding PUSCH functionality.
 
 *******************************************************************************/
 
@@ -720,9 +721,10 @@ void generate_sss(LIBLTE_PHY_STRUCT *phy_struct,
                   float             *sss_im_5);
 
 /*********************************************************************
-    Name: symbols_to_samples
+    Name: symbols_to_samples_dl
 
-    Description: Converts subcarrier symbols to I/Q samples
+    Description: Converts subcarrier symbols to I/Q samples for the
+                 downlink
 
     Document Reference: 3GPP TS 36.211 v10.1.0 section 6.12
 *********************************************************************/
@@ -730,18 +732,39 @@ void generate_sss(LIBLTE_PHY_STRUCT *phy_struct,
 // Enums
 // Structs
 // Functions
-void symbols_to_samples(LIBLTE_PHY_STRUCT *phy_struct,
-                        float             *symb_re,
-                        float             *symb_im,
-                        uint32             symbol_offset,
-                        float             *samps_re,
-                        float             *samps_im,
-                        uint32            *N_samps);
+void symbols_to_samples_dl(LIBLTE_PHY_STRUCT *phy_struct,
+                           float             *symb_re,
+                           float             *symb_im,
+                           uint32             symbol_offset,
+                           float             *samps_re,
+                           float             *samps_im,
+                           uint32            *N_samps);
 
 /*********************************************************************
-    Name: samples_to_symbols
+    Name: symbols_to_samples_ul
 
-    Description: Converts I/Q samples to subcarrier symbols
+    Description: Converts subcarrier symbols to I/Q samples for the
+                 uplink
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 5.6
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+void symbols_to_samples_ul(LIBLTE_PHY_STRUCT *phy_struct,
+                           float             *symb_re,
+                           float             *symb_im,
+                           uint32             symbol_offset,
+                           float             *samps_re,
+                           float             *samps_im,
+                           uint32            *N_samps);
+
+/*********************************************************************
+    Name: samples_to_symbols_dl
+
+    Description: Converts I/Q samples to subcarrier symbols for the
+                 downlink
 
     Document Reference: 3GPP TS 36.211 v10.1.0 section 6.12
 *********************************************************************/
@@ -749,14 +772,33 @@ void symbols_to_samples(LIBLTE_PHY_STRUCT *phy_struct,
 // Enums
 // Structs
 // Functions
-void samples_to_symbols(LIBLTE_PHY_STRUCT *phy_struct,
-                        float             *samps_re,
-                        float             *samps_im,
-                        uint32             slot_start_idx,
-                        uint32             symbol_offset,
-                        uint8              scale,
-                        float             *symb_re,
-                        float             *symb_im);
+void samples_to_symbols_dl(LIBLTE_PHY_STRUCT *phy_struct,
+                           float             *samps_re,
+                           float             *samps_im,
+                           uint32             slot_start_idx,
+                           uint32             symbol_offset,
+                           uint8              scale,
+                           float             *symb_re,
+                           float             *symb_im);
+
+/*********************************************************************
+    Name: samples_to_symbols_ul
+
+    Description: Converts I/Q samples to subcarrier symbols for the
+                 uplink
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 5.6
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+void samples_to_symbols_ul(LIBLTE_PHY_STRUCT *phy_struct,
+                           float             *samps_re,
+                           float             *samps_im,
+                           uint32             symbol_offset,
+                           float             *symb_re,
+                           float             *symb_im);
 
 /*********************************************************************
     Name: modulation_mapper
@@ -1684,18 +1726,18 @@ LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT  **phy_struct,
         }
 
         // Samples to symbols
-        (*phy_struct)->dl_s2s_in              = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex)*(*phy_struct)->N_samps_per_symb*20);
-        (*phy_struct)->dl_s2s_out             = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex)*(*phy_struct)->N_samps_per_symb*20);
-        (*phy_struct)->dl_symbs_to_samps_plan = fftwf_plan_dft_1d((*phy_struct)->N_samps_per_symb,
-                                                                  (*phy_struct)->dl_s2s_in,
-                                                                  (*phy_struct)->dl_s2s_out,
-                                                                  FFTW_BACKWARD,
-                                                                  FFTW_MEASURE);
-        (*phy_struct)->dl_samps_to_symbs_plan = fftwf_plan_dft_1d((*phy_struct)->N_samps_per_symb,
-                                                                  (*phy_struct)->dl_s2s_in,
-                                                                  (*phy_struct)->dl_s2s_out,
-                                                                  FFTW_FORWARD,
-                                                                  FFTW_MEASURE);
+        (*phy_struct)->s2s_in              = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex)*(*phy_struct)->N_samps_per_symb*20);
+        (*phy_struct)->s2s_out             = (fftwf_complex *)fftwf_malloc(sizeof(fftwf_complex)*(*phy_struct)->N_samps_per_symb*20);
+        (*phy_struct)->symbs_to_samps_plan = fftwf_plan_dft_1d((*phy_struct)->N_samps_per_symb,
+                                                               (*phy_struct)->s2s_in,
+                                                               (*phy_struct)->s2s_out,
+                                                               FFTW_BACKWARD,
+                                                               FFTW_MEASURE);
+        (*phy_struct)->samps_to_symbs_plan = fftwf_plan_dft_1d((*phy_struct)->N_samps_per_symb,
+                                                               (*phy_struct)->s2s_in,
+                                                               (*phy_struct)->s2s_out,
+                                                               FFTW_FORWARD,
+                                                               FFTW_MEASURE);
 
         err = LIBLTE_SUCCESS;
     }
@@ -1717,10 +1759,10 @@ LIBLTE_ERROR_ENUM liblte_phy_cleanup(LIBLTE_PHY_STRUCT *phy_struct)
     if(phy_struct != NULL)
     {
         // Samples to symbols
-        fftwf_destroy_plan(phy_struct->dl_samps_to_symbs_plan);
-        fftwf_destroy_plan(phy_struct->dl_symbs_to_samps_plan);
-        fftwf_free(phy_struct->dl_s2s_in);
-        fftwf_free(phy_struct->dl_s2s_out);
+        fftwf_destroy_plan(phy_struct->samps_to_symbs_plan);
+        fftwf_destroy_plan(phy_struct->symbs_to_samps_plan);
+        fftwf_free(phy_struct->s2s_in);
+        fftwf_free(phy_struct->s2s_out);
 
         // PRACH
         fftwf_destroy_plan(phy_struct->prach_idft_plan);
@@ -1807,6 +1849,26 @@ LIBLTE_ERROR_ENUM liblte_phy_update_n_rb_dl(LIBLTE_PHY_STRUCT *phy_struct,
 
     return(err);
 }
+
+/*********************************************************************
+    Name: liblte_phy_pusch_channel_encode
+
+    Description: Encodes and modulates the Physical Uplink Shared
+                 Channel
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 5.3
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Name: liblte_phy_pusch_channel_decode
+
+    Description: Demodulates and decodes the Physical Uplink Shared
+                 Channel
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 5.3
+*********************************************************************/
+// FIXME
 
 /*********************************************************************
     Name: liblte_phy_generate_prach
@@ -4062,14 +4124,14 @@ LIBLTE_ERROR_ENUM liblte_phy_find_pss_and_fine_timing(LIBLTE_PHY_STRUCT *phy_str
         {
             for(j=0; j<N_SYMB_DL_NORMAL_CP; j++)
             {
-                samples_to_symbols(phy_struct,
-                                   i_samps,
-                                   q_samps,
-                                   symb_starts[j]+(phy_struct->N_samps_per_slot*i),
-                                   0,
-                                   0,
-                                   phy_struct->rx_symb_re,
-                                   phy_struct->rx_symb_im);
+                samples_to_symbols_dl(phy_struct,
+                                      i_samps,
+                                      q_samps,
+                                      symb_starts[j]+(phy_struct->N_samps_per_slot*i),
+                                      0,
+                                      0,
+                                      phy_struct->rx_symb_re,
+                                      phy_struct->rx_symb_im);
 
                 for(k=0; k<3; k++)
                 {
@@ -4154,14 +4216,14 @@ LIBLTE_ERROR_ENUM liblte_phy_find_pss_and_fine_timing(LIBLTE_PHY_STRUCT *phy_str
                 idx += i;
             }
 
-            samples_to_symbols(phy_struct,
-                               i_samps,
-                               q_samps,
-                               idx,
-                               0,
-                               0,
-                               phy_struct->rx_symb_re,
-                               phy_struct->rx_symb_im);
+            samples_to_symbols_dl(phy_struct,
+                                  i_samps,
+                                  q_samps,
+                                  idx,
+                                  0,
+                                  0,
+                                  phy_struct->rx_symb_re,
+                                  phy_struct->rx_symb_im);
 
             corr_re = 0;
             corr_im = 0;
@@ -4316,14 +4378,14 @@ LIBLTE_ERROR_ENUM liblte_phy_find_sss(LIBLTE_PHY_STRUCT *phy_struct,
         sss_thresh = pss_thresh * 0.9;
 
         // Demod symbol and search for secondary synchronization signals
-        samples_to_symbols(phy_struct,
-                           i_samps,
-                           q_samps,
-                           symb_starts[5],
-                           0,
-                           0,
-                           phy_struct->rx_symb_re,
-                           phy_struct->rx_symb_im);
+        samples_to_symbols_dl(phy_struct,
+                              i_samps,
+                              q_samps,
+                              symb_starts[5],
+                              0,
+                              0,
+                              phy_struct->rx_symb_re,
+                              phy_struct->rx_symb_im);
         for(i=0; i<168; i++)
         {
             corr_re = 0;
@@ -4565,13 +4627,13 @@ LIBLTE_ERROR_ENUM liblte_phy_create_dl_subframe(LIBLTE_PHY_STRUCT          *phy_
         for(i=0; i<14; i++)
         {
             idx += N_samps;
-            symbols_to_samples(phy_struct,
-                               &subframe->tx_symb_re[ant][i][0],
-                               &subframe->tx_symb_im[ant][i][0],
-                               i,
-                               &i_samps[idx],
-                               &q_samps[idx],
-                               &N_samps);
+            symbols_to_samples_dl(phy_struct,
+                                  &subframe->tx_symb_re[ant][i][0],
+                                  &subframe->tx_symb_im[ant][i][0],
+                                  i,
+                                  &i_samps[idx],
+                                  &q_samps[idx],
+                                  &N_samps);
         }
 
         err = LIBLTE_SUCCESS;
@@ -4632,14 +4694,14 @@ LIBLTE_ERROR_ENUM liblte_phy_get_dl_subframe_and_ce(LIBLTE_PHY_STRUCT          *
         for(i=0; i<16; i++)
         {
             // Demodulate symbols
-            samples_to_symbols(phy_struct,
-                               i_samps,
-                               q_samps,
-                               subfr_start_idx + (i/7)*phy_struct->N_samps_per_slot,
-                               i%7,
-                               0,
-                               &subframe->rx_symb_re[i][0],
-                               &subframe->rx_symb_im[i][0]);
+            samples_to_symbols_dl(phy_struct,
+                                  i_samps,
+                                  q_samps,
+                                  subfr_start_idx + (i/7)*phy_struct->N_samps_per_slot,
+                                  i%7,
+                                  0,
+                                  &subframe->rx_symb_re[i][0],
+                                  &subframe->rx_symb_im[i][0]);
         }
 
         // Generate cell specific reference signals
@@ -4877,6 +4939,43 @@ LIBLTE_ERROR_ENUM liblte_phy_get_dl_subframe_and_ce(LIBLTE_PHY_STRUCT          *
                     }
                 }
             }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    Name: liblte_phy_get_ul_subframe
+
+    Description: Resolves all symbols for a particular uplink subframe
+
+    Document Reference: 3GPP TS 36.211 v10.1.0
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_phy_get_ul_subframe(LIBLTE_PHY_STRUCT          *phy_struct,
+                                             float                      *i_samps,
+                                             float                      *q_samps,
+                                             LIBLTE_PHY_SUBFRAME_STRUCT *subframe)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+
+    if(phy_struct != NULL &&
+       i_samps    != NULL &&
+       q_samps    != NULL &&
+       subframe   != NULL)
+    {
+        for(i=0; i<14; i++)
+        {
+            // Demodulate symbols
+            samples_to_symbols_ul(phy_struct,
+                                  i_samps,
+                                  q_samps,
+                                  i%7,
+                                  &subframe->rx_symb_re[i][0],
+                                  &subframe->rx_symb_im[i][0]);
         }
 
         err = LIBLTE_SUCCESS;
@@ -6069,19 +6168,20 @@ void generate_sss(LIBLTE_PHY_STRUCT *phy_struct,
 }
 
 /*********************************************************************
-    Name: symbols_to_samples
+    Name: symbols_to_samples_dl
 
-    Description: Converts subcarrier symbols to I/Q samples
+    Description: Converts subcarrier symbols to I/Q samples for the
+                 downlink
 
     Document Reference: 3GPP TS 36.211 v10.1.0 section 6.12
 *********************************************************************/
-void symbols_to_samples(LIBLTE_PHY_STRUCT *phy_struct,
-                        float             *symb_re,
-                        float             *symb_im,
-                        uint32             symbol_offset,
-                        float             *samps_re,
-                        float             *samps_im,
-                        uint32            *N_samps)
+void symbols_to_samples_dl(LIBLTE_PHY_STRUCT *phy_struct,
+                           float             *symb_re,
+                           float             *symb_im,
+                           uint32             symbol_offset,
+                           float             *samps_re,
+                           float             *samps_im,
+                           uint32            *N_samps)
 {
     uint32 CP_len;
     uint32 i;
@@ -6096,24 +6196,24 @@ void symbols_to_samples(LIBLTE_PHY_STRUCT *phy_struct,
 
     for(i=0; i<phy_struct->N_samps_per_symb; i++)
     {
-        phy_struct->dl_s2s_in[i][0] = 0;
-        phy_struct->dl_s2s_in[i][1] = 0;
+        phy_struct->s2s_in[i][0] = 0;
+        phy_struct->s2s_in[i][1] = 0;
     }
     for(i=0; i<(phy_struct->FFT_size/2)-phy_struct->FFT_pad_size; i++)
     {
         // Positive spectrum
-        phy_struct->dl_s2s_in[i+1][0] = symb_re[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)];
-        phy_struct->dl_s2s_in[i+1][1] = symb_im[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)];
+        phy_struct->s2s_in[i+1][0] = symb_re[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)];
+        phy_struct->s2s_in[i+1][1] = symb_im[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)];
 
         // Negative spectrum
-        phy_struct->dl_s2s_in[phy_struct->N_samps_per_symb-i-1][0] = symb_re[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1];
-        phy_struct->dl_s2s_in[phy_struct->N_samps_per_symb-i-1][1] = symb_im[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1];
+        phy_struct->s2s_in[phy_struct->N_samps_per_symb-i-1][0] = symb_re[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1];
+        phy_struct->s2s_in[phy_struct->N_samps_per_symb-i-1][1] = symb_im[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1];
     }
-    fftwf_execute(phy_struct->dl_symbs_to_samps_plan);
+    fftwf_execute(phy_struct->symbs_to_samps_plan);
     for(i=0; i<phy_struct->N_samps_per_symb; i++)
     {
-        samps_re[CP_len+i] = phy_struct->dl_s2s_out[i][0];
-        samps_im[CP_len+i] = phy_struct->dl_s2s_out[i][1];
+        samps_re[CP_len+i] = phy_struct->s2s_out[i][0];
+        samps_im[CP_len+i] = phy_struct->s2s_out[i][1];
     }
     for(i=0; i<CP_len; i++)
     {
@@ -6124,25 +6224,78 @@ void symbols_to_samples(LIBLTE_PHY_STRUCT *phy_struct,
 }
 
 /*********************************************************************
-    Name: samples_to_symbols
+    Name: symbols_to_samples_ul
 
-    Description: Converts I/Q samples to subcarrier symbols
+    Description: Converts subcarrier symbols to I/Q samples for the
+                 uplink
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 5.6
+*********************************************************************/
+void symbols_to_samples_ul(LIBLTE_PHY_STRUCT *phy_struct,
+                           float             *symb_re,
+                           float             *symb_im,
+                           uint32             symbol_offset,
+                           float             *samps_re,
+                           float             *samps_im,
+                           uint32            *N_samps)
+{
+    uint32 CP_len;
+    uint32 i;
+    uint32 idx;
+
+    // Calculate index and CP length
+    if((symbol_offset % 7) == 0)
+    {
+        CP_len = phy_struct->N_samps_cp_l_0;
+    }else{
+        CP_len = phy_struct->N_samps_cp_l_else;
+    }
+
+    for(i=0; i<phy_struct->N_samps_per_symb; i++)
+    {
+        phy_struct->s2s_in[i][0] = 0;
+        phy_struct->s2s_in[i][1] = 0;
+    }
+    for(i=0; i<phy_struct->FFT_size-(phy_struct->FFT_pad_size/2); i++)
+    {
+        idx                        = (i*phy_struct->FFT_pad_size+phy_struct->FFT_size/2)%phy_struct->FFT_size;
+        phy_struct->s2s_in[idx][0] = symb_re[i];
+        phy_struct->s2s_in[idx][1] = symb_im[i];
+    }
+    fftwf_execute(phy_struct->symbs_to_samps_plan);
+    for(i=0; i<phy_struct->N_samps_per_symb; i++)
+    {
+        samps_re[CP_len+i] = phy_struct->s2s_out[i][0];
+        samps_im[CP_len+i] = phy_struct->s2s_out[i][1];
+    }
+    for(i=0; i<CP_len; i++)
+    {
+        samps_re[i] = samps_re[phy_struct->N_samps_per_symb+i];
+        samps_im[i] = samps_im[phy_struct->N_samps_per_symb+i];
+    }
+    *N_samps = phy_struct->N_samps_per_symb + CP_len;
+}
+
+/*********************************************************************
+    Name: samples_to_symbols_dl
+
+    Description: Converts I/Q samples to subcarrier symbols for the
+                 downlink
 
     Document Reference: 3GPP TS 36.211 v10.1.0 section 6.12
 *********************************************************************/
-void samples_to_symbols(LIBLTE_PHY_STRUCT *phy_struct,
-                        float             *samps_re,
-                        float             *samps_im,
-                        uint32             slot_start_idx,
-                        uint32             symbol_offset,
-                        uint8              scale,
-                        float             *symb_re,
-                        float             *symb_im)
+void samples_to_symbols_dl(LIBLTE_PHY_STRUCT *phy_struct,
+                           float             *samps_re,
+                           float             *samps_im,
+                           uint32             slot_start_idx,
+                           uint32             symbol_offset,
+                           uint8              scale,
+                           float             *symb_re,
+                           float             *symb_im)
 {
     uint32 CP_len;
     uint32 index;
     uint32 i;
-    int32  idx;
 
     // Calculate index and CP length
     if((symbol_offset % 7) == 0)
@@ -6159,19 +6312,19 @@ void samples_to_symbols(LIBLTE_PHY_STRUCT *phy_struct,
 
     for(i=0; i<phy_struct->N_samps_per_symb; i++)
     {
-        phy_struct->dl_s2s_in[i][0] = samps_re[index+CP_len-1+i];
-        phy_struct->dl_s2s_in[i][1] = samps_im[index+CP_len-1+i];
+        phy_struct->s2s_in[i][0] = samps_re[index+CP_len-1+i];
+        phy_struct->s2s_in[i][1] = samps_im[index+CP_len-1+i];
     }
-    fftwf_execute(phy_struct->dl_samps_to_symbs_plan);
+    fftwf_execute(phy_struct->samps_to_symbs_plan);
     for(i=0; i<(phy_struct->FFT_size/2)-phy_struct->FFT_pad_size; i++)
     {
         // Positive spectrum
-        symb_re[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)] = phy_struct->dl_s2s_out[i+1][0];
-        symb_im[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)] = phy_struct->dl_s2s_out[i+1][1];
+        symb_re[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)] = phy_struct->s2s_out[i+1][0];
+        symb_im[i+((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)] = phy_struct->s2s_out[i+1][1];
 
         // Negative spectrum
-        symb_re[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1] = phy_struct->dl_s2s_out[phy_struct->N_samps_per_symb-i-1][0];
-        symb_im[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1] = phy_struct->dl_s2s_out[phy_struct->N_samps_per_symb-i-1][1];
+        symb_re[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1] = phy_struct->s2s_out[phy_struct->N_samps_per_symb-i-1][0];
+        symb_im[((phy_struct->FFT_size/2)-phy_struct->FFT_pad_size)-i-1] = phy_struct->s2s_out[phy_struct->N_samps_per_symb-i-1][1];
     }
 
     if(scale == 1)
@@ -6181,6 +6334,53 @@ void samples_to_symbols(LIBLTE_PHY_STRUCT *phy_struct,
             symb_re[i] = cosf(atan2f(symb_im[i], symb_re[i]));
             symb_im[i] = sinf(atan2f(symb_im[i], symb_re[i]));
         }
+    }
+}
+
+/*********************************************************************
+    Name: samples_to_symbols_ul
+
+    Description: Converts I/Q samples to subcarrier symbols for the
+                 uplink
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 5.6
+*********************************************************************/
+void samples_to_symbols_ul(LIBLTE_PHY_STRUCT *phy_struct,
+                           float             *samps_re,
+                           float             *samps_im,
+                           uint32             symbol_offset,
+                           float             *symb_re,
+                           float             *symb_im)
+{
+    uint32 CP_len;
+    uint32 index;
+    uint32 i;
+    uint32 idx;
+
+    // Calculate index and CP length
+    if((symbol_offset % 7) == 0)
+    {
+        CP_len = phy_struct->N_samps_cp_l_0;
+    }else{
+        CP_len = phy_struct->N_samps_cp_l_else;
+    }
+    index = (phy_struct->N_samps_per_symb+phy_struct->N_samps_cp_l_else)*symbol_offset;
+    if(symbol_offset > 0)
+    {
+        index += phy_struct->N_samps_cp_l_0 - phy_struct->N_samps_cp_l_else;
+    }
+
+    for(i=0; i<phy_struct->N_samps_per_symb; i++)
+    {
+        phy_struct->s2s_in[i][0] = samps_re[index+CP_len-1+i];
+        phy_struct->s2s_in[i][1] = samps_im[index+CP_len-1+i];
+    }
+    fftwf_execute(phy_struct->samps_to_symbs_plan);
+    for(i=0; i<phy_struct->FFT_size-(phy_struct->FFT_pad_size*2); i++)
+    {
+        idx        = (i+phy_struct->FFT_pad_size+phy_struct->FFT_size/2)%phy_struct->FFT_size;
+        symb_re[i] = phy_struct->s2s_out[idx][0];
+        symb_im[i] = phy_struct->s2s_out[idx][1];
     }
 }
 
@@ -10163,7 +10363,7 @@ float get_soft_decision(float rx_re,
     diff_im = rx_im - exp_im;
     dist    = sqrt(diff_re*diff_re + diff_im*diff_im);
 
-    if(dist >= max_dist)
+    if(dist >= (max_dist - (max_dist/120)))
     {
         dist = max_dist - (max_dist/120);
     }

@@ -10,9 +10,13 @@ cmake                 Files needed for cmake
 LTE_fdd_dl_file_scan  A gnu-radio LTE FDD DL file scanner application
 LTE_fdd_dl_file_gen   A gnu-radio LTE FDD DL file generator application
 LTE_fdd_dl_scan       A gnu-radio LTE FDD DL scanner application that
-                      currently supports rtl-sdr and hackrf hardware
+                      currently supports rtl-sdr, hackrf, and USRP
+                      B2X0 hardware
 LTE_file_recorder     A gnu-radio LTE file recording application that
-                      currently supports rtl-sdr and hackrf hardware
+                      currently supports rtl-sdr, hackrf, and USRP
+                      B2X0 hardware
+LTE_fdd_enodeb        An LTE FDD eNodeB application that currently
+                      supports URSP B2X0 hardware
 
 To build the C++ and python code use the following:
 
@@ -92,25 +96,47 @@ LTE_fdd_dl_file_scan.
 #############
 To use the installed C++ live scanner, make sure LD_LIBRARY_PATH
 is set to /usr/local/lib (export LD_LIBRARY_PATH=/usr/local/lib),
-plug in rtl-sdr or hackrf hardware, run LTE_fdd_dl_scan, and connect
-(via telnet, nc, etc) to the control port at port number 20000.
-Scan parameters can be changed and scan results can be observed
-on the control port.  For a list of parameters simply type help
-on the control port.
+plug in rtl-sdr, hackrf, or USRP B2X0 hardware, run
+LTE_fdd_dl_scan, and connect (via telnet, nc, etc) to the control
+port at port number 20000.  Scan parameters can be changed and
+scan results can be observed on the control port.  For a list of
+parameters simply type help on the control port.
 
 ###################
 #  FILE RECORDER  #
 ###################
 To use the installed C++ file recorder, make sure LD_LIBRARY_PATH
 is set to /usr/local/lib (export LD_LIBRARY_PATH=/usr/local/lib),
-plug in rtl-sdr or hackrf hardware, run LTE_file_recorder, and connect
-(via telnet, nc, etc) to the control port at port number 25000.
-Recording parameters can be changed on the control port.  For a list
-of parameters simply type help on the control port.  File recorded
-using hackRF hardware are recorded using a sample rate of 15.36MHz.
-Files recorded with all other hardware are recorded using a sample
-rate of 1.92MHz.  All files recorded with this application can be
+plug in rtl-sdr, hackrf, or USRP B2X0 hardware, run
+LTE_file_recorder, and connect (via telnet, nc, etc) to the
+control port at port number 25000.  Recording parameters can be
+changed on the control port.  For a list of parameters simply type
+help on the control port.  Files recorded using hackRF or USRP B2X0
+hardware are recorded using a sample rate of 15.36MHz.  Files
+recorded with all other hardware are recorded using a sample rate
+of 1.92MHz.  All files recorded with this application can be
 scanned with LTE_fdd_dl_file_scan.
+
+############
+#  ENODEB  #
+############
+To use the installed C++ eNodeB, make sure LD_LIBRARY_PATH is set
+to /usr/local/lib (export LD_LIBRARY_PATH=/usr/local/lib), plug in
+USRP B2X0 hardware, run LTE_fdd_enodeb, and connect (via telnet, nc,
+etc) to the control port at port number 30000.  eNodeB parameters
+can be changed on the control port.  For a list of parameters simply
+type help on the control port.
+NOTES: This is currently a DL transmit application only (there is no
+UL receive functionality).  This application has been tested at 1.4,
+3, and 5MHz bandwidths with few issues.  Higher bandwidths are
+supported, but may not function correctly at this time.
+WARNINGS: By using this application you risk disruption of service in
+a public network, even if you are not directly interfering with the
+radio transmissions.  This is a criminal act in most countries, and a
+much more serious offense than a simple violation of radio spectrum
+regulaions.  It is highly recommended to use this application only
+with antennas and test UEs inside an RF Shielded Enclosure (Faraday
+Cage).
 
 ############
 #  OCTAVE  #

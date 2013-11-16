@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     08/26/2013    Ben Wojtowicz    Created file
+    11/13/2013    Ben Wojtowicz    Added support for USRP B2X0.
 
 *******************************************************************************/
 
@@ -33,6 +34,7 @@
 *******************************************************************************/
 
 #include "LTE_file_recorder_flowgraph.h"
+#include "uhd/usrp/multi_usrp.hpp"
 
 /*******************************************************************************
                               DEFINES
@@ -105,9 +107,11 @@ LTE_FILE_RECORDER_STATUS_ENUM LTE_file_recorder_flowgraph::start(uint16      ear
                                                                  std::string file_name)
 {
     boost::mutex::scoped_lock       lock(start_mutex);
-    LTE_file_recorder_interface    *interface     = LTE_file_recorder_interface::get_instance();
+    LTE_file_recorder_interface    *interface = LTE_file_recorder_interface::get_instance();
+    uhd::device_addr_t              hint;
     LTE_FILE_RECORDER_STATUS_ENUM   err           = LTE_FILE_RECORDER_STATUS_FAIL;
     LTE_FILE_RECORDER_HW_TYPE_ENUM  hardware_type = LTE_FILE_RECORDER_HW_TYPE_UNKNOWN;
+    double                          mcr;
     uint32                          freq;
 
     if(!started)
@@ -118,19 +122,32 @@ LTE_FILE_RECORDER_STATUS_ENUM LTE_file_recorder_flowgraph::start(uint16      ear
         }
         if(NULL == samp_src.get())
         {
-            osmosdr::source::sptr tmp_src1 = osmosdr::source::make("hackrf");
-            if(0 != tmp_src1->get_sample_rates().size())
+            osmosdr::source::sptr tmp_src0 = osmosdr::source::make("uhd");
+            BOOST_FOREACH(const uhd::device_addr_t &dev, uhd::device::find(hint))
             {
-                hardware_type = LTE_FILE_RECORDER_HW_TYPE_HACKRF;
-                samp_src      = tmp_src1;
+                uhd::usrp::multi_usrp::make(dev)->set_master_clock_rate(30720000);
+                mcr = uhd::usrp::multi_usrp::make(dev)->get_master_clock_rate();
+            }
+            if(0 != tmp_src0->get_sample_rates().size() &&
+               1 >= fabs(mcr - 30720000))
+            {
+                hardware_type = LTE_FILE_RECORDER_HW_TYPE_USRP;
+                samp_src      = tmp_src0;
             }else{
-                osmosdr::source::sptr tmp_src2 = osmosdr::source::make("rtl=0");
-                if(0 != tmp_src2->get_sample_rates().size())
+                osmosdr::source::sptr tmp_src1 = osmosdr::source::make("hackrf");
+                if(0 != tmp_src1->get_sample_rates().size())
                 {
-                    hardware_type = LTE_FILE_RECORDER_HW_TYPE_RTL_SDR;
-                    samp_src      = tmp_src2;
+                    hardware_type = LTE_FILE_RECORDER_HW_TYPE_HACKRF;
+                    samp_src      = tmp_src1;
                 }else{
-                    samp_src = osmosdr::source::make();
+                    osmosdr::source::sptr tmp_src2 = osmosdr::source::make("rtl=0");
+                    if(0 != tmp_src2->get_sample_rates().size())
+                    {
+                        hardware_type = LTE_FILE_RECORDER_HW_TYPE_RTL_SDR;
+                        samp_src      = tmp_src2;
+                    }else{
+                        samp_src = osmosdr::source::make();
+                    }
                 }
             }
         }
@@ -147,6 +164,12 @@ LTE_FILE_RECORDER_STATUS_ENUM LTE_file_recorder_flowgraph::start(uint16      ear
             {
                 switch(hardware_type)
                 {
+                case LTE_FILE_RECORDER_HW_TYPE_USRP:
+                    samp_src->set_sample_rate(15360000);
+                    samp_src->set_gain_mode(false);
+                    samp_src->set_gain(35);
+                    samp_src->set_bandwidth(10000000);
+                    break;
                 case LTE_FILE_RECORDER_HW_TYPE_HACKRF:
                     samp_src->set_sample_rate(15360000);
                     samp_src->set_gain_mode(false);

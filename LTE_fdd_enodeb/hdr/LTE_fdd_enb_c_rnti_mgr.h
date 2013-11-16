@@ -17,30 +17,27 @@
 
 *******************************************************************************
 
-    File: LTE_file_recorder_flowgraph.h
+    File: LTE_fdd_enb_c_rnti_mgr.h
 
-    Description: Contains all the definitions for the LTE file recorder
-                 gnuradio flowgraph.
+    Description: Contains all the definitions for the LTE FDD eNodeB
+                 C-RNTI manager.
 
     Revision History
     ----------    -------------    --------------------------------------------
-    08/26/2013    Ben Wojtowicz    Created file
-    11/13/2013    Ben Wojtowicz    Added support for USRP B2X0.
+    11/09/2013    Ben Wojtowicz    Created file
 
 *******************************************************************************/
 
-#ifndef __LTE_FILE_RECORDER_FLOWGRAPH_H__
-#define __LTE_FILE_RECORDER_FLOWGRAPH_H__
+#ifndef __LTE_FDD_ENB_C_RNTI_MGR_H__
+#define __LTE_FDD_ENB_C_RNTI_MGR_H__
 
 /*******************************************************************************
                               INCLUDES
 *******************************************************************************/
 
-#include "LTE_file_recorder_interface.h"
+#include "LTE_fdd_enb_user.h"
+#include "typedefs.h"
 #include <boost/thread/mutex.hpp>
-#include <gnuradio/top_block.h>
-#include <osmosdr/source.h>
-#include <gnuradio/blocks/file_sink.h>
 
 /*******************************************************************************
                               DEFINES
@@ -56,46 +53,32 @@
                               TYPEDEFS
 *******************************************************************************/
 
-typedef enum{
-    LTE_FILE_RECORDER_HW_TYPE_RTL_SDR = 0,
-    LTE_FILE_RECORDER_HW_TYPE_HACKRF,
-    LTE_FILE_RECORDER_HW_TYPE_USRP,
-    LTE_FILE_RECORDER_HW_TYPE_UNKNOWN,
-}LTE_FILE_RECORDER_HW_TYPE_ENUM;
 
 /*******************************************************************************
                               CLASS DECLARATIONS
 *******************************************************************************/
 
-class LTE_file_recorder_flowgraph
+class LTE_fdd_enb_c_rnti_mgr
 {
 public:
     // Singleton
-    static LTE_file_recorder_flowgraph* get_instance(void);
+    static LTE_fdd_enb_c_rnti_mgr* get_instance(void);
     static void cleanup(void);
 
-    // Flowgraph
-    bool is_started(void);
-    LTE_FILE_RECORDER_STATUS_ENUM start(uint16 earfcn, std::string file_name);
-    LTE_FILE_RECORDER_STATUS_ENUM stop(void);
+    // External interface
+    void add_c_rnti(uint16 c_rnti, LTE_fdd_enb_user *user);
+    void update_c_rnti_user(uint16 c_rnti, LTE_fdd_enb_user *user);
+    void del_c_rnti(uint16 c_rnti);
 
 private:
     // Singleton
-    static LTE_file_recorder_flowgraph *instance;
-    LTE_file_recorder_flowgraph();
-    ~LTE_file_recorder_flowgraph();
+    static LTE_fdd_enb_c_rnti_mgr *instance;
+    LTE_fdd_enb_c_rnti_mgr();
+    ~LTE_fdd_enb_c_rnti_mgr();
 
-    // Run
-    static void* run_thread(void *inputs);
-
-    // Variables
-    gr::top_block_sptr          top_block;
-    osmosdr::source::sptr       samp_src;
-    gr::blocks::file_sink::sptr file_sink;
-
-    pthread_t    start_thread;
-    boost::mutex start_mutex;
-    bool         started;
+    // User map
+    std::map<uint16, LTE_fdd_enb_user*> c_rnti_map;
+    boost::mutex                        c_rnti_mutex;
 };
 
-#endif /* __LTE_FILE_RECORDER_FLOWGRAPH_H__ */
+#endif /* __LTE_FDD_ENB_C_RNTI_MGR_H__ */

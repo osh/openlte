@@ -1,0 +1,151 @@
+/*******************************************************************************
+
+    Copyright 2013 Ben Wojtowicz
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+*******************************************************************************
+
+    File: LTE_fdd_enb_mac.h
+
+    Description: Contains all the definitions for the LTE FDD eNodeB
+                 medium access control layer.
+
+    Revision History
+    ----------    -------------    --------------------------------------------
+    11/09/2013    Ben Wojtowicz    Created file
+
+*******************************************************************************/
+
+#ifndef __LTE_FDD_ENB_MAC_H__
+#define __LTE_FDD_ENB_MAC_H__
+
+/*******************************************************************************
+                              INCLUDES
+*******************************************************************************/
+
+#include "LTE_fdd_enb_cnfg_db.h"
+#include "LTE_fdd_enb_msgq.h"
+#include "liblte_mac.h"
+#include <boost/thread/mutex.hpp>
+#include <boost/interprocess/ipc/message_queue.hpp>
+#include <list>
+
+/*******************************************************************************
+                              DEFINES
+*******************************************************************************/
+
+
+/*******************************************************************************
+                              FORWARD DECLARATIONS
+*******************************************************************************/
+
+
+/*******************************************************************************
+                              TYPEDEFS
+*******************************************************************************/
+
+typedef struct{
+    LIBLTE_PHY_ALLOCATION_STRUCT dl_alloc;
+    LIBLTE_PHY_ALLOCATION_STRUCT ul_alloc;
+    LIBLTE_MAC_RAR_STRUCT        rar;
+    uint32                       fn_combo;
+}LTE_FDD_ENB_RAR_SCHED_QUEUE_STRUCT;
+
+typedef struct{
+    LIBLTE_PHY_ALLOCATION_STRUCT alloc;
+    uint32                       fn_combo;
+}LTE_FDD_ENB_DL_SCHED_QUEUE_STRUCT;
+
+typedef struct{
+    LIBLTE_PHY_ALLOCATION_STRUCT alloc;
+    uint32                       fn_combo;
+}LTE_FDD_ENB_UL_SCHED_QUEUE_STRUCT;
+
+/*******************************************************************************
+                              CLASS DECLARATIONS
+*******************************************************************************/
+
+class LTE_fdd_enb_mac
+{
+public:
+    // Singleton
+    static LTE_fdd_enb_mac* get_instance(void);
+    static void cleanup(void);
+
+    // Start/Stop
+    void start(void);
+    void stop(void);
+
+    // External interface
+    void update_sys_info(void);
+
+private:
+    // Singleton
+    static LTE_fdd_enb_mac *instance;
+    LTE_fdd_enb_mac();
+    ~LTE_fdd_enb_mac();
+
+    // Start/Stop
+    boost::mutex start_mutex;
+    bool         started;
+
+    // Communication
+    void handle_phy_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg);
+    void handle_rlc_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg);
+    LTE_fdd_enb_msgq                   *phy_comm_msgq;
+    LTE_fdd_enb_msgq                   *rlc_comm_msgq;
+    boost::interprocess::message_queue *mac_phy_mq;
+    boost::interprocess::message_queue *mac_rlc_mq;
+
+    // PHY Message Handlers
+    void handle_ready_to_send(LTE_FDD_ENB_READY_TO_SEND_MSG_STRUCT *rts);
+    void handle_prach_decode(LTE_FDD_ENB_PRACH_DECODE_MSG_STRUCT *prach_decode);
+    void handle_pucch_decode(LTE_FDD_ENB_PUCCH_DECODE_MSG_STRUCT *pucch_decode);
+    void handle_pusch_decode(LTE_FDD_ENB_PUSCH_DECODE_MSG_STRUCT *pusch_decode);
+
+    // RLC Message Handlers
+
+    // Message Parsers
+
+    // State Machines
+
+    // Message Constructors
+    void construct_random_access_response(uint8 preamble, uint16 timing_adv, uint32 fn_combo);
+
+    // Scheduler
+    void scheduler(void);
+    LTE_FDD_ENB_ERROR_ENUM add_to_rar_sched_queue(uint32 fn_combo, LIBLTE_PHY_ALLOCATION_STRUCT *dl_alloc, LIBLTE_PHY_ALLOCATION_STRUCT *ul_alloc, LIBLTE_MAC_RAR_STRUCT *rar);
+    LTE_FDD_ENB_ERROR_ENUM add_to_dl_sched_queue(uint32 fn_combo, LIBLTE_PHY_ALLOCATION_STRUCT *alloc);
+    LTE_FDD_ENB_ERROR_ENUM add_to_ul_sched_queue(uint32 fn_combo, LIBLTE_PHY_ALLOCATION_STRUCT *alloc);
+    boost::mutex                                   rar_sched_queue_mutex;
+    boost::mutex                                   dl_sched_queue_mutex;
+    boost::mutex                                   ul_sched_queue_mutex;
+    std::list<LTE_FDD_ENB_RAR_SCHED_QUEUE_STRUCT*> rar_sched_queue;
+    std::list<LTE_FDD_ENB_DL_SCHED_QUEUE_STRUCT*>  dl_sched_queue;
+    std::list<LTE_FDD_ENB_UL_SCHED_QUEUE_STRUCT*>  ul_sched_queue;
+    LTE_FDD_ENB_PDSCH_SCHEDULE_MSG_STRUCT          sched_dl_subfr[10];
+    LTE_FDD_ENB_PUSCH_SCHEDULE_MSG_STRUCT          sched_ul_subfr[10];
+    uint8                                          sched_cur_dl_subfn;
+    uint8                                          sched_cur_ul_subfn;
+
+    // Parameters
+    boost::mutex                sys_info_mutex;
+    LTE_FDD_ENB_SYS_INFO_STRUCT sys_info;
+
+    // Helpers
+    uint32 get_n_reserved_prbs(uint32 fn_combo);
+};
+
+#endif /* __LTE_FDD_ENB_MAC_H__ */
