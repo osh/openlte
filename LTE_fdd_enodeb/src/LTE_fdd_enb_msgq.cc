@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/10/2013    Ben Wojtowicz    Created file
+    11/23/2013    Ben Wojtowicz    Fixed a bug with receive size.
 
 *******************************************************************************/
 
@@ -135,7 +136,7 @@ void* LTE_fdd_enb_msgq::receive_thread(void *inputs)
 {
     LTE_fdd_enb_msgq           *msgq = (LTE_fdd_enb_msgq *)inputs;
     LTE_FDD_ENB_MESSAGE_STRUCT *msg  = NULL;
-    uint32                      rx_size;
+    std::size_t                 rx_size;
     uint32                      prio;
     bool                        not_done = true;
 
