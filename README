@@ -10,11 +10,11 @@ cmake                 Files needed for cmake
 LTE_fdd_dl_file_scan  A gnu-radio LTE FDD DL file scanner application
 LTE_fdd_dl_file_gen   A gnu-radio LTE FDD DL file generator application
 LTE_fdd_dl_scan       A gnu-radio LTE FDD DL scanner application that
-                      currently supports rtl-sdr, hackrf, and USRP
-                      B2X0 hardware
+                      currently supports rtl-sdr, hackrf, USRP B2X0,
+                      and bladeRF hardware
 LTE_file_recorder     A gnu-radio LTE file recording application that
-                      currently supports rtl-sdr, hackrf, and USRP
-                      B2X0 hardware
+                      currently supports rtl-sdr, hackrf, USRP B2X0,
+                      and bladeRF hardware
 LTE_fdd_enodeb        An LTE FDD eNodeB application that currently
                       supports URSP B2X0 hardware
 
@@ -96,7 +96,7 @@ LTE_fdd_dl_file_scan.
 #############
 To use the installed C++ live scanner, make sure LD_LIBRARY_PATH
 is set to /usr/local/lib (export LD_LIBRARY_PATH=/usr/local/lib),
-plug in rtl-sdr, hackrf, or USRP B2X0 hardware, run
+plug in rtl-sdr, hackrf, USRP B2X0, or bladeRF hardware, run
 LTE_fdd_dl_scan, and connect (via telnet, nc, etc) to the control
 port at port number 20000.  Scan parameters can be changed and
 scan results can be observed on the control port.  For a list of
@@ -107,14 +107,14 @@ parameters simply type help on the control port.
 ###################
 To use the installed C++ file recorder, make sure LD_LIBRARY_PATH
 is set to /usr/local/lib (export LD_LIBRARY_PATH=/usr/local/lib),
-plug in rtl-sdr, hackrf, or USRP B2X0 hardware, run
+plug in rtl-sdr, hackrf, USRP B2X0, or bladeRF hardware, run
 LTE_file_recorder, and connect (via telnet, nc, etc) to the
 control port at port number 25000.  Recording parameters can be
 changed on the control port.  For a list of parameters simply type
-help on the control port.  Files recorded using hackRF or USRP B2X0
-hardware are recorded using a sample rate of 15.36MHz.  Files
-recorded with all other hardware are recorded using a sample rate
-of 1.92MHz.  All files recorded with this application can be
+help on the control port.  Files recorded using hackRF, USRP B2X0,
+or bladeRF hardware are recorded using a sample rate of 15.36MHz.
+Files recorded with all other hardware are recorded using a sample
+rate of 1.92MHz.  All files recorded with this application can be
 scanned with LTE_fdd_dl_file_scan.
 
 ############

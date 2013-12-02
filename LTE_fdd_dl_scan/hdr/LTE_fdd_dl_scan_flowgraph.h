@@ -28,6 +28,7 @@
     07/21/2013    Ben Wojtowicz    Added support for HackRF Jawbreaker
     08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7.
     11/13/2013    Ben Wojtowicz    Added support for USRP B2X0.
+    11/30/2013    Ben Wojtowicz    Added support for bladeRF.
 
 *******************************************************************************/
 
@@ -62,6 +63,7 @@ typedef enum{
     LTE_FDD_DL_SCAN_HW_TYPE_RTL_SDR = 0,
     LTE_FDD_DL_SCAN_HW_TYPE_HACKRF,
     LTE_FDD_DL_SCAN_HW_TYPE_USRP,
+    LTE_FDD_DL_SCAN_HW_TYPE_BLADERF,
     LTE_FDD_DL_SCAN_HW_TYPE_UNKNOWN,
 }LTE_FDD_DL_SCAN_HW_TYPE_ENUM;
 

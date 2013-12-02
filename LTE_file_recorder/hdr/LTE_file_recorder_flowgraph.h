@@ -26,6 +26,7 @@
     ----------    -------------    --------------------------------------------
     08/26/2013    Ben Wojtowicz    Created file
     11/13/2013    Ben Wojtowicz    Added support for USRP B2X0.
+    11/30/2013    Ben Wojtowicz    Added support for bladeRF.
 
 *******************************************************************************/
 
@@ -60,6 +61,7 @@ typedef enum{
     LTE_FILE_RECORDER_HW_TYPE_RTL_SDR = 0,
     LTE_FILE_RECORDER_HW_TYPE_HACKRF,
     LTE_FILE_RECORDER_HW_TYPE_USRP,
+    LTE_FILE_RECORDER_HW_TYPE_BLADERF,
     LTE_FILE_RECORDER_HW_TYPE_UNKNOWN,
 }LTE_FILE_RECORDER_HW_TYPE_ENUM;
 

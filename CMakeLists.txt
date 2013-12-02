@@ -23,7 +23,7 @@
 ########################################################################
 cmake_minimum_required(VERSION 2.6)
 project(openLTE CXX C)
-set(openLTE_version 0.10.1)
+set(openLTE_version 0.10.2)
 enable_testing()
 
 #select the release build type by default to get optimization flags
@@ -91,8 +91,6 @@ set(GRC_BLOCKS_DIR      ${GR_PKG_DATA_DIR}/grc/blocks)
 set(GR_REQUIRED_COMPONENTS RUNTIME BLOCKS PMT)
 find_package(Gnuradio "3.7.0")
 find_package(GnuradioOsmosdr)
-find_package(Rtlsdr)
-find_package(HackRf)
 find_package(Uhd)
 find_package(FFTW3F)
 
@@ -102,14 +100,6 @@ endif()
 
 if(NOT GNURADIO_OSMOSDR_FOUND)
     message(FATAL_ERROR "GNURadio Osmosdr required to compile openLTE (http://sdr.osmocom.org/trac/wiki/GrOsmoSDR)")
-endif()
-
-if(NOT RTLSDR_FOUND)
-    message(FATAL_ERROR "RTLSDR required to compile openLTE (http://sdr.osmocom.org/trac/wiki/rtl-sdr)")
-endif()
-
-if(NOT HACKRF_FOUND)
-    message(FATAL_ERROR "HackRF required to compile openLTE (http://github.com/mossmann/hackrf/wiki)")
 endif()
 
 if(NOT UHD_FOUND)

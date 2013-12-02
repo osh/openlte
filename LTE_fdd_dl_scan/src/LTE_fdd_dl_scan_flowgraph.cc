@@ -29,6 +29,7 @@
     08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7 and added a
                                    new hardware discovery mechanism.
     11/13/2013    Ben Wojtowicz    Added support for USRP B2X0.
+    11/30/2013    Ben Wojtowicz    Added support for bladeRF.
 
 *******************************************************************************/
 
@@ -141,13 +142,20 @@ LTE_FDD_DL_SCAN_STATUS_ENUM LTE_fdd_dl_scan_flowgraph::start(uint16 dl_earfcn)
                     hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_HACKRF;
                     samp_src      = tmp_src1;
                 }else{
-                    osmosdr::source::sptr tmp_src2 = osmosdr::source::make("rtl=0");
+                    osmosdr::source::sptr tmp_src2 = osmosdr::source::make("bladerf");
                     if(0 != tmp_src2->get_sample_rates().size())
                     {
-                        hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_RTL_SDR;
+                        hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_BLADERF;
                         samp_src      = tmp_src2;
                     }else{
-                        samp_src = osmosdr::source::make();
+                        osmosdr::source::sptr tmp_src3 = osmosdr::source::make("rtl=0");
+                        if(0 != tmp_src3->get_sample_rates().size())
+                        {
+                            hardware_type = LTE_FDD_DL_SCAN_HW_TYPE_RTL_SDR;
+                            samp_src      = tmp_src3;
+                        }else{
+                            samp_src = osmosdr::source::make();
+                        }
                     }
                 }
             }
@@ -160,6 +168,9 @@ LTE_FDD_DL_SCAN_STATUS_ENUM LTE_fdd_dl_scan_flowgraph::start(uint16 dl_earfcn)
                 state_machine = LTE_fdd_dl_scan_make_state_machine(15360000);
                 break;
             case LTE_FDD_DL_SCAN_HW_TYPE_HACKRF:
+                state_machine = LTE_fdd_dl_scan_make_state_machine(15360000);
+                break;
+            case LTE_FDD_DL_SCAN_HW_TYPE_BLADERF:
                 state_machine = LTE_fdd_dl_scan_make_state_machine(15360000);
                 break;
             case LTE_FDD_DL_SCAN_HW_TYPE_UNKNOWN:
@@ -190,6 +201,14 @@ LTE_FDD_DL_SCAN_STATUS_ENUM LTE_fdd_dl_scan_flowgraph::start(uint16 dl_earfcn)
                     samp_src->set_gain_mode(false);
                     samp_src->set_gain(14);
                     samp_src->set_dc_offset_mode(osmosdr::source::DCOffsetAutomatic);
+                    break;
+                case LTE_FDD_DL_SCAN_HW_TYPE_BLADERF:
+                    samp_src->set_sample_rate(15360000);
+                    samp_src->set_gain_mode(false);
+                    samp_src->set_gain(6, "LNA");
+                    samp_src->set_gain(33, "VGA1");
+                    samp_src->set_gain(3, "VGA2");
+                    samp_src->set_bandwidth(10000000);
                     break;
                 case LTE_FDD_DL_SCAN_HW_TYPE_UNKNOWN:
                 default:

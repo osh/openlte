@@ -79,3 +79,5 @@ v00.10.00     Added LTE_fdd_enodeb application using a USRP B2X0 currently with
               and LTE_file_recorder, and fixed a bug genererating the references
               for the second slot in lte_generate_dmrs_pusch.m.
 v00.10.01     Fixed a bug with the receive size used in LTE_fdd_enb_msgq.cc.
+v00.10.02     Added support for bladeRF in LTE_fdd_dl_scan and LTE_file_recorder,
+              removed cmake requirements for rtl-sdr and hackrf.
