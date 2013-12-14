@@ -1,5 +1,5 @@
 %
-% Copyright 2011-2012 Ben Wojtowicz
+% Copyright 2011-2013 Ben Wojtowicz
 %
 %    This program is free software: you can redistribute it and/or modify
 %    it under the terms of the GNU Affero General Public License as published by
@@ -33,6 +33,7 @@
 % Rev History: Ben Wojtowicz 12/26/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
 %              Ben Wojtowicz 02/16/2012 Added control channel and SIB1 encode
+%              Ben Wojtowicz 12/14/2013 Fixed a bug in PDSCH mapping
 %
 function [output_samps] = lte_fdd_dl_transmit(bandwidth, N_frames, N_id_2, N_id_1, N_ant, mcc, mnc, tac, cell_id, band)
     % DEFINES
@@ -667,6 +668,27 @@ function [mod_vec_out] = map_pdsch(mod_vec_in, N_ctrl_symbs, N_sf, N_rb_dl, N_sc
     % Copy mod_vec to output
     mod_vec_out = mod_vec_in;
 
+    % Determine first and last PBCH, PSS, and SSS subcarriers
+    if(N_rb_dl == 6)
+        first_sc = 0;
+        last_sc  = (6*N_sc_rb)-1;
+    elseif(N_rb_dl == 15)
+        first_sc = (4*N_sc_rb)+6;
+        last_sc  = (11*N_sc_rb)-7;
+    elseif(N_rb_dl == 25)
+        first_sc = (9*N_sc_rb)+6;
+        last_sc  = (16*N_sc_rb)-7;
+    elseif(N_rb_dl == 50)
+        first_sc = 22*N_sc_rb;
+        last_sc  = (28*N_sc_rb)-1;
+    elseif(N_rb_dl == 75)
+        first_sc = (34*N_sc_rb)+6;
+        last_sc  = (41*N_sc_rb)-7;
+    else % N_rb_dl == 100
+        first_sc = 47*N_sc_rb;
+        last_sc  = (53*N_sc_rb)-1;
+    endif
+
     % Map the PDSCH
     pdsch_bits = lte_dlsch_channel_encode(alloc_s.bits, alloc_s.tx_mode, alloc_s.rv_idx, alloc_s.N_out_res*2, 2, 2, 250368, 8);
     for(q=0:alloc_s.N_codewords-1)
@@ -700,6 +722,22 @@ function [mod_vec_out] = map_pdsch(mod_vec_in, N_ctrl_symbs, N_sf, N_rb_dl, N_sc
                                    mod(L, 7) == 1 &&
                                    mod(N_id_cell, 3) == mod(m, 3))
                                 % CRS
+                            elseif(N_sf == 0 &&
+                                   (n*N_sc_rb+m) >= first_sc &&
+                                   (n*N_sc_rb+m) <= last_sc &&
+                                   L >= 7 &&
+                                   L <= 10)
+                                % PBCH
+                            elseif((N_sf == 0 || N_sf == 5) &&
+                                   (n*N_sc_rb+m) >= first_sc &&
+                                   (n*N_sc_rb+m) <= last_sc &&
+                                   L == 6)
+                                % PSS
+                            elseif((N_sf == 0 || N_sf == 5) &&
+                                   (n*N_sc_rb+m) >= first_sc &&
+                                   (n*N_sc_rb+m) <= last_sc &&
+                                   L == 5)
+                                % SSS
                             else
                                 mod_vec_out(p+1,L+1,n*N_sc_rb+m+1) = pdsch_y(p+1,idx+1);
                                 idx                                = idx + 1;

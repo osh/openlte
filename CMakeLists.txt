@@ -23,7 +23,7 @@
 ########################################################################
 cmake_minimum_required(VERSION 2.6)
 project(openLTE CXX C)
-set(openLTE_version 0.10.2)
+set(openLTE_version 0.10.3)
 enable_testing()
 
 #select the release build type by default to get optimization flags
