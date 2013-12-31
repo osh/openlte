@@ -25,6 +25,9 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/10/2013    Ben Wojtowicz    Created file
+    12/30/2013    Ben Wojtowicz    Changed the setting of the thread priority
+                                   to use the uhd method and fixed a bug with
+                                   baseband saturation in transmit.
 
 *******************************************************************************/
 
@@ -38,6 +41,7 @@
 #include <uhd/device.hpp>
 #include <uhd/types/device_addr.hpp>
 #include <uhd/property_tree.hpp>
+#include <uhd/utils/thread_priority.hpp>
 
 /*******************************************************************************
                               DEFINES
@@ -150,8 +154,8 @@ LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_radio::start(void)
                 {
                     usrp->set_tx_rate(get_sample_rate());
                     usrp->set_rx_rate(get_sample_rate());
-                    usrp->set_tx_freq(uhd::tune_request_t(liblte_interface_dl_earfcn_to_frequency(dl_earfcn)));
-                    usrp->set_rx_freq(uhd::tune_request_t(liblte_interface_ul_earfcn_to_frequency(ul_earfcn)));
+                    usrp->set_tx_freq((double)liblte_interface_dl_earfcn_to_frequency(dl_earfcn));
+                    usrp->set_rx_freq((double)liblte_interface_ul_earfcn_to_frequency(ul_earfcn));
                     usrp->set_tx_gain(tx_gain);
                     usrp->set_rx_gain(rx_gain);
 
@@ -432,7 +436,7 @@ void LTE_fdd_enb_radio::send(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *buf)
             metadata.time_spec = next_tx_ts;
             for(i=0; i<N_tx_samps; i++)
             {
-                tx_buf[i] = gr_complex(buf->i_buf[0][idx+i], buf->q_buf[0][idx+i]);
+                tx_buf[i] = gr_complex(buf->i_buf[0][idx+i]/50.0, buf->q_buf[0][idx+i]/50.0);
             }
 #if EXTRA_RADIO_DEBUG
             interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
@@ -452,7 +456,7 @@ void LTE_fdd_enb_radio::send(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *buf)
             metadata.time_spec = next_tx_ts;
             for(i=0; i<samps_to_send; i++)
             {
-                tx_buf[i] = gr_complex(buf->i_buf[0][idx+i], buf->q_buf[0][idx+i]);
+                tx_buf[i] = gr_complex(buf->i_buf[0][idx+i]/50.0, buf->q_buf[0][idx+i]/50.0);
             }
 #if EXTRA_RADIO_DEBUG
             interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
@@ -503,8 +507,7 @@ void* LTE_fdd_enb_radio::radio_thread_func(void *inputs)
     bool                             rx_synced   = false;
 
     // Set highest priority
-    priority.sched_priority = 99;
-    pthread_setschedparam(radio->radio_thread, SCHED_FIFO, &priority);
+    uhd::set_thread_priority_safe();
 
     // Setup sleep time for no_rf device
     sleep_time.tv_sec  = 0;

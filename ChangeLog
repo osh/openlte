@@ -83,3 +83,5 @@ v00.10.02     Added support for bladeRF in LTE_fdd_dl_scan and LTE_file_recorder
               removed cmake requirements for rtl-sdr and hackrf.
 v00.10.03     Fixed a PDSCH mapping bug in the lte_fdd_dl_transmit octave
               routine.
+v00.10.04     Fixed a bug in LTE_fdd_enodeb dealing with saturation of baseband
+              transmit samples.
