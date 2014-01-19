@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,10 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/10/2013    Ben Wojtowicz    Created file
+    01/18/2014    Ben Wojtowicz    Cached a copy of the interface class, added
+                                   real-time priority to PHY->MAC message queue,
+                                   added level to debug prints, and fixed
+                                   subframe scheduling.
 
 *******************************************************************************/
 
@@ -87,7 +91,8 @@ void LTE_fdd_enb_mac::cleanup(void)
 /********************************/
 LTE_fdd_enb_mac::LTE_fdd_enb_mac()
 {
-    started = false;
+    interface = NULL;
+    started   = false;
 }
 LTE_fdd_enb_mac::~LTE_fdd_enb_mac()
 {
@@ -97,7 +102,7 @@ LTE_fdd_enb_mac::~LTE_fdd_enb_mac()
 /********************/
 /*    Start/Stop    */
 /********************/
-void LTE_fdd_enb_mac::start(void)
+void LTE_fdd_enb_mac::start(LTE_fdd_enb_interface *iface)
 {
     boost::mutex::scoped_lock  lock(start_mutex);
     msgq_cb                    phy_cb(&msgq_cb_wrapper<LTE_fdd_enb_mac, &LTE_fdd_enb_mac::handle_phy_msg>, this);
@@ -107,9 +112,11 @@ void LTE_fdd_enb_mac::start(void)
 
     if(!started)
     {
+        interface     = iface;
         started       = true;
         phy_comm_msgq = new LTE_fdd_enb_msgq("phy_mac_mq",
-                                             phy_cb);
+                                             phy_cb,
+                                             90);
         rlc_comm_msgq = new LTE_fdd_enb_msgq("rlc_mac_mq",
                                              rlc_cb);
         mac_phy_mq    = new boost::interprocess::message_queue(boost::interprocess::open_only,
@@ -134,11 +141,11 @@ void LTE_fdd_enb_mac::start(void)
             sched_ul_subfr[i].fn_combo            = i;
             sched_ul_subfr[i].next_prb            = 0;
         }
-        sched_ul_subfr[9].fn_combo = (LTE_FDD_ENB_FN_COMBO_MAX + 1) - 1;
         sched_dl_subfr[0].fn_combo = 10;
         sched_dl_subfr[1].fn_combo = 11;
-        sched_cur_dl_subfn         = 2;
-        sched_cur_ul_subfn         = 9;
+        sched_dl_subfr[2].fn_combo = 12;
+        sched_cur_dl_subfn         = 3;
+        sched_cur_ul_subfn         = 0;
     }
 }
 void LTE_fdd_enb_mac::stop(void)
@@ -158,8 +165,6 @@ void LTE_fdd_enb_mac::stop(void)
 /***********************/
 void LTE_fdd_enb_mac::handle_phy_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
 {
-    LTE_fdd_enb_interface *interface = LTE_fdd_enb_interface::get_instance();
-
     if(LTE_FDD_ENB_DEST_LAYER_MAC == msg->dest_layer ||
        LTE_FDD_ENB_DEST_LAYER_ANY == msg->dest_layer)
     {
@@ -183,6 +188,7 @@ void LTE_fdd_enb_mac::handle_phy_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
             break;
         default:
             interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_WARNING,
+                                      LTE_FDD_ENB_DEBUG_LEVEL_MAC,
                                       __FILE__,
                                       __LINE__,
                                       "Received invalid message %s",
@@ -197,12 +203,11 @@ void LTE_fdd_enb_mac::handle_phy_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
 }
 void LTE_fdd_enb_mac::handle_rlc_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
 {
-    LTE_fdd_enb_interface *interface = LTE_fdd_enb_interface::get_instance();
-
     if(LTE_FDD_ENB_DEST_LAYER_MAC == msg->dest_layer ||
        LTE_FDD_ENB_DEST_LAYER_ANY == msg->dest_layer)
     {
         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_MAC,
                                   __FILE__,
                                   __LINE__,
                                   "Received RLC message %s",
@@ -231,9 +236,8 @@ void LTE_fdd_enb_mac::update_sys_info(void)
 /**********************/
 void LTE_fdd_enb_mac::handle_ready_to_send(LTE_FDD_ENB_READY_TO_SEND_MSG_STRUCT *rts)
 {
-    LTE_fdd_enb_interface *interface = LTE_fdd_enb_interface::get_instance();
-
     interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                              LTE_FDD_ENB_DEBUG_LEVEL_MAC,
                               __FILE__,
                               __LINE__,
                               "RTS %u:%u %u:%u",
@@ -245,6 +249,7 @@ void LTE_fdd_enb_mac::handle_ready_to_send(LTE_FDD_ENB_READY_TO_SEND_MSG_STRUCT 
     if(rts->dl_fn_combo != sched_dl_subfr[sched_cur_dl_subfn].fn_combo)
     {
         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_MAC,
                                   __FILE__,
                                   __LINE__,
                                   "RTS dl_fn_combo incorrect: RTS %u but currently on %u",
@@ -269,6 +274,7 @@ void LTE_fdd_enb_mac::handle_ready_to_send(LTE_FDD_ENB_READY_TO_SEND_MSG_STRUCT 
     if(rts->ul_fn_combo != sched_ul_subfr[sched_cur_ul_subfn].fn_combo)
     {
         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_MAC,
                                   __FILE__,
                                   __LINE__,
                                   "RTS ul_fn_combo incorrect: RTS %u but currently on %u",
@@ -362,7 +368,6 @@ void LTE_fdd_enb_mac::construct_random_access_response(uint8  preamble,
                                                        uint16 timing_adv,
                                                        uint32 fn_combo)
 {
-    LTE_fdd_enb_interface        *interface = LTE_fdd_enb_interface::get_instance();
     LTE_fdd_enb_user_mgr         *user_mgr  = LTE_fdd_enb_user_mgr::get_instance();
     LIBLTE_MAC_RAR_STRUCT         rar;
     LIBLTE_PHY_ALLOCATION_STRUCT  dl_alloc;
@@ -416,11 +421,13 @@ void LTE_fdd_enb_mac::construct_random_access_response(uint8  preamble,
                                                             &rar))
         {
             interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                      LTE_FDD_ENB_DEBUG_LEVEL_MAC,
                                       __FILE__,
                                       __LINE__,
                                       "Can't schedule RAR");
         }else{
             interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                      LTE_FDD_ENB_DEBUG_LEVEL_MAC,
                                       __FILE__,
                                       __LINE__,
                                       "RAR scheduled %u",
@@ -428,6 +435,7 @@ void LTE_fdd_enb_mac::construct_random_access_response(uint8  preamble,
         }
     }else{
         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_MAC,
                                   __FILE__,
                                   __LINE__,
                                   "No free C-RNTI or add_user fail");
@@ -440,8 +448,7 @@ void LTE_fdd_enb_mac::construct_random_access_response(uint8  preamble,
 void LTE_fdd_enb_mac::scheduler(void)
 {
     boost::mutex::scoped_lock           lock(sys_info_mutex);
-    LTE_fdd_enb_interface              *interface = LTE_fdd_enb_interface::get_instance();
-    LTE_fdd_enb_phy                    *phy       = LTE_fdd_enb_phy::get_instance();
+    LTE_fdd_enb_phy                    *phy = LTE_fdd_enb_phy::get_instance();
     LTE_FDD_ENB_RAR_SCHED_QUEUE_STRUCT *rar_sched;
     LTE_FDD_ENB_DL_SCHED_QUEUE_STRUCT  *dl_sched;
     LTE_FDD_ENB_UL_SCHED_QUEUE_STRUCT  *ul_sched;
@@ -535,6 +542,7 @@ void LTE_fdd_enb_mac::scheduler(void)
                                                            &rar_sched->dl_alloc.msg);
 
                 interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                          LTE_FDD_ENB_DEBUG_LEVEL_MAC,
                                           __FILE__,
                                           __LINE__,
                                           "RAR sent %u %u %u",
@@ -562,6 +570,7 @@ void LTE_fdd_enb_mac::scheduler(void)
         }else if(resp_win_stop < sched_dl_subfr[sched_cur_dl_subfn].fn_combo){ // Check to see if the response window has passed
             // Response window has passed, remove from queue
             interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                      LTE_FDD_ENB_DEBUG_LEVEL_MAC,
                                       __FILE__,
                                       __LINE__,
                                       "RAR outside of resp win %u %u",

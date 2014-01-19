@@ -85,3 +85,7 @@ v00.10.03     Fixed a PDSCH mapping bug in the lte_fdd_dl_transmit octave
               routine.
 v00.10.04     Fixed a bug in LTE_fdd_enodeb dealing with saturation of baseband
               transmit samples.
+v00.11.00     Fixed a bug with transmitting SIB2 for 1.4MHz bandwidth in
+              LTE_fdd_dl_file_gen and LTE_fdd_enodeb, fixed several bugs in
+              liblte_phy.cc, LTE_fdd_enodeb, and lte_prach_detector.m, and
+              added PRACH detection processing in LTE_fdd_enodeb.

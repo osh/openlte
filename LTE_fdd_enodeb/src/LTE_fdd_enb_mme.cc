@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/10/2013    Ben Wojtowicz    Created file
+    01/18/2014    Ben Wojtowicz    Added level to debug prints.
 
 *******************************************************************************/
 
@@ -33,6 +34,7 @@
 *******************************************************************************/
 
 #include "LTE_fdd_enb_mme.h"
+#include "LTE_fdd_enb_interface.h"
 
 /*******************************************************************************
                               DEFINES
@@ -128,6 +130,7 @@ void LTE_fdd_enb_mme::handle_rrc_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
     LTE_fdd_enb_interface *interface = LTE_fdd_enb_interface::get_instance();
 
     interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                              LTE_FDD_ENB_DEBUG_LEVEL_MME,
                               __FILE__,
                               __LINE__,
                               "Received RRC message %s",

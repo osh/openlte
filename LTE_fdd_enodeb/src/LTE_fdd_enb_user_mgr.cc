@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/10/2013    Ben Wojtowicz    Created file
+    01/18/2014    Ben Wojtowicz    Added level to debug prints.
 
 *******************************************************************************/
 
@@ -191,6 +192,7 @@ LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_user_mgr::add_user(uint16 c_rnti)
         }
     }catch(...){
         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_USER,
                                   __FILE__,
                                   __LINE__,
                                   "Exception to fake imsi");
@@ -268,6 +270,7 @@ LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_user_mgr::del_user(uint16 c_rnti)
         }
     }catch(...){
         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_USER,
                                   __FILE__,
                                   __LINE__,
                                   "Exception to fake imsi");

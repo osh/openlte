@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2012-2013 Ben Wojtowicz
+    Copyright 2012-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -75,6 +75,13 @@
                                    MCS, N_prb, and N_cce.  Fixed a bug in the
                                    RIV calculation of dci_1a_unpack.
     11/13/2013    Ben Wojtowicz    Started adding PUSCH functionality.
+    01/18/2014    Ben Wojtowicz    Optimization of PDSCH mapping/de-mapping and
+                                   several bug fixes: PRACH detector, PDCCH
+                                   PRACH processing, RIVs larger than 1/2
+                                   N_rb_dl, normalization of single antenna case
+                                   in pre_decoder_and_matched_filter, coding
+                                   rate in get_tbs_mcs_and_n_prb_for_dl, N_REs
+                                   in get_num_bits_in_prb.
 
 *******************************************************************************/
 
@@ -1564,7 +1571,6 @@ LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT  **phy_struct,
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
     uint32            i;
     uint32            j;
-    uint32            idx;
 
     if(phy_struct != NULL)
     {
@@ -1702,9 +1708,8 @@ LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT  **phy_struct,
             fftwf_execute((*phy_struct)->prach_dft_plan);
             for(j=0; j<(*phy_struct)->prach_N_zc; j++)
             {
-                idx                                   = (j+1+(*phy_struct)->prach_N_zc/2)%(*phy_struct)->prach_N_zc;
-                (*phy_struct)->prach_x_u_fft_re[i][j] = (*phy_struct)->prach_dft_out[idx][0];
-                (*phy_struct)->prach_x_u_fft_im[i][j] = (*phy_struct)->prach_dft_out[idx][1];
+                (*phy_struct)->prach_x_u_fft_re[i][j] = (*phy_struct)->prach_dft_out[j][0];
+                (*phy_struct)->prach_x_u_fft_im[i][j] = (*phy_struct)->prach_dft_out[j][1];
             }
         }
 
@@ -2115,12 +2120,12 @@ LIBLTE_ERROR_ENUM liblte_phy_detect_prach(LIBLTE_PHY_STRUCT *phy_struct,
             ave_val /= phy_struct->prach_N_zc;
         }
 
-        if(max_val >= 10*ave_val &&
+        if(max_val >= 50*ave_val &&
            max_val != 0)
         {
             *N_det_pre = 1;
             *det_pre   = max_root*(v_max+1) + ((max_offset+N_cs)%phy_struct->prach_N_zc)/N_cs;
-            *det_ta    = ((N_cs - ((max_offset+N_cs)%phy_struct->prach_N_zc))%N_cs)*29.155/16;
+            *det_ta    = (((N_cs - ((max_offset+N_cs)%phy_struct->prach_N_zc))%N_cs)*29.155/16)-1;
         }else{
             *N_det_pre = 0;
         }
@@ -2255,57 +2260,52 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *ph
                 idx = 0;
                 for(L=pdcch->N_symbs; L<14; L++)
                 {
-                    for(i=0; i<phy_struct->N_rb_dl; i++)
+                    for(prb_idx=0; prb_idx<pdcch->alloc[alloc_idx].N_prb; prb_idx++)
                     {
-                        for(prb_idx=0; prb_idx<pdcch->alloc[alloc_idx].N_prb; prb_idx++)
+                        i = pdcch->alloc[alloc_idx].prb[prb_idx];
+                        for(j=0; j<phy_struct->N_sc_rb; j++)
                         {
-                            if(i == pdcch->alloc[alloc_idx].prb[prb_idx])
+                            if(N_ant           == 1 &&
+                               (L % 7)         == 0 &&
+                               (N_id_cell % 6) == (j % 6))
                             {
-                                for(j=0; j<phy_struct->N_sc_rb; j++)
-                                {
-                                    if(N_ant           == 1 &&
-                                       (L % 7)         == 0 &&
-                                       (N_id_cell % 6) == (j % 6))
-                                    {
-                                        // Skip CRS
-                                    }else if(N_ant               == 1 &&
-                                             (L % 7)             == 4 &&
-                                             ((N_id_cell+3) % 6) == (j % 6)){
-                                        // Skip CRS
-                                    }else if((N_ant          == 2  ||
-                                              N_ant          == 4) &&
-                                             ((L % 7)        == 0  ||
-                                              (L % 7)        == 4) &&
-                                             (N_id_cell % 3) == (j % 3)){
-                                        // Skip CRS
-                                    }else if(N_ant           == 4 &&
-                                             (L % 7)         == 1 &&
-                                             (N_id_cell % 3) == (j % 3)){
-                                        // Skip CRS
-                                    }else if(subframe->num             == 0        &&
-                                             (i*phy_struct->N_sc_rb+j) >= first_sc &&
-                                             (i*phy_struct->N_sc_rb+j) <= last_sc  &&
-                                             L                         >= 7        &&
-                                             L                         <= 10){
-                                        // Skip PBCH
-                                    }else if((subframe->num            == 0        ||
-                                              subframe->num            == 5)       &&
-                                             (i*phy_struct->N_sc_rb+j) >= first_sc &&
-                                             (i*phy_struct->N_sc_rb+j) <= last_sc  &&
-                                             L                         == 6){
-                                        // Skip PSS
-                                    }else if((subframe->num            == 0        ||
-                                              subframe->num            == 5)       &&
-                                             (i*phy_struct->N_sc_rb+j) >= first_sc &&
-                                             (i*phy_struct->N_sc_rb+j) <= last_sc  &&
-                                             L                         == 5){
-                                        // Skip SSS
-                                    }else{
-                                        subframe->tx_symb_re[p][L][i*phy_struct->N_sc_rb+j] = phy_struct->pdsch_y_re[p][idx];
-                                        subframe->tx_symb_im[p][L][i*phy_struct->N_sc_rb+j] = phy_struct->pdsch_y_im[p][idx];
-                                        idx++;
-                                    }
-                                }
+                                // Skip CRS
+                            }else if(N_ant               == 1 &&
+                                     (L % 7)             == 4 &&
+                                     ((N_id_cell+3) % 6) == (j % 6)){
+                                // Skip CRS
+                            }else if((N_ant          == 2  ||
+                                      N_ant          == 4) &&
+                                     ((L % 7)        == 0  ||
+                                      (L % 7)        == 4) &&
+                                     (N_id_cell % 3) == (j % 3)){
+                                // Skip CRS
+                            }else if(N_ant           == 4 &&
+                                     (L % 7)         == 1 &&
+                                     (N_id_cell % 3) == (j % 3)){
+                                // Skip CRS
+                            }else if(subframe->num             == 0        &&
+                                     (i*phy_struct->N_sc_rb+j) >= first_sc &&
+                                     (i*phy_struct->N_sc_rb+j) <= last_sc  &&
+                                     L                         >= 7        &&
+                                     L                         <= 10){
+                                // Skip PBCH
+                            }else if((subframe->num            == 0        ||
+                                      subframe->num            == 5)       &&
+                                     (i*phy_struct->N_sc_rb+j) >= first_sc &&
+                                     (i*phy_struct->N_sc_rb+j) <= last_sc  &&
+                                     L                         == 6){
+                                // Skip PSS
+                            }else if((subframe->num            == 0        ||
+                                      subframe->num            == 5)       &&
+                                     (i*phy_struct->N_sc_rb+j) >= first_sc &&
+                                     (i*phy_struct->N_sc_rb+j) <= last_sc  &&
+                                     L                         == 5){
+                                // Skip SSS
+                            }else{
+                                subframe->tx_symb_re[p][L][i*phy_struct->N_sc_rb+j] = phy_struct->pdsch_y_re[p][idx];
+                                subframe->tx_symb_im[p][L][i*phy_struct->N_sc_rb+j] = phy_struct->pdsch_y_im[p][idx];
+                                idx++;
                             }
                         }
                     }
@@ -2384,62 +2384,57 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_decode(LIBLTE_PHY_STRUCT            *
         idx = 0;
         for(L=N_pdcch_symbs; L<14; L++)
         {
-            for(i=0; i<phy_struct->N_rb_dl; i++)
+            for(prb_idx=0; prb_idx<alloc->N_prb; prb_idx++)
             {
-                for(prb_idx=0; prb_idx<alloc->N_prb; prb_idx++)
+                i = alloc->prb[prb_idx];
+                for(j=0; j<phy_struct->N_sc_rb; j++)
                 {
-                    if(i == alloc->prb[prb_idx])
+                    if(N_ant           == 1 &&
+                       (L % 7)         == 0 &&
+                       (N_id_cell % 6) == (j % 6))
                     {
-                        for(j=0; j<phy_struct->N_sc_rb; j++)
+                        // Skip CRS
+                    }else if(N_ant               == 1 &&
+                             (L % 7)             == 4 &&
+                             ((N_id_cell+3) % 6) == (j % 6)){
+                        // Skip CRS
+                    }else if((N_ant          == 2  ||
+                              N_ant          == 4) &&
+                             ((L % 7)        == 0  ||
+                              (L % 7)        == 4) &&
+                             (N_id_cell % 3) == (j % 3)){
+                        // Skip CRS
+                    }else if(N_ant           == 4 &&
+                             (L % 7)         == 1 &&
+                             (N_id_cell % 3) == (j % 3)){
+                        // Skip CRS
+                    }else if(subframe->num             == 0        &&
+                             (i*phy_struct->N_sc_rb+j) >= first_sc &&
+                             (i*phy_struct->N_sc_rb+j) <= last_sc  &&
+                             L                         >= 7        &&
+                             L                         <= 10){
+                        // Skip PBCH
+                    }else if((subframe->num            == 0        ||
+                              subframe->num            == 5)       &&
+                             (i*phy_struct->N_sc_rb+j) >= first_sc &&
+                             (i*phy_struct->N_sc_rb+j) <= last_sc  &&
+                             L                         == 6){
+                        // Skip PSS
+                    }else if((subframe->num            == 0        ||
+                              subframe->num            == 5)       &&
+                             (i*phy_struct->N_sc_rb+j) >= first_sc &&
+                             (i*phy_struct->N_sc_rb+j) <= last_sc  &&
+                             L                         == 5){
+                        // Skip SSS
+                    }else{
+                        phy_struct->pdsch_y_est_re[idx] = subframe->rx_symb_re[L][i*phy_struct->N_sc_rb+j];
+                        phy_struct->pdsch_y_est_im[idx] = subframe->rx_symb_im[L][i*phy_struct->N_sc_rb+j];
+                        for(p=0; p<N_ant; p++)
                         {
-                            if(N_ant           == 1 &&
-                               (L % 7)         == 0 &&
-                               (N_id_cell % 6) == (j % 6))
-                            {
-                                // Skip CRS
-                            }else if(N_ant               == 1 &&
-                                     (L % 7)             == 4 &&
-                                     ((N_id_cell+3) % 6) == (j % 6)){
-                                // Skip CRS
-                            }else if((N_ant          == 2  ||
-                                      N_ant          == 4) &&
-                                     ((L % 7)        == 0  ||
-                                      (L % 7)        == 4) &&
-                                     (N_id_cell % 3) == (j % 3)){
-                                // Skip CRS
-                            }else if(N_ant           == 4 &&
-                                     (L % 7)         == 1 &&
-                                     (N_id_cell % 3) == (j % 3)){
-                                // Skip CRS
-                            }else if(subframe->num             == 0        &&
-                                     (i*phy_struct->N_sc_rb+j) >= first_sc &&
-                                     (i*phy_struct->N_sc_rb+j) <= last_sc  &&
-                                     L                         >= 7        &&
-                                     L                         <= 10){
-                                // Skip PBCH
-                            }else if((subframe->num            == 0        ||
-                                      subframe->num            == 5)       &&
-                                     (i*phy_struct->N_sc_rb+j) >= first_sc &&
-                                     (i*phy_struct->N_sc_rb+j) <= last_sc  &&
-                                     L                         == 6){
-                                // Skip PSS
-                            }else if((subframe->num            == 0        ||
-                                      subframe->num            == 5)       &&
-                                     (i*phy_struct->N_sc_rb+j) >= first_sc &&
-                                     (i*phy_struct->N_sc_rb+j) <= last_sc  &&
-                                     L                         == 5){
-                                // Skip SSS
-                            }else{
-                                phy_struct->pdsch_y_est_re[idx] = subframe->rx_symb_re[L][i*phy_struct->N_sc_rb+j];
-                                phy_struct->pdsch_y_est_im[idx] = subframe->rx_symb_im[L][i*phy_struct->N_sc_rb+j];
-                                for(p=0; p<N_ant; p++)
-                                {
-                                    phy_struct->pdsch_c_est_re[p][idx] = subframe->rx_ce_re[p][L][i*phy_struct->N_sc_rb+j];
-                                    phy_struct->pdsch_c_est_im[p][idx] = subframe->rx_ce_im[p][L][i*phy_struct->N_sc_rb+j];
-                                }
-                                idx++;
-                            }
+                            phy_struct->pdsch_c_est_re[p][idx] = subframe->rx_ce_re[p][L][i*phy_struct->N_sc_rb+j];
+                            phy_struct->pdsch_c_est_im[p][idx] = subframe->rx_ce_im[p][L][i*phy_struct->N_sc_rb+j];
                         }
+                        idx++;
                     }
                 }
             }
@@ -2750,6 +2745,7 @@ LIBLTE_ERROR_ENUM liblte_phy_bch_channel_decode(LIBLTE_PHY_STRUCT          *phy_
     Document Reference: 3GPP TS 36.211 v10.1.0 sections 6.7, 6.8, and
                         6.9
                         3GPP TS 36.212 v10.1.0 section 5.1.4.2.1
+                        3GPP TS 36.213 v10.3.0 section 7.1 and 9.1.1
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT              *phy_struct,
                                                   LIBLTE_PHY_PCFICH_STRUCT       *pcfich,
@@ -2991,8 +2987,10 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
                 }
             }
             // Add the DCIs to the search space, FIXME: only handling alloc[0]
-            if(LIBLTE_MAC_SI_RNTI == pdcch->alloc[0].rnti ||
-               LIBLTE_MAC_P_RNTI  == pdcch->alloc[0].rnti)
+            if(LIBLTE_MAC_SI_RNTI        == pdcch->alloc[0].rnti ||
+               LIBLTE_MAC_P_RNTI         == pdcch->alloc[0].rnti ||
+               (LIBLTE_MAC_RA_RNTI_START <= pdcch->alloc[0].rnti &&
+                LIBLTE_MAC_RA_RNTI_END   >= pdcch->alloc[0].rnti))
             {
                 // Add to the common search space, using aggregation level of 8
                 for(p=0; p<N_ant; p++)
@@ -5005,6 +5003,7 @@ LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_dl(uint32  N_bits,
 {
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
     uint32            i;
+    uint32            code_rate;
     uint32            N_prb_tmp;
     uint32            N_bits_per_prb;
 
@@ -5029,23 +5028,28 @@ LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_dl(uint32  N_bits,
                 }
             }
 
-            // Targetting a coding rate of 4:1
+            // Target coding rate is 4:1, will allow down to 3:1
             N_bits_per_prb = get_num_bits_in_prb(N_subframe, 3, N_rb_dl/2, N_rb_dl, 2, LIBLTE_PHY_MODULATION_TYPE_QPSK);
             *N_prb         = 0;
-            for(i=0; i<N_rb_dl; i++)
+            for(code_rate=4; code_rate>2; code_rate--)
             {
-                if((*tbs * 4) < (N_bits_per_prb*i))
+                for(i=1; i<=N_rb_dl; i++)
                 {
-                    *N_prb = i;
+                    if((*tbs * code_rate) < (N_bits_per_prb*i))
+                    {
+                        *N_prb = i;
+                        break;
+                    }
+                }
+                if(*N_prb != 0)
+                {
                     break;
                 }
             }
-            if(*N_prb == 0)
+            if(*N_prb != 0)
             {
-                *N_prb = N_rb_dl;
+                err = LIBLTE_SUCCESS;
             }
-
-            err = LIBLTE_SUCCESS;
         }else{
             // FIXME: Add support for other RNTIs
         }
@@ -5761,8 +5765,10 @@ void pre_decoder_and_matched_filter(float                          *y_re,
         *M_layer_symb = M_ap_symb;
         for(i=0; i<*M_layer_symb; i++)
         {
-            x_re_ptr[0][i] = y_re[i]*h_re_ptr[0][i] + y_im[i]*h_im_ptr[0][i];
-            x_im_ptr[0][i] = y_im[i]*h_re_ptr[0][i] - y_re[i]*h_im_ptr[0][i];
+            h_norm         = (h_re_ptr[0][i] * h_re_ptr[0][i] +
+                              h_im_ptr[0][i] * h_im_ptr[0][i]);
+            x_re_ptr[0][i] = (y_re[i]*h_re_ptr[0][i] + y_im[i]*h_im_ptr[0][i]) / h_norm;
+            x_im_ptr[0][i] = (y_im[i]*h_re_ptr[0][i] - y_re[i]*h_im_ptr[0][i]) / h_norm;
         }
     }else if(N_ant == 2){
         // 3GPP TS 36.211 v10.1.0 section 6.3.4.3
@@ -10061,8 +10067,10 @@ void dci_1a_pack(LIBLTE_PHY_ALLOCATION_STRUCT    *alloc,
     // Format 0/1A flag is set to 1A
     phy_value_2_bits(DCI_0_1A_FLAG_1A, &dci, 1);
 
-    if(LIBLTE_MAC_SI_RNTI == alloc->rnti ||
-       LIBLTE_MAC_P_RNTI  == alloc->rnti)
+    if(LIBLTE_MAC_SI_RNTI        == alloc->rnti ||
+       LIBLTE_MAC_P_RNTI         == alloc->rnti ||
+       (LIBLTE_MAC_RA_RNTI_START <= alloc->rnti &&
+        LIBLTE_MAC_RA_RNTI_END   >= alloc->rnti))
     {
         // FIXME: Only supporting localized VRBs
         phy_value_2_bits(DCI_VRB_TYPE_LOCALIZED, &dci, 1);
@@ -10071,7 +10079,7 @@ void dci_1a_pack(LIBLTE_PHY_ALLOCATION_STRUCT    *alloc,
         {
             RIV = N_rb_dl*(alloc->N_prb-1) + alloc->prb[0];
         }else{
-            RIV = N_rb_dl*(N_rb_dl-alloc->N_prb+1) + (N_rb_dl + alloc->prb[0]);
+            RIV = N_rb_dl*(N_rb_dl-alloc->N_prb+1) + (N_rb_dl - 1 - alloc->prb[0]);
         }
         phy_value_2_bits(RIV, &dci, RIV_length);
 
@@ -10438,14 +10446,14 @@ uint32 get_num_bits_in_prb(uint32                          N_subframe,
             {
                 if(N_subframe == 0)
                 {
-                    N_REs -= 5*6 - 5;
+                    N_REs -= 5*6 + 5;
                 }else if(N_subframe == 5){
                     N_REs -= 2*6;
                 }
             }else{
                 if(N_subframe == 0)
                 {
-                    N_REs -= 5*12 - 10;
+                    N_REs -= 5*12 + 10;
                 }else if(N_subframe == 5){
                     N_REs -= 2*12;
                 }
@@ -10468,14 +10476,14 @@ uint32 get_num_bits_in_prb(uint32                          N_subframe,
             {
                 if(N_subframe == 0)
                 {
-                    N_REs -= 5*6 - 4;
+                    N_REs -= 5*6 + 4;
                 }else if(N_subframe == 5){
                     N_REs -= 2*6;
                 }
             }else{
                 if(N_subframe == 0)
                 {
-                    N_REs -= 5*12 - 8;
+                    N_REs -= 5*12 + 8;
                 }else if(N_subframe == 5){
                     N_REs -= 2*12;
                 }
@@ -10503,14 +10511,14 @@ uint32 get_num_bits_in_prb(uint32                          N_subframe,
             {
                 if(N_subframe == 0)
                 {
-                    N_REs -= 4*6 - 2*4;
+                    N_REs -= 4*6 + 2*4;
                 }else if(N_subframe == 5){
                     N_REs -= 2*6;
                 }
             }else{
                 if(N_subframe == 0)
                 {
-                    N_REs -= 4*12 - 2*8;
+                    N_REs -= 4*12 + 2*8;
                 }else if(N_subframe == 5){
                     N_REs -= 2*12;
                 }

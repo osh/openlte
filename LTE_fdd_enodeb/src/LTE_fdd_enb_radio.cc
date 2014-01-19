@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -28,6 +28,9 @@
     12/30/2013    Ben Wojtowicz    Changed the setting of the thread priority
                                    to use the uhd method and fixed a bug with
                                    baseband saturation in transmit.
+    01/18/2014    Ben Wojtowicz    Handling multiple antennas, added ability to
+                                   update EARFCNs, and fixed sleep time for
+                                   no_rf case.
 
 *******************************************************************************/
 
@@ -146,6 +149,9 @@ LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_radio::start(void)
                 // Get the DL and UL EARFCNs
                 cnfg_db->get_param(LTE_FDD_ENB_PARAM_DL_EARFCN, dl_earfcn);
                 cnfg_db->get_param(LTE_FDD_ENB_PARAM_UL_EARFCN, ul_earfcn);
+
+                // Get the number of TX antennas
+                cnfg_db->get_param(LTE_FDD_ENB_PARAM_N_ANT, N_ant);
 
                 // Setup the USRP
                 usrp = uhd::usrp::multi_usrp::make(devs[selected_radio_idx-1]);
@@ -397,6 +403,16 @@ uint32 LTE_fdd_enb_radio::get_sample_rate(void)
 
     return(fs);
 }
+void LTE_fdd_enb_radio::set_earfcns(int64 dl_earfcn,
+                                    int64 ul_earfcn)
+{
+    if(started &&
+       0 != selected_radio_idx)
+    {
+        usrp->set_tx_freq((double)liblte_interface_dl_earfcn_to_frequency(dl_earfcn));
+        usrp->set_rx_freq((double)liblte_interface_ul_earfcn_to_frequency(ul_earfcn));
+    }
+}
 void LTE_fdd_enb_radio::send(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *buf)
 {
 #if EXTRA_RADIO_DEBUG
@@ -406,6 +422,7 @@ void LTE_fdd_enb_radio::send(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *buf)
     uint32                 samps_to_send = N_samps_per_subfr;
     uint32                 idx           = 0;
     uint32                 i;
+    uint32                 p;
     uint16                 N_skipped_subfrs;
 
     if(0 != selected_radio_idx)
@@ -437,9 +454,15 @@ void LTE_fdd_enb_radio::send(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *buf)
             for(i=0; i<N_tx_samps; i++)
             {
                 tx_buf[i] = gr_complex(buf->i_buf[0][idx+i]/50.0, buf->q_buf[0][idx+i]/50.0);
+                for(p=1; p<N_ant; p++)
+                {
+                    tx_buf[i] += gr_complex(buf->i_buf[p][idx+i]/50.0, buf->q_buf[p][idx+i]/50.0);
+                }
+                tx_buf[i] /= N_ant;
             }
 #if EXTRA_RADIO_DEBUG
             interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                      LTE_FDD_ENB_DEBUG_LEVEL_RADIO,
                                       __FILE__,
                                       __LINE__,
                                       "Sending subfr %lld %u",
@@ -457,9 +480,15 @@ void LTE_fdd_enb_radio::send(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *buf)
             for(i=0; i<samps_to_send; i++)
             {
                 tx_buf[i] = gr_complex(buf->i_buf[0][idx+i]/50.0, buf->q_buf[0][idx+i]/50.0);
+                for(p=1; p<N_ant; p++)
+                {
+                    tx_buf[i] += gr_complex(buf->i_buf[p][idx+i]/50.0, buf->q_buf[p][idx+i]/50.0);
+                }
+                tx_buf[i] /= N_ant;
             }
 #if EXTRA_RADIO_DEBUG
             interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                      LTE_FDD_ENB_DEBUG_LEVEL_RADIO,
                                       __FILE__,
                                       __LINE__,
                                       "Sending subfr %lld %u",
@@ -507,11 +536,12 @@ void* LTE_fdd_enb_radio::radio_thread_func(void *inputs)
     bool                             rx_synced   = false;
 
     // Set highest priority
-    uhd::set_thread_priority_safe();
+    priority.sched_priority = 99;
+    pthread_setschedparam(radio->radio_thread, SCHED_FIFO, &priority);
 
     // Setup sleep time for no_rf device
     sleep_time.tv_sec  = 0;
-    sleep_time.tv_nsec = 1000;
+    sleep_time.tv_nsec = 1000000;
 
     while(not_done &&
           radio->is_started())
@@ -560,6 +590,7 @@ void* LTE_fdd_enb_radio::radio_thread_func(void *inputs)
                 if(check_ts.to_ticks(samp_rate) == next_rx_ts.to_ticks(samp_rate))
                 {
                     interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                              LTE_FDD_ENB_DEBUG_LEVEL_RADIO,
                                               __FILE__,
                                               __LINE__,
                                               "RX synced %lld %lld",
@@ -572,6 +603,7 @@ void* LTE_fdd_enb_radio::radio_thread_func(void *inputs)
                     if(check_ts.to_ticks(samp_rate) > next_rx_ts.to_ticks(samp_rate))
                     {
                         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                                  LTE_FDD_ENB_DEBUG_LEVEL_RADIO,
                                                   __FILE__,
                                                   __LINE__,
                                                   "RX modifying recv_size to sync %lld %lld",
@@ -588,6 +620,7 @@ void* LTE_fdd_enb_radio::radio_thread_func(void *inputs)
                     if(num_samps != radio->N_rx_samps)
                     {
                         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                                  LTE_FDD_ENB_DEBUG_LEVEL_RADIO,
                                                   __FILE__,
                                                   __LINE__,
                                                   "RX packet size issue %u %u",
@@ -600,6 +633,7 @@ void* LTE_fdd_enb_radio::radio_thread_func(void *inputs)
                     {
                         // FIXME: Not sure this will ever happen
                         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                                  LTE_FDD_ENB_DEBUG_LEVEL_RADIO,
                                                   __FILE__,
                                                   __LINE__,
                                                   "RX old time spec %lld %lld",
@@ -607,6 +641,7 @@ void* LTE_fdd_enb_radio::radio_thread_func(void *inputs)
                                                   next_rx_ts_ticks);
                     }else if((metadata_ts_ticks - next_rx_ts_ticks) > 1){
                         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                                  LTE_FDD_ENB_DEBUG_LEVEL_RADIO,
                                                   __FILE__,
                                                   __LINE__,
                                                   "RX overrun %lld %lld",
@@ -652,6 +687,7 @@ void* LTE_fdd_enb_radio::radio_thread_func(void *inputs)
                                 {
 #if EXTRA_RADIO_DEBUG
                                     interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                                              LTE_FDD_ENB_DEBUG_LEVEL_RADIO,
                                                               __FILE__,
                                                               __LINE__,
                                                               "Receiving subfr %lld %u",
@@ -675,6 +711,7 @@ void* LTE_fdd_enb_radio::radio_thread_func(void *inputs)
 
 #if EXTRA_RADIO_DEBUG
                                 interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                                          LTE_FDD_ENB_DEBUG_LEVEL_RADIO,
                                                           __FILE__,
                                                           __LINE__,
                                                           "Receiving subfr %lld %u",
@@ -694,6 +731,7 @@ void* LTE_fdd_enb_radio::radio_thread_func(void *inputs)
                     }
                 }else{
                     interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                              LTE_FDD_ENB_DEBUG_LEVEL_RADIO,
                                               __FILE__,
                                               __LINE__,
                                               "RX error %u",

@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,11 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/10/2013    Ben Wojtowicz    Created file
+    01/18/2014    Ben Wojtowicz    Cached a copy of the interface class, added
+                                   level to debug prints, add the ability to
+                                   handle late subframes, fixed a bug with
+                                   transmitting SIB2 for 1.4MHz bandwidth, and
+                                   added PRACH detection.
 
 *******************************************************************************/
 
@@ -86,7 +91,8 @@ void LTE_fdd_enb_phy::cleanup(void)
 /********************************/
 LTE_fdd_enb_phy::LTE_fdd_enb_phy()
 {
-    started = false;
+    interface = NULL;
+    started   = false;
 }
 LTE_fdd_enb_phy::~LTE_fdd_enb_phy()
 {
@@ -96,11 +102,9 @@ LTE_fdd_enb_phy::~LTE_fdd_enb_phy()
 /********************/
 /*    Start/Stop    */
 /********************/
-void LTE_fdd_enb_phy::start(void)
+void LTE_fdd_enb_phy::start(LTE_fdd_enb_interface *iface)
 {
-    boost::mutex::scoped_lock  lock(start_mutex);
-    LTE_fdd_enb_interface     *interface = LTE_fdd_enb_interface::get_instance();
-    LTE_fdd_enb_radio         *radio     = LTE_fdd_enb_radio::get_instance();
+    LTE_fdd_enb_radio         *radio = LTE_fdd_enb_radio::get_instance();
     msgq_cb                    cb(&msgq_cb_wrapper<LTE_fdd_enb_phy, &LTE_fdd_enb_phy::handle_mac_msg>, this);
     LIBLTE_PHY_FS_ENUM         fs;
     uint32                     i;
@@ -126,11 +130,12 @@ void LTE_fdd_enb_phy::start(void)
         }else if(1920000 == samp_rate){
             fs = LIBLTE_PHY_FS_1_92MHZ;
         }else{
-            interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
-                                      __FILE__,
-                                      __LINE__,
-                                      "Invalid sample rate %u",
-                                      samp_rate);
+            iface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_PHY,
+                                  __FILE__,
+                                  __LINE__,
+                                  "Invalid sample rate %u",
+                                  samp_rate);
         }
         liblte_phy_init(&phy_struct,
                         fs,
@@ -154,11 +159,13 @@ void LTE_fdd_enb_phy::start(void)
             mac_pusch_schedule[i].allocations.N_alloc = 0;
             mac_pusch_schedule[i].decodes.N_alloc     = 0;
         }
-        pcfich.cfi      = 2; // FIXME: Make this dynamic every subfr
-        pdcch.N_alloc   = 0;
-        pdcch.N_symbs   = 2; // FIXME: Make this dynamic every subfr
-        dl_subframe.num = 0;
-        dl_fn_combo     = 0;
+        pcfich.cfi        = 2; // FIXME: Make this dynamic every subfr
+        pdcch.N_alloc     = 0;
+        pdcch.N_symbs     = 2; // FIXME: Make this dynamic every subfr
+        dl_subframe.num   = 0;
+        dl_fn_combo       = 0;
+        last_rts_fn_combo = 0;
+        late_subfr        = false;
 
         // Uplink
         ul_fn_combo    = (LTE_FDD_ENB_FN_COMBO_MAX + 1) - 2;
@@ -254,16 +261,16 @@ void LTE_fdd_enb_phy::start(void)
         phy_mac_mq    = new boost::interprocess::message_queue(boost::interprocess::open_only,
                                                                "phy_mac_mq");
 
-        started = true;
+        interface = iface;
+        started   = true;
     }
 }
 void LTE_fdd_enb_phy::stop(void)
 {
-    boost::mutex::scoped_lock lock(start_mutex);
-
     if(started)
     {
         started = false;
+
         delete mac_comm_msgq;
     }
 }
@@ -298,8 +305,6 @@ uint32 LTE_fdd_enb_phy::get_n_cce(void)
 /***********************/
 void LTE_fdd_enb_phy::handle_mac_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
 {
-    LTE_fdd_enb_interface *interface = LTE_fdd_enb_interface::get_instance();
-
     if(LTE_FDD_ENB_DEST_LAYER_PHY == msg->dest_layer ||
        LTE_FDD_ENB_DEST_LAYER_ANY == msg->dest_layer)
     {
@@ -315,6 +320,7 @@ void LTE_fdd_enb_phy::handle_mac_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
             break;
         default:
             interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_WARNING,
+                                      LTE_FDD_ENB_DEBUG_LEVEL_PHY,
                                       __FILE__,
                                       __LINE__,
                                       "Received invalid message %s",
@@ -324,6 +330,7 @@ void LTE_fdd_enb_phy::handle_mac_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
         }
     }else{
         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_PHY,
                                   __FILE__,
                                   __LINE__,
                                   "Received message for invalid layer %s",
@@ -338,11 +345,14 @@ void LTE_fdd_enb_phy::handle_mac_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
 void LTE_fdd_enb_phy::radio_interface(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf,
                                       LTE_FDD_ENB_RADIO_RX_BUF_STRUCT *rx_buf)
 {
-    // Once started, this routine gets called every millisecond to:
-    //     1) process the new uplink subframe
-    //     2) generate the next downlink subframe
-    process_ul(rx_buf);
-    process_dl(tx_buf);
+    if(started)
+    {
+        // Once started, this routine gets called every millisecond to:
+        //     1) process the new uplink subframe
+        //     2) generate the next downlink subframe
+        process_ul(rx_buf);
+        process_dl(tx_buf);
+    }
 }
 void LTE_fdd_enb_phy::radio_interface(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
 {
@@ -355,32 +365,58 @@ void LTE_fdd_enb_phy::radio_interface(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
 /******************/
 void LTE_fdd_enb_phy::handle_pdsch_schedule(LTE_FDD_ENB_PDSCH_SCHEDULE_MSG_STRUCT *pdsch_schedule)
 {
-    LTE_fdd_enb_interface     *interface = LTE_fdd_enb_interface::get_instance();
-    boost::mutex::scoped_lock  lock(pdsch_mutex);
+    boost::mutex::scoped_lock lock(pdsch_mutex);
 
-    interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
-                              __FILE__,
-                              __LINE__,
-                              "Received PDSCH schedule from MAC");
+    if(pdsch_schedule->fn_combo                 < dl_fn_combo &&
+       (dl_fn_combo - pdsch_schedule->fn_combo) < (LTE_FDD_ENB_FN_COMBO_MAX/2))
+    {
+        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_PHY,
+                                  __FILE__,
+                                  __LINE__,
+                                  "Late subframe from MAC:%u, PHY is currently on %u",
+                                  pdsch_schedule->fn_combo,
+                                  dl_fn_combo);
 
-    memcpy(&mac_pdsch_schedule[pdsch_schedule->fn_combo%10], pdsch_schedule, sizeof(LTE_FDD_ENB_PDSCH_SCHEDULE_MSG_STRUCT));
+        late_subfr = true;
+        if(pdsch_schedule->fn_combo == last_rts_fn_combo)
+        {
+            late_subfr = false;
+        }
+    }else{
+        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_PHY,
+                                  __FILE__,
+                                  __LINE__,
+                                  "Received PDSCH schedule from MAC %u:%u",
+                                  pdsch_schedule->fn_combo,
+                                  mac_pdsch_schedule[pdsch_schedule->fn_combo%10].fn_combo);
+
+        memcpy(&mac_pdsch_schedule[pdsch_schedule->fn_combo%10], pdsch_schedule, sizeof(LTE_FDD_ENB_PDSCH_SCHEDULE_MSG_STRUCT));
+
+        late_subfr = false;
+    }
 }
 void LTE_fdd_enb_phy::handle_pusch_schedule(LTE_FDD_ENB_PUSCH_SCHEDULE_MSG_STRUCT *pusch_schedule)
 {
-    LTE_fdd_enb_interface     *interface = LTE_fdd_enb_interface::get_instance();
-    boost::mutex::scoped_lock  lock(pusch_mutex);
+    boost::mutex::scoped_lock lock(pusch_mutex);
 
     interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                              LTE_FDD_ENB_DEBUG_LEVEL_PHY,
                               __FILE__,
                               __LINE__,
-                              "Received PUSCH schedule from MAC");
+                              "Received PUSCH schedule from MAC %u:%u",
+                              pusch_schedule->fn_combo,
+                              mac_pusch_schedule[pusch_schedule->fn_combo%10].fn_combo);
 
-    memcpy(&mac_pusch_schedule[pusch_schedule->fn_combo%10], pusch_schedule, sizeof(LTE_FDD_ENB_PUSCH_SCHEDULE_MSG_STRUCT));
+    if(mac_pusch_schedule[pusch_schedule->fn_combo%10].fn_combo == pusch_schedule->fn_combo)
+    {
+        memcpy(&mac_pusch_schedule[pusch_schedule->fn_combo%10], pusch_schedule, sizeof(LTE_FDD_ENB_PUSCH_SCHEDULE_MSG_STRUCT));
+    }
 }
 void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
 {
-    LTE_fdd_enb_interface                *interface = LTE_fdd_enb_interface::get_instance();
-    LTE_fdd_enb_radio                    *radio     = LTE_fdd_enb_radio::get_instance();
+    LTE_fdd_enb_radio                    *radio = LTE_fdd_enb_radio::get_instance();
     boost::mutex::scoped_lock             lock(sys_info_mutex);
     LTE_FDD_ENB_READY_TO_SEND_MSG_STRUCT  rts;
     uint32                                p;
@@ -458,19 +494,23 @@ void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
         pdcch.alloc[pdcch.N_alloc].rv_idx = (uint32)ceilf(1.5 * ((sfn / 2) % 4)) % 4; //36.321 section 5.3.1
         pdcch.N_alloc++;
     }
-    if((0 * sys_info.si_win_len)%10   == dl_subframe.num &&
+    if((0 * sys_info.si_win_len)%10   <= dl_subframe.num &&
+       (1 * sys_info.si_win_len)%10   >  dl_subframe.num &&
        ((0 * sys_info.si_win_len)/10) == (sfn % sys_info.si_periodicity_T))
     {
         // SIs in 1st scheduling info list entry
         memcpy(&pdcch.alloc[pdcch.N_alloc], &sys_info.sib_alloc[0], sizeof(LIBLTE_PHY_ALLOCATION_STRUCT));
-        liblte_phy_get_tbs_mcs_and_n_prb_for_dl(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
-                                                dl_subframe.num,
-                                                sys_info.N_rb_dl,
-                                                pdcch.alloc[pdcch.N_alloc].rnti,
-                                                &pdcch.alloc[pdcch.N_alloc].tbs,
-                                                &pdcch.alloc[pdcch.N_alloc].mcs,
-                                                &pdcch.alloc[pdcch.N_alloc].N_prb);
-        pdcch.N_alloc++;
+        // FIXME: This was a hack to allow SIB2 decoding with 1.4MHz BW due to overlap with MIB
+        if(LIBLTE_SUCCESS == liblte_phy_get_tbs_mcs_and_n_prb_for_dl(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
+                                                                     dl_subframe.num,
+                                                                     sys_info.N_rb_dl,
+                                                                     pdcch.alloc[pdcch.N_alloc].rnti,
+                                                                     &pdcch.alloc[pdcch.N_alloc].tbs,
+                                                                     &pdcch.alloc[pdcch.N_alloc].mcs,
+                                                                     &pdcch.alloc[pdcch.N_alloc].N_prb))
+        {
+            pdcch.N_alloc++;
+        }
     }
     for(i=1; i<sys_info.sib1.N_sched_info; i++)
     {
@@ -501,6 +541,7 @@ void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
         }
     }else{
         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_PHY,
                                   __FILE__,
                                   __LINE__,
                                   "PDSCH fn_combo from MAC (%u) does not match PHY (%u)",
@@ -508,23 +549,6 @@ void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
                                   dl_fn_combo);
     }
     pdsch_mutex.unlock();
-    pusch_mutex.lock();
-    if(mac_pusch_schedule[subfn].fn_combo == dl_fn_combo)
-    {
-        for(i=0; i<mac_pusch_schedule[subfn].allocations.N_alloc; i++)
-        {
-            memcpy(&pdcch.alloc[pdcch.N_alloc], &mac_pusch_schedule[subfn].allocations.alloc[i], sizeof(LIBLTE_PHY_ALLOCATION_STRUCT));
-            pdcch.N_alloc++;
-        }
-    }else{
-        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
-                                  __FILE__,
-                                  __LINE__,
-                                  "PUSCH fn_combo from MAC (%u) does not match PHY (%u)",
-                                  mac_pusch_schedule[subfn].fn_combo,
-                                  dl_fn_combo);
-    }
-    pusch_mutex.unlock();
 
     // Handle PDCCH and PDSCH
     for(i=0; i<pdcch.N_alloc; i++)
@@ -537,6 +561,7 @@ void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
     if(last_prb > phy_struct->N_rb_dl)
     {
         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_PHY,
                                   __FILE__,
                                   __LINE__,
                                   "More PRBs allocated than are available");
@@ -574,13 +599,17 @@ void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
     dl_fn_combo = (dl_fn_combo + 1) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
 
     // Send READY TO SEND message to MAC
-    rts.dl_fn_combo = (dl_fn_combo + 1) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
-    rts.ul_fn_combo = (ul_fn_combo + 1) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
-    LTE_fdd_enb_msgq::send(phy_mac_mq,
-                           LTE_FDD_ENB_MESSAGE_TYPE_READY_TO_SEND,
-                           LTE_FDD_ENB_DEST_LAYER_MAC,
-                           (LTE_FDD_ENB_MESSAGE_UNION *)&rts,
-                           sizeof(rts));
+    if(!late_subfr)
+    {
+        rts.dl_fn_combo   = (dl_fn_combo + 2) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
+        rts.ul_fn_combo   = (ul_fn_combo + 2) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
+        last_rts_fn_combo = rts.dl_fn_combo;
+        LTE_fdd_enb_msgq::send(phy_mac_mq,
+                               LTE_FDD_ENB_MESSAGE_TYPE_READY_TO_SEND,
+                               LTE_FDD_ENB_DEST_LAYER_MAC,
+                               (LTE_FDD_ENB_MESSAGE_UNION *)&rts,
+                               sizeof(rts));
+    }
 
     // Send samples to radio
     radio->send(tx_buf);
@@ -592,6 +621,8 @@ void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
 void LTE_fdd_enb_phy::process_ul(LTE_FDD_ENB_RADIO_RX_BUF_STRUCT *rx_buf)
 {
     uint32 N_skipped_subfrs = 0;
+    uint32 sfn;
+    uint32 subfn;
 
     // Check the received fn_combo
     if(rx_buf->fn_combo != ul_fn_combo)
@@ -606,6 +637,34 @@ void LTE_fdd_enb_phy::process_ul(LTE_FDD_ENB_RADIO_RX_BUF_STRUCT *rx_buf)
         // Jump the DL and UL fn_combos
         dl_fn_combo = (dl_fn_combo + N_skipped_subfrs) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
         ul_fn_combo = (ul_fn_combo + N_skipped_subfrs) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
+    }
+    sfn   = ul_fn_combo/10;
+    subfn = ul_fn_combo%10;
+
+    // Handle PRACH
+    if((sfn % prach_sfn_mod) == 0)
+    {
+        if((subfn % prach_subfn_mod) == prach_subfn_check)
+        {
+            if(subfn != 0 ||
+               true  == prach_subfn_zero_allowed)
+            {
+                prach_decode.fn_combo = ul_fn_combo;
+                liblte_phy_detect_prach(phy_struct,
+                                        rx_buf->i_buf,
+                                        rx_buf->q_buf,
+                                        sys_info.sib2.rr_config_common_sib.prach_cnfg.prach_cnfg_info.prach_freq_offset,
+                                        &prach_decode.num_preambles,
+                                        prach_decode.preamble,
+                                        prach_decode.timing_adv);
+
+                LTE_fdd_enb_msgq::send(phy_mac_mq,
+                                       LTE_FDD_ENB_MESSAGE_TYPE_PRACH_DECODE,
+                                       LTE_FDD_ENB_DEST_LAYER_MAC,
+                                       (LTE_FDD_ENB_MESSAGE_UNION *)&prach_decode,
+                                       sizeof(LTE_FDD_ENB_PRACH_DECODE_MSG_STRUCT));
+            }
+        }
     }
 
     // Update counters

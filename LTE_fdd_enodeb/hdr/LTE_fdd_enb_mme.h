@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/09/2013    Ben Wojtowicz    Created file
+    01/18/2014    Ben Wojtowicz    Added an explicit include for boost mutexes.
 
 *******************************************************************************/
 
@@ -38,6 +39,7 @@
 #include "LTE_fdd_enb_cnfg_db.h"
 #include "LTE_fdd_enb_msgq.h"
 #include <boost/interprocess/ipc/message_queue.hpp>
+#include <boost/thread/mutex.hpp>
 
 /*******************************************************************************
                               DEFINES

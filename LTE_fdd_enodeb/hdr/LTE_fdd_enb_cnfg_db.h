@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/09/2013    Ben Wojtowicz    Created file
+    01/18/2014    Ben Wojtowicz    Added set/get routines for uint32 values.
 
 *******************************************************************************/
 
@@ -38,6 +39,8 @@
 #include "LTE_fdd_enb_interface.h"
 #include "liblte_rrc.h"
 #include "liblte_phy.h"
+#include <string>
+#include <map>
 
 /*******************************************************************************
                               DEFINES
@@ -97,9 +100,11 @@ public:
     LTE_FDD_ENB_ERROR_ENUM set_param(LTE_FDD_ENB_PARAM_ENUM param, int64 value);
     LTE_FDD_ENB_ERROR_ENUM set_param(LTE_FDD_ENB_PARAM_ENUM param, double value);
     LTE_FDD_ENB_ERROR_ENUM set_param(LTE_FDD_ENB_PARAM_ENUM param, std::string value);
+    LTE_FDD_ENB_ERROR_ENUM set_param(LTE_FDD_ENB_PARAM_ENUM param, uint32 value);
     LTE_FDD_ENB_ERROR_ENUM get_param(LTE_FDD_ENB_PARAM_ENUM param, int64 &value);
     LTE_FDD_ENB_ERROR_ENUM get_param(LTE_FDD_ENB_PARAM_ENUM param, double &value);
     LTE_FDD_ENB_ERROR_ENUM get_param(LTE_FDD_ENB_PARAM_ENUM param, std::string &value);
+    LTE_FDD_ENB_ERROR_ENUM get_param(LTE_FDD_ENB_PARAM_ENUM param, uint32 &value);
 
     // MIB/SIB Construction
     void construct_sys_info(void);

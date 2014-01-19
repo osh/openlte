@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/09/2013    Ben Wojtowicz    Created file
+    01/18/2014    Ben Wojtowicz    Added the ability to set priorities.
 
 *******************************************************************************/
 
@@ -181,6 +182,9 @@ class LTE_fdd_enb_msgq
 public:
     LTE_fdd_enb_msgq(std::string _msgq_name,
                      msgq_cb     cb);
+    LTE_fdd_enb_msgq(std::string _msgq_name,
+                     msgq_cb     cb,
+                     uint32      _prio);
     ~LTE_fdd_enb_msgq();
 
     // Send/Receive
@@ -202,6 +206,7 @@ private:
     msgq_cb     callback;
     std::string msgq_name;
     pthread_t   rx_thread;
+    uint32      prio;
 };
 
 #endif /* __LTE_FDD_ENB_MSGQ_H__ */

@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/10/2013    Ben Wojtowicz    Created file
+    01/18/2014    Ben Wojtowicz    Added level to debug prints.
 
 *******************************************************************************/
 
@@ -33,6 +34,7 @@
 *******************************************************************************/
 
 #include "LTE_fdd_enb_pdcp.h"
+#include "LTE_fdd_enb_interface.h"
 
 /*******************************************************************************
                               DEFINES
@@ -137,6 +139,7 @@ void LTE_fdd_enb_pdcp::handle_rlc_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
        LTE_FDD_ENB_DEST_LAYER_ANY  == msg->dest_layer)
     {
         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_PDCP,
                                   __FILE__,
                                   __LINE__,
                                   "Received RLC message %s",
@@ -155,6 +158,7 @@ void LTE_fdd_enb_pdcp::handle_rrc_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
        LTE_FDD_ENB_DEST_LAYER_ANY  == msg->dest_layer)
     {
         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_PDCP,
                                   __FILE__,
                                   __LINE__,
                                   "Received RRC message %s",

@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,9 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/10/2013    Ben Wojtowicz    Created file
+    01/18/2014    Ben Wojtowicz    Changed several default values, updating
+                                   EARFCNs in the radio, and added set/get for
+                                   uint32 values.
 
 *******************************************************************************/
 
@@ -33,6 +36,7 @@
 *******************************************************************************/
 
 #include "LTE_fdd_enb_cnfg_db.h"
+#include "LTE_fdd_enb_interface.h"
 #include "LTE_fdd_enb_phy.h"
 #include "LTE_fdd_enb_mac.h"
 #include "LTE_fdd_enb_rlc.h"
@@ -110,8 +114,8 @@ LTE_fdd_enb_cnfg_db::LTE_fdd_enb_cnfg_db()
     var_map_int64[LTE_FDD_ENB_PARAM_N_ID_1]                    = 0;
     var_map_uint32[LTE_FDD_ENB_PARAM_MCC]                      = 0xFFFFF001;
     var_map_uint32[LTE_FDD_ENB_PARAM_MNC]                      = 0xFFFFFF01;
-    var_map_int64[LTE_FDD_ENB_PARAM_CELL_ID]                   = 0;
-    var_map_int64[LTE_FDD_ENB_PARAM_TRACKING_AREA_CODE]        = 0;
+    var_map_int64[LTE_FDD_ENB_PARAM_CELL_ID]                   = 1;
+    var_map_int64[LTE_FDD_ENB_PARAM_TRACKING_AREA_CODE]        = 1;
     var_map_int64[LTE_FDD_ENB_PARAM_Q_RX_LEV_MIN]              = -140;
     var_map_int64[LTE_FDD_ENB_PARAM_P0_NOMINAL_PUSCH]          = -70;
     var_map_int64[LTE_FDD_ENB_PARAM_P0_NOMINAL_PUCCH]          = -96;
@@ -123,11 +127,13 @@ LTE_fdd_enb_cnfg_db::LTE_fdd_enb_cnfg_db()
     var_map_int64[LTE_FDD_ENB_PARAM_SIB7_PRESENT]              = 0;
     var_map_int64[LTE_FDD_ENB_PARAM_SIB8_PRESENT]              = 0;
     var_map_int64[LTE_FDD_ENB_PARAM_SEARCH_WIN_SIZE]           = 0;
-    var_map_uint32[LTE_FDD_ENB_PARAM_SYSTEM_INFO_VALUE_TAG]    = 0;
+    var_map_uint32[LTE_FDD_ENB_PARAM_SYSTEM_INFO_VALUE_TAG]    = 1;
     var_map_int64[LTE_FDD_ENB_PARAM_SYSTEM_INFO_WINDOW_LENGTH] = LIBLTE_RRC_SI_WINDOW_LENGTH_MS1;
     var_map_int64[LTE_FDD_ENB_PARAM_PHICH_RESOURCE]            = LIBLTE_RRC_PHICH_RESOURCE_1;
     var_map_int64[LTE_FDD_ENB_PARAM_N_SCHED_INFO]              = 1;
     var_map_int64[LTE_FDD_ENB_PARAM_SYSTEM_INFO_PERIODICITY]   = LIBLTE_RRC_SI_PERIODICITY_RF8;
+    var_map_uint32[LTE_FDD_ENB_PARAM_DEBUG_TYPE]               = 0xFFFFFFFF;
+    var_map_uint32[LTE_FDD_ENB_PARAM_DEBUG_LEVEL]              = 0xFFFFFFFF;
 }
 LTE_fdd_enb_cnfg_db::~LTE_fdd_enb_cnfg_db()
 {
@@ -139,8 +145,9 @@ LTE_fdd_enb_cnfg_db::~LTE_fdd_enb_cnfg_db()
 LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_cnfg_db::set_param(LTE_FDD_ENB_PARAM_ENUM param,
                                                       int64                  value)
 {
-    std::map<LTE_FDD_ENB_PARAM_ENUM, int64>::iterator iter = var_map_int64.find(param);
-    LTE_FDD_ENB_ERROR_ENUM                            err  = LTE_FDD_ENB_ERROR_INVALID_PARAM;
+    LTE_fdd_enb_radio                                 *radio = LTE_fdd_enb_radio::get_instance();
+    std::map<LTE_FDD_ENB_PARAM_ENUM, int64>::iterator  iter  = var_map_int64.find(param);
+    LTE_FDD_ENB_ERROR_ENUM                             err   = LTE_FDD_ENB_ERROR_INVALID_PARAM;
 
     if(var_map_int64.end() != iter)
     {
@@ -154,6 +161,7 @@ LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_cnfg_db::set_param(LTE_FDD_ENB_PARAM_ENUM par
             set_param(LTE_FDD_ENB_PARAM_N_ID_1, (value - (value % 3))/3);
         }else if(LTE_FDD_ENB_PARAM_DL_EARFCN == param){
             set_param(LTE_FDD_ENB_PARAM_UL_EARFCN, (int64)liblte_interface_get_corresponding_ul_earfcn(value));
+            radio->set_earfcns(value, (int64)liblte_interface_get_corresponding_ul_earfcn(value));
         }
     }
 
@@ -224,6 +232,20 @@ LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_cnfg_db::set_param(LTE_FDD_ENB_PARAM_ENUM par
 
     return(err);
 }
+LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_cnfg_db::set_param(LTE_FDD_ENB_PARAM_ENUM param,
+                                                      uint32                 value)
+{
+    std::map<LTE_FDD_ENB_PARAM_ENUM, uint32>::iterator iter = var_map_uint32.find(param);
+    LTE_FDD_ENB_ERROR_ENUM                             err  = LTE_FDD_ENB_ERROR_INVALID_PARAM;
+
+    if(var_map_uint32.end() != iter)
+    {
+        (*iter).second = value;
+        err            = LTE_FDD_ENB_ERROR_NONE;
+    }
+
+    return(err);
+}
 LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_cnfg_db::get_param(LTE_FDD_ENB_PARAM_ENUM  param,
                                                       int64                  &value)
 {
@@ -274,6 +296,20 @@ LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_cnfg_db::get_param(LTE_FDD_ENB_PARAM_ENUM  pa
         }catch(...){
             // Intentionally do nothing
         }
+    }
+
+    return(err);
+}
+LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_cnfg_db::get_param(LTE_FDD_ENB_PARAM_ENUM  param,
+                                                      uint32                 &value)
+{
+    std::map<LTE_FDD_ENB_PARAM_ENUM, uint32>::iterator iter = var_map_uint32.find(param);
+    LTE_FDD_ENB_ERROR_ENUM                             err  = LTE_FDD_ENB_ERROR_INVALID_PARAM;
+
+    if(var_map_uint32.end() != iter)
+    {
+        value = (*iter).second;
+        err   = LTE_FDD_ENB_ERROR_NONE;
     }
 
     return(err);
@@ -416,7 +452,7 @@ void LTE_fdd_enb_cnfg_db::construct_sys_info(void)
     sys_info.sib1.plmn_id[0].resv_for_oper         = LIBLTE_RRC_NOT_RESV_FOR_OPER;
     sys_info.sib1.cell_barred                      = LIBLTE_RRC_CELL_NOT_BARRED;
     sys_info.sib1.intra_freq_reselection           = LIBLTE_RRC_INTRA_FREQ_RESELECTION_ALLOWED;
-    sys_info.sib1.si_window_length                 = LIBLTE_RRC_SI_WINDOW_LENGTH_MS1;
+    sys_info.sib1.si_window_length                 = LIBLTE_RRC_SI_WINDOW_LENGTH_MS2;
     sys_info.sib1.sf_assignment                    = LIBLTE_RRC_SUBFRAME_ASSIGNMENT_0;
     sys_info.sib1.special_sf_patterns              = LIBLTE_RRC_SPECIAL_SUBFRAME_PATTERNS_0;
     int64_iter                                     = var_map_int64.find(LTE_FDD_ENB_PARAM_CELL_ID);
@@ -440,7 +476,7 @@ void LTE_fdd_enb_cnfg_db::construct_sys_info(void)
     int64_iter                        = var_map_int64.find(LTE_FDD_ENB_PARAM_FREQ_BAND);
     if(var_map_int64.end() != int64_iter)
     {
-        sys_info.sib1.freq_band_indicator = (*int64_iter).second;
+        sys_info.sib1.freq_band_indicator = liblte_interface_band_num[(*int64_iter).second];
     }
     uint32_iter = var_map_uint32.find(LTE_FDD_ENB_PARAM_SYSTEM_INFO_VALUE_TAG);
     if(var_map_uint32.end() != uint32_iter)
@@ -448,7 +484,7 @@ void LTE_fdd_enb_cnfg_db::construct_sys_info(void)
         sys_info.sib1.system_info_value_tag = (*uint32_iter).second++;
     }
     sys_info.sib1.p_max_present = true;
-    sys_info.sib1.p_max         = -30;
+    sys_info.sib1.p_max         = 23;
     sys_info.sib1.tdd           = false;
 
     // SIB2
@@ -469,7 +505,7 @@ void LTE_fdd_enb_cnfg_db::construct_sys_info(void)
     sys_info.sib2.rr_config_common_sib.prach_cnfg.prach_cnfg_info.high_speed_flag              = false;
     sys_info.sib2.rr_config_common_sib.prach_cnfg.prach_cnfg_info.zero_correlation_zone_config = 1;
     sys_info.sib2.rr_config_common_sib.prach_cnfg.prach_cnfg_info.prach_freq_offset            = 0;
-    sys_info.sib2.rr_config_common_sib.pdsch_cnfg.rs_power                                     = -60;
+    sys_info.sib2.rr_config_common_sib.pdsch_cnfg.rs_power                                     = 0;
     sys_info.sib2.rr_config_common_sib.pdsch_cnfg.p_b                                          = 0;
     sys_info.sib2.rr_config_common_sib.pusch_cnfg.n_sb                                         = 1;
     sys_info.sib2.rr_config_common_sib.pusch_cnfg.hopping_mode                                 = LIBLTE_RRC_HOPPING_MODE_INTER_SUBFRAME;

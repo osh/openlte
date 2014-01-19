@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,8 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/09/2013    Ben Wojtowicz    Created file
+    01/18/2014    Ben Wojtowicz    Cached a copy of the interface class and
+                                   added the ability to handle late subframes.
 
 *******************************************************************************/
 
@@ -35,6 +37,7 @@
                               INCLUDES
 *******************************************************************************/
 
+#include "LTE_fdd_enb_interface.h"
 #include "LTE_fdd_enb_cnfg_db.h"
 #include "LTE_fdd_enb_msgq.h"
 #include "LTE_fdd_enb_radio.h"
@@ -69,7 +72,7 @@ public:
     static void cleanup(void);
 
     // Start/Stop
-    void start(void);
+    void start(LTE_fdd_enb_interface *iface);
     void stop(void);
 
     // External interface
@@ -87,8 +90,8 @@ private:
     ~LTE_fdd_enb_phy();
 
     // Start/Stop
-    boost::mutex start_mutex;
-    bool         started;
+    LTE_fdd_enb_interface *interface;
+    bool                   started;
 
     // Communication
     void handle_mac_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg);
@@ -114,6 +117,8 @@ private:
     LIBLTE_PHY_SUBFRAME_STRUCT            dl_subframe;
     LIBLTE_MSG_STRUCT                     dl_rrc_msg;
     uint32                                dl_fn_combo;
+    uint32                                last_rts_fn_combo;
+    bool                                  late_subfr;
 
     // Uplink
     void process_ul(LTE_FDD_ENB_RADIO_RX_BUF_STRUCT *rx_buf);

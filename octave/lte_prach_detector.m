@@ -1,5 +1,5 @@
 %
-% Copyright 2013 Ben Wojtowicz
+% Copyright 2013-2014 Ben Wojtowicz
 %
 %    This program is free software: you can redistribute it and/or modify
 %    it under the terms of the GNU Affero General Public License as published by
@@ -31,6 +31,7 @@
 %              Ben Wojtowicz 08/26/2013 Fixed a bug in the frequency domain conversion,
 %                                       added support for all sampling rates, and added
 %                                       a qualification metric
+%              Ben Wojtowicz 01/18/2013 Fixed several bugs
 %
 function [det_preamble, det_ta] = lte_prach_detector(x_u, prach_bb, root_seq_idx, pre_format, zczc, hs_flag, prach_freq_offset, N_ul_rb)
 
@@ -152,7 +153,7 @@ function [det_preamble, det_ta] = lte_prach_detector(x_u, prach_bb, root_seq_idx
         T_seq    = T_seq/8;
         T_cp     = T_cp/8;
     else % 6 == N_ul_rb
-        FFT_size = 6;
+        FFT_size = 128;
         T_fft    = T_fft/16;
         T_seq    = T_seq/16;
         T_cp     = T_cp/16;
@@ -172,7 +173,7 @@ function [det_preamble, det_ta] = lte_prach_detector(x_u, prach_bb, root_seq_idx
     % Correlate with all the available roots
     [N_roots, root_len] = size(x_u);
     for(n=1:N_roots)
-        x_u_fft = fftshift(fft(x_u(n,:)));
+        x_u_fft = fft(x_u(n,:));
 
         for(m=1:root_len)
             tmp_corr(m) = x_u_fft(m)*conj(x_fd_sig(m));
@@ -200,9 +201,9 @@ function [det_preamble, det_ta] = lte_prach_detector(x_u, prach_bb, root_seq_idx
         ave_val = ave_val/root_len;
     endfor
 
-    if(max_val >= 10*ave_val)
+    if(max_val >= 50*ave_val)
         det_preamble = floor((max_root-1)*(v_max+1) + (mod(max_offset+N_cs-1, N_zc))/N_cs);
-        det_ta       = floor(mod(N_cs - mod(max_offset+N_cs-1, N_zc), N_cs)*29.155/16);
+        det_ta       = floor(mod(N_cs - mod(max_offset+N_cs-1, N_zc), N_cs)*29.155/16)-1;
     else
         det_preamble = -1;
         det_ta       = -1;

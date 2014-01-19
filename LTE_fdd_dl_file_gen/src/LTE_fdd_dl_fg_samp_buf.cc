@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2012-2013 Ben Wojtowicz
+    Copyright 2012-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -42,6 +42,8 @@
     09/16/2013    Ben Wojtowicz    Added support for changing the sample rate.
     09/28/2013    Ben Wojtowicz    Added support for setting the sample rate
                                    and output data type.
+    01/18/2014    Ben Wojtowicz    Fixed a bug with transmitting SIB2 for 1.4MHz
+                                   bandwidth.
 
 *******************************************************************************/
 
@@ -128,8 +130,8 @@ LTE_fdd_dl_fg_samp_buf::LTE_fdd_dl_fg_samp_buf(size_t out_size_val)
     si_periodicity_T                      = 8;
     sib1.cell_barred                      = LIBLTE_RRC_CELL_NOT_BARRED;
     sib1.intra_freq_reselection           = LIBLTE_RRC_INTRA_FREQ_RESELECTION_ALLOWED;
-    sib1.si_window_length                 = LIBLTE_RRC_SI_WINDOW_LENGTH_MS1;
-    si_win_len                            = 1;
+    sib1.si_window_length                 = LIBLTE_RRC_SI_WINDOW_LENGTH_MS2;
+    si_win_len                            = 2;
     sib1.sf_assignment                    = LIBLTE_RRC_SUBFRAME_ASSIGNMENT_0;
     sib1.special_sf_patterns              = LIBLTE_RRC_SPECIAL_SUBFRAME_PATTERNS_0;
     sib1.cell_id                          = 0;
@@ -382,7 +384,8 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                     pdcch.alloc[pdcch.N_alloc].tx_mode        = sib_tx_mode;
                     pdcch.N_alloc++;
                 }
-                if(subframe.num             ==  (0 * si_win_len)%10 &&
+                if(subframe.num             >=  (0 * si_win_len)%10 &&
+                   subframe.num             <   (1 * si_win_len)%10 &&
                    (sfn % si_periodicity_T) == ((0 * si_win_len)/10))
                 {
                     // SIs in 1st scheduling info list entry
@@ -414,20 +417,24 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                     }
                     liblte_rrc_pack_bcch_dlsch_msg(&bcch_dlsch_msg,
                                                    &pdcch.alloc[pdcch.N_alloc].msg);
-                    liblte_phy_get_tbs_mcs_and_n_prb_for_dl(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
-                                                            subframe.num,
-                                                            N_rb_dl,
-                                                            LIBLTE_MAC_SI_RNTI,
-                                                            &pdcch.alloc[pdcch.N_alloc].tbs,
-                                                            &pdcch.alloc[pdcch.N_alloc].mcs,
-                                                            &pdcch.alloc[pdcch.N_alloc].N_prb);
-                    pdcch.alloc[pdcch.N_alloc].pre_coder_type = LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY;
-                    pdcch.alloc[pdcch.N_alloc].mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
-                    pdcch.alloc[pdcch.N_alloc].rv_idx         = 0; //36.321 section 5.3.1
-                    pdcch.alloc[pdcch.N_alloc].N_codewords    = 1;
-                    pdcch.alloc[pdcch.N_alloc].rnti           = LIBLTE_MAC_SI_RNTI;
-                    pdcch.alloc[pdcch.N_alloc].tx_mode        = sib_tx_mode;
-                    pdcch.N_alloc++;
+
+                    // FIXME: This was a hack to allow SIB2 decoding with 1.4MHz BW due to overlap with MIB
+                    if(LIBLTE_SUCCESS == liblte_phy_get_tbs_mcs_and_n_prb_for_dl(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
+                                                                                 subframe.num,
+                                                                                 N_rb_dl,
+                                                                                 LIBLTE_MAC_SI_RNTI,
+                                                                                 &pdcch.alloc[pdcch.N_alloc].tbs,
+                                                                                 &pdcch.alloc[pdcch.N_alloc].mcs,
+                                                                                 &pdcch.alloc[pdcch.N_alloc].N_prb))
+                    {
+                        pdcch.alloc[pdcch.N_alloc].pre_coder_type = LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY;
+                        pdcch.alloc[pdcch.N_alloc].mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
+                        pdcch.alloc[pdcch.N_alloc].rv_idx         = 0; //36.321 section 5.3.1
+                        pdcch.alloc[pdcch.N_alloc].N_codewords    = 1;
+                        pdcch.alloc[pdcch.N_alloc].rnti           = LIBLTE_MAC_SI_RNTI;
+                        pdcch.alloc[pdcch.N_alloc].tx_mode        = sib_tx_mode;
+                        pdcch.N_alloc++;
+                    }
                 }
                 for(j=1; j<sib1.N_sched_info; j++)
                 {

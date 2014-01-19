@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -26,6 +26,7 @@
     ----------    -------------    --------------------------------------------
     11/10/2013    Ben Wojtowicz    Created file
     11/23/2013    Ben Wojtowicz    Fixed a bug with receive size.
+    01/18/2013    Ben Wojtowicz    Added ability to set priorities.
 
 *******************************************************************************/
 
@@ -79,6 +80,16 @@ LTE_fdd_enb_msgq::LTE_fdd_enb_msgq(std::string _msgq_name,
 {
     msgq_name = _msgq_name;
     callback  = cb;
+    prio      = 0;
+    pthread_create(&rx_thread, NULL, &receive_thread, this);
+}
+LTE_fdd_enb_msgq::LTE_fdd_enb_msgq(std::string _msgq_name,
+                                   msgq_cb     cb,
+                                   uint32      _prio)
+{
+    msgq_name = _msgq_name;
+    callback  = cb;
+    prio      = _prio;
     pthread_create(&rx_thread, NULL, &receive_thread, this);
 }
 LTE_fdd_enb_msgq::~LTE_fdd_enb_msgq()
@@ -136,9 +147,18 @@ void* LTE_fdd_enb_msgq::receive_thread(void *inputs)
 {
     LTE_fdd_enb_msgq           *msgq = (LTE_fdd_enb_msgq *)inputs;
     LTE_FDD_ENB_MESSAGE_STRUCT *msg  = NULL;
+    struct sched_param          priority;
     std::size_t                 rx_size;
     uint32                      prio;
     bool                        not_done = true;
+
+    // Set priority
+    if(msgq->prio != 0)
+    {
+        // FIXME: verify
+        priority.sched_priority = prio;
+        pthread_setschedparam(msgq->rx_thread, SCHED_FIFO, &priority);
+    }
 
     // Open the message_queue
     boost::interprocess::message_queue mq(boost::interprocess::open_only,

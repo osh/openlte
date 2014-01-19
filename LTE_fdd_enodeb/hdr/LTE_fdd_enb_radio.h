@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,8 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/09/2013    Ben Wojtowicz    Created file
+    01/18/2014    Ben Wojtowicz    Handling EARFCN updates and multiple
+                                   antennas.
 
 *******************************************************************************/
 
@@ -102,6 +104,7 @@ public:
     uint32 get_rx_gain(void);
     LTE_FDD_ENB_ERROR_ENUM set_rx_gain(uint32 gain);
     uint32 get_sample_rate(void);
+    void set_earfcns(int64 dl_earfcn, int64 ul_earfcn);
     void send(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *buf);
 
 private:
@@ -127,6 +130,7 @@ private:
     gr_complex       tx_buf[LIBLTE_PHY_N_SAMPS_PER_SUBFR_30_72MHZ];
     gr_complex       rx_buf[LIBLTE_PHY_N_SAMPS_PER_SUBFR_30_72MHZ];
     uhd::time_spec_t next_tx_ts;
+    int64            N_ant;
     uint32           N_tx_samps;
     uint32           N_rx_samps;
     uint32           N_samps_per_subfr;

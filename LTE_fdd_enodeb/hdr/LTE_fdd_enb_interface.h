@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -24,6 +24,8 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/09/2013    Ben Wojtowicz    Created file
+    01/18/2014    Ben Wojtowicz    Added dynamic variables and added level to
+                                   debug prints.
 
 *******************************************************************************/
 
@@ -70,6 +72,7 @@ typedef enum{
     LTE_FDD_ENB_ERROR_NO_FREE_C_RNTI,
     LTE_FDD_ENB_ERROR_C_RNTI_NOT_FOUND,
     LTE_FDD_ENB_ERROR_CANT_SCHEDULE,
+    LTE_FDD_ENB_ERROR_VARIABLE_NOT_DYNAMIC,
     LTE_FDD_ENB_ERROR_N_ITEMS,
 }LTE_FDD_ENB_ERROR_ENUM;
 static const char LTE_fdd_enb_error_text[LTE_FDD_ENB_ERROR_N_ITEMS][100] = {"none",
@@ -85,22 +88,48 @@ static const char LTE_fdd_enb_error_text[LTE_FDD_ENB_ERROR_N_ITEMS][100] = {"non
                                                                             "user not found",
                                                                             "no free C-RNTI",
                                                                             "C-RNTI not found",
-                                                                            "cant schedule"};
+                                                                            "cant schedule",
+                                                                            "variable not dynamic"};
 
 typedef enum{
     LTE_FDD_ENB_DEBUG_TYPE_ERROR = 0,
     LTE_FDD_ENB_DEBUG_TYPE_WARNING,
     LTE_FDD_ENB_DEBUG_TYPE_INFO,
+    LTE_FDD_ENB_DEBUG_TYPE_DEBUG,
     LTE_FDD_ENB_DEBUG_TYPE_N_ITEMS,
 }LTE_FDD_ENB_DEBUG_TYPE_ENUM;
-static const char LTE_fdd_enb_debug_type_text[LTE_FDD_ENB_DEBUG_TYPE_N_ITEMS][100] = {"ERROR",
-                                                                                      "WARNING",
-                                                                                      "INFO"};
+static const char LTE_fdd_enb_debug_type_text[LTE_FDD_ENB_DEBUG_TYPE_N_ITEMS][100] = {"error",
+                                                                                      "warning",
+                                                                                      "info",
+                                                                                      "debug"};
+
+typedef enum{
+    LTE_FDD_ENB_DEBUG_LEVEL_RADIO = 0,
+    LTE_FDD_ENB_DEBUG_LEVEL_PHY,
+    LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+    LTE_FDD_ENB_DEBUG_LEVEL_RLC,
+    LTE_FDD_ENB_DEBUG_LEVEL_PDCP,
+    LTE_FDD_ENB_DEBUG_LEVEL_RRC,
+    LTE_FDD_ENB_DEBUG_LEVEL_MME,
+    LTE_FDD_ENB_DEBUG_LEVEL_USER,
+    LTE_FDD_ENB_DEBUG_LEVEL_IFACE,
+    LTE_FDD_ENB_DEBUG_LEVEL_N_ITEMS,
+}LTE_FDD_ENB_DEBUG_LEVEL_ENUM;
+static const char LTE_fdd_enb_debug_level_text[LTE_FDD_ENB_DEBUG_LEVEL_N_ITEMS][100] = {"radio",
+                                                                                        "phy",
+                                                                                        "mac",
+                                                                                        "rlc",
+                                                                                        "pdcp",
+                                                                                        "rrc",
+                                                                                        "mme",
+                                                                                        "user",
+                                                                                        "iface"};
 
 typedef enum{
     LTE_FDD_ENB_VAR_TYPE_DOUBLE = 0,
     LTE_FDD_ENB_VAR_TYPE_INT64,
     LTE_FDD_ENB_VAR_TYPE_HEX,
+    LTE_FDD_ENB_VAR_TYPE_UINT32,
 }LTE_FDD_ENB_VAR_TYPE_ENUM;
 
 typedef enum{
@@ -137,6 +166,8 @@ typedef enum{
     LTE_FDD_ENB_PARAM_PHICH_RESOURCE,
     LTE_FDD_ENB_PARAM_N_SCHED_INFO,
     LTE_FDD_ENB_PARAM_SYSTEM_INFO_PERIODICITY,
+    LTE_FDD_ENB_PARAM_DEBUG_TYPE,
+    LTE_FDD_ENB_PARAM_DEBUG_LEVEL,
 
     // Radio parameters managed by LTE_fdd_enb_radio
     LTE_FDD_ENB_PARAM_AVAILABLE_RADIOS,
@@ -179,6 +210,8 @@ static const char lte_fdd_enb_param_text[LTE_FDD_ENB_PARAM_N_ITEMS][100] = {"ban
                                                                             "phich_resource",
                                                                             "n_sched_info",
                                                                             "system_info_periodicity",
+                                                                            "debug_type",
+                                                                            "debug_level",
                                                                             "available_radios",
                                                                             "selected_radio_name",
                                                                             "selected_radio_idx",
@@ -193,6 +226,7 @@ typedef struct{
     int64                     int64_l_bound;
     int64                     int64_u_bound;
     bool                      special_bounds;
+    bool                      dynamic;
 }LTE_FDD_ENB_VAR_STRUCT;
 
 /*******************************************************************************
@@ -213,8 +247,8 @@ public:
     void send_ctrl_msg(std::string msg);
     void send_ctrl_info_msg(std::string msg);
     void send_ctrl_error_msg(LTE_FDD_ENB_ERROR_ENUM error, std::string msg);
-    void send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ENUM type, std::string file_name, int32 line, std::string msg, ...);
-    void send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ENUM type, std::string file_name, int32 line, LIBLTE_MSG_STRUCT *lte_msg, std::string msg, ...);
+    void send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ENUM type, LTE_FDD_ENB_DEBUG_LEVEL_ENUM level, std::string file_name, int32 line, std::string msg, ...);
+    void send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ENUM type, LTE_FDD_ENB_DEBUG_LEVEL_ENUM level, std::string file_name, int32 line, LIBLTE_MSG_STRUCT *lte_msg, std::string msg, ...);
     static void handle_ctrl_msg(std::string msg);
     static void handle_ctrl_connect(void);
     static void handle_ctrl_disconnect(void);
@@ -252,6 +286,8 @@ private:
     // Variables
     std::map<std::string, LTE_FDD_ENB_VAR_STRUCT> var_map;
     boost::mutex                                  start_mutex;
+    uint32                                        debug_type_mask;
+    uint32                                        debug_level_mask;
     bool                                          shutdown;
     bool                                          started;
 
@@ -259,6 +295,7 @@ private:
     LTE_FDD_ENB_ERROR_ENUM write_value(LTE_FDD_ENB_VAR_STRUCT *var, double value);
     LTE_FDD_ENB_ERROR_ENUM write_value(LTE_FDD_ENB_VAR_STRUCT *var, int64 value);
     LTE_FDD_ENB_ERROR_ENUM write_value(LTE_FDD_ENB_VAR_STRUCT *var, std::string value);
+    LTE_FDD_ENB_ERROR_ENUM write_value(LTE_FDD_ENB_VAR_STRUCT *var, uint32 value);
 };
 
 #endif /* __LTE_FDD_ENB_INTERFACE_H__ */
