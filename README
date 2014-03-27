@@ -126,10 +126,10 @@ USRP B2X0 hardware, run LTE_fdd_enodeb, and connect (via telnet, nc,
 etc) to the control port at port number 30000.  eNodeB parameters
 can be changed on the control port.  For a list of parameters simply
 type help on the control port.
-NOTES: This is currently a DL transmit application only (there is no
-UL receive functionality).  This application has been tested at 1.4,
-3, and 5MHz bandwidths with few issues.  Higher bandwidths are
-supported, but may not function correctly at this time.
+NOTES: This application currently supports DL transmit and limited
+UL receive functionality.  It has been tested at 1.4, 3, and 5MHz
+bandwidths with few issues.  Higher bandwidths are supported, but
+may not function correctly at this time.
 WARNINGS: By using this application you risk disruption of service in
 a public network, even if you are not directly interfering with the
 radio transmissions.  This is a criminal act in most countries, and a

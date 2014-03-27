@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2012-2013 Ben Wojtowicz
+    Copyright 2012-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -47,6 +47,7 @@
                                    latest LTE library.
     09/28/2013    Ben Wojtowicz    Added support for setting the sample rate
                                    and input data type.
+    03/26/2014    Ben Wojtowicz    Using the latest LTE library.
 
 *******************************************************************************/
 
@@ -186,12 +187,8 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                             LIBLTE_PHY_INIT_N_ID_CELL_UNKNOWN,
                             4,
                             LIBLTE_PHY_N_RB_DL_1_4MHZ,
-                            LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                            liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1],
-                            0,
-                            0,
-                            1,
-                            false);
+                            LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP,
+                            liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1]);
             num_samps_needed = phy_struct->N_samps_per_subfr * COARSE_TIMING_SEARCH_NUM_SUBFRAMES;
         }
     }

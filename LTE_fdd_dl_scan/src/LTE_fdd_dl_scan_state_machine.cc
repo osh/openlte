@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -29,6 +29,7 @@
                                    for decoding SIBs.
     08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7 and the
                                    latest LTE library.
+    03/26/2014    Ben Wojtowicz    Using the latest LTE library.
 
 *******************************************************************************/
 
@@ -112,12 +113,8 @@ LTE_fdd_dl_scan_state_machine::LTE_fdd_dl_scan_state_machine(uint32 samp_rate)
                         LIBLTE_PHY_INIT_N_ID_CELL_UNKNOWN,
                         4,
                         LIBLTE_PHY_N_RB_DL_1_4MHZ,
-                        LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                        liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1],
-                        0,
-                        0,
-                        1,
-                        false);
+                        LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP,
+                        liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1]);
         one_subframe_num_samps               = ONE_SUBFRAME_NUM_SAMPS_1_92MHZ;
         one_frame_num_samps                  = ONE_FRAME_NUM_SAMPS_1_92MHZ;
         freq_change_wait_num_samps           = FREQ_CHANGE_WAIT_NUM_SAMPS_1_92MHZ;
@@ -133,12 +130,8 @@ LTE_fdd_dl_scan_state_machine::LTE_fdd_dl_scan_state_machine(uint32 samp_rate)
                         LIBLTE_PHY_INIT_N_ID_CELL_UNKNOWN,
                         4,
                         LIBLTE_PHY_N_RB_DL_10MHZ,
-                        LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                        liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1],
-                        0,
-                        0,
-                        1,
-                        false);
+                        LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP,
+                        liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1]);
         one_subframe_num_samps               = ONE_SUBFRAME_NUM_SAMPS_15_36MHZ;
         one_frame_num_samps                  = ONE_FRAME_NUM_SAMPS_15_36MHZ;
         freq_change_wait_num_samps           = FREQ_CHANGE_WAIT_NUM_SAMPS_15_36MHZ;

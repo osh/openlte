@@ -1,5 +1,5 @@
 %
-% Copyright 2013 Ben Wojtowicz
+% Copyright 2013-2014 Ben Wojtowicz
 %
 %    This program is free software: you can redistribute it and/or modify
 %    it under the terms of the GNU Affero General Public License as published by
@@ -31,6 +31,7 @@
 % Notes:       Currently only handles normal CP
 % Rev History: Ben Wojtowicz 09/28/2013 Created
 %              Ben Wojtowicz 11/13/2013 Bug fix for second slot reference signal
+%              Ben Wojtowicz 03/26/2014 Added a note to add the last precoding step
 %
 function [r] = lte_generate_dmrs_pusch(N_subfr, N_id_cell, delta_ss, group_hopping_enabled, sequence_hopping_enabled, cyclic_shift, cyclic_shift_dci, w_config, N_prbs, layer)
 
@@ -181,4 +182,6 @@ function [r] = lte_generate_dmrs_pusch(N_subfr, N_id_cell, delta_ss, group_hoppi
             r(m*M_sc_rb + n + 1) = w_vector(m+1)*r_u_v_alpha_lambda(m+1,n+1);
         endfor
     endfor
+
+    % FIXME: Add precoding to arrive at r_tilda
 endfunction

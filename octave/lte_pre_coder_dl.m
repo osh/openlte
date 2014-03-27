@@ -1,5 +1,5 @@
 %
-% Copyright 2011-2012 Ben Wojtowicz
+% Copyright 2011-2012, 2014 Ben Wojtowicz
 %
 %    This program is free software: you can redistribute it and/or modify
 %    it under the terms of the GNU Affero General Public License as published by
@@ -14,9 +14,9 @@
 %    You should have received a copy of the GNU Affero General Public License
 %    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 %
-% Function:    lte_pre_coder
+% Function:    lte_pre_coder_dl
 % Description: Generates a block of vectors to be mapped onto
-%              resources on each antenna port
+%              resources on each downlink antenna port
 % Inputs:      x            - Block of input vectors
 %              N_ant        - Number of antennas
 %              style        - Style of mapping (tx_diversity or
@@ -27,8 +27,9 @@
 % Rev History: Ben Wojtowicz 10/28/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
 %              Ben Wojtowicz 02/19/2012 Added newline to EOF
+%              Ben Wojtowicz 03/26/2014 Changed name to lte_pre_coder_dl
 %
-function [y] = lte_pre_coder(x, N_ant, style)
+function [y] = lte_pre_coder_dl(x, N_ant, style)
 
     [v, M_layer_symb] = size(x);
 

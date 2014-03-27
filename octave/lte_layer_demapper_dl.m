@@ -1,5 +1,5 @@
 %
-% Copyright 2011-2012 Ben Wojtowicz
+% Copyright 2011-2012, 2014 Ben Wojtowicz
 %
 %    This program is free software: you can redistribute it and/or modify
 %    it under the terms of the GNU Affero General Public License as published by
@@ -14,8 +14,8 @@
 %    You should have received a copy of the GNU Affero General Public License
 %    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 %
-% Function:    lte_layer_demapper
-% Description: De-maps one or several layers into complex-valued
+% Function:    lte_layer_demapper_dl
+% Description: De-maps one or several downlink layers into complex-valued
 %              modulation symbols
 % Inputs:      x            - Mapped complex valued modulation
 %                             symbols
@@ -28,8 +28,9 @@
 % Rev History: Ben Wojtowicz 10/28/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
 %              Ben Wojtowicz 02/19/2012 Fixed check for NULL symbols
+%              Ben Wojtowicz 03/26/2014 Changed name to lte_layer_demapper_dl
 %
-function [d] = lte_layer_demapper(x, N_cw, style)
+function [d] = lte_layer_demapper_dl(x, N_cw, style)
 
     [v, M_layer_symb] = size(x);
 

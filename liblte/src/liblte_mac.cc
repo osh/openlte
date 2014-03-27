@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     07/21/2013    Ben Wojtowicz    Created file.
+    03/26/3014    Ben Wojtowicz    Added DL-SCH/UL-SCH PDU handling.
 
 *******************************************************************************/
 
@@ -75,14 +76,111 @@ uint32 mac_bits_2_value(uint8  **bits,
 *******************************************************************************/
 
 /*********************************************************************
-    PDU Name: DL-SCH and UL-SCH
+    PDU Name: DL-SCH and UL-SCH MAC PDU
 
     Description: PDU containing a MAC header, zero or more MAC SDUs,
                  and zero or more MAC control elements
 
     Document Reference: 36.321 v10.2.0 Section 6.1.2
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_mac_pack_mac_pdu(LIBLTE_MAC_PDU_STRUCT *pdu,
+                                          LIBLTE_MSG_STRUCT     *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint32             i;
+
+    if(pdu != NULL &&
+       msg != NULL)
+    {
+        // Pack the subheaders
+        for(i=0; i<pdu->N_subheaders; i++)
+        {
+            mac_value_2_bits(0,                      &msg_ptr, 1); // R
+            mac_value_2_bits(0,                      &msg_ptr, 1); // R
+            mac_value_2_bits(0,                      &msg_ptr, 1); // E
+            mac_value_2_bits(pdu->subheader[i].lcid, &msg_ptr, 5);
+            if(i != (pdu->N_subheaders-1))
+            {
+                if((pdu->subheader[i].sdu.N_bits/8) < 128)
+                {
+                    mac_value_2_bits(0,                              &msg_ptr, 1); // F
+                    mac_value_2_bits(pdu->subheader[i].sdu.N_bits/8, &msg_ptr, 7);
+                }else{
+                    mac_value_2_bits(1,                              &msg_ptr,  1); // F
+                    mac_value_2_bits(pdu->subheader[i].sdu.N_bits/8, &msg_ptr, 15);
+                }
+            }
+        }
+
+        // Pack the control elements
+        // FIXME
+
+        // Pack the SDUs
+        for(i=0; i<pdu->N_subheaders; i++)
+        {
+            memcpy(msg_ptr, pdu->subheader[i].sdu.msg, pdu->subheader[i].sdu.N_bits);
+            msg_ptr += pdu->subheader[i].sdu.N_bits;
+        }
+
+        msg->N_bits = msg_ptr - msg->msg;
+        err         = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_MSG_STRUCT     *msg,
+                                            LIBLTE_MAC_PDU_STRUCT *pdu)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint32             i;
+    uint8              e_bit = 1;
+
+    if(msg != NULL &&
+       pdu != NULL)
+    {
+        // Unpack the subheaders
+        pdu->N_subheaders = 0;
+        while(e_bit)
+        {
+            mac_bits_2_value(&msg_ptr, 2); // R
+            e_bit = mac_bits_2_value(&msg_ptr, 1);
+            pdu->subheader[pdu->N_subheaders].lcid = mac_bits_2_value(&msg_ptr, 5);
+
+            if(e_bit)
+            {
+                if(mac_bits_2_value(&msg_ptr, 1)) // F
+                {
+                    pdu->subheader[pdu->N_subheaders].sdu.N_bits = mac_bits_2_value(&msg_ptr, 15) * 8;
+                }else{
+                    pdu->subheader[pdu->N_subheaders].sdu.N_bits = mac_bits_2_value(&msg_ptr, 7) * 8;
+                }
+            }else{
+                pdu->subheader[pdu->N_subheaders].sdu.N_bits = 0;
+            }
+            pdu->N_subheaders++;
+        }
+
+        // Unpack the control elements
+        // FIXME
+
+        // Unpack the SDUs
+        for(i=0; i<pdu->N_subheaders; i++)
+        {
+            if(pdu->subheader[i].sdu.N_bits == 0)
+            {
+                pdu->subheader[i].sdu.N_bits = msg->N_bits - (msg_ptr - msg->msg);
+            }
+            memcpy(pdu->subheader[i].sdu.msg, msg_ptr, pdu->subheader[i].sdu.N_bits);
+            msg_ptr += pdu->subheader[i].sdu.N_bits;
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     PDU Name: Transparent

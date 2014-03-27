@@ -1,5 +1,5 @@
 %
-% Copyright 2012 Ben Wojtowicz
+% Copyright 2012, 2014 Ben Wojtowicz
 %
 %    This program is free software: you can redistribute it and/or modify
 %    it under the terms of the GNU Affero General Public License as published by
@@ -22,12 +22,13 @@
 %              tx_mode   - Transmission mode used
 %              N_soft    - Number of soft bits
 %              M_dl_harq - Maximum number of DL HARQ processes
-%              chan_type - "dlsch", "ulsch", "pch", or "mch"
+%              chan_type - "dlsch", "ulsch", "_pch_", or "_mch_"
 %              rv_idx    - Redundancy version number
 % Outputs:     out_bits  - Output bits from the rate matcher
 % Spec:        3GPP TS 36.212 section 5.1.4.1 v10.1.0
 % Notes:       None
 % Rev History: Ben Wojtowicz 01/09/2012 Created
+%              Ben Wojtowicz 03/26/2014 Made all the chan_type values the same length
 %
 function [out_bits] = lte_rate_match_turbo(in_bits, E, C, tx_mode, N_soft, M_dl_harq, chan_type, rv_idx)
     % Check in bits
@@ -117,7 +118,7 @@ function [out_bits] = lte_rate_match_turbo(in_bits, E, C, tx_mode, N_soft, M_dl_
     endif
     M_limit = 8;
     N_ir    = floor(N_soft/(K_mimo*min(M_dl_harq,M_limit)));
-    if(chan_type == "dlsch" || chan_type == "pch")
+    if(chan_type == "dlsch" || chan_type == "_pch_")
         N_cb = min(floor(N_ir/C), K_w);
     else
         N_cb = K_w;

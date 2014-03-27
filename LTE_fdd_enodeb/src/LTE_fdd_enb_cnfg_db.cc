@@ -28,6 +28,7 @@
     01/18/2014    Ben Wojtowicz    Changed several default values, updating
                                    EARFCNs in the radio, and added set/get for
                                    uint32 values.
+    03/26/2014    Ben Wojtowicz    Using the latest LTE library.
 
 *******************************************************************************/
 
@@ -107,7 +108,8 @@ LTE_fdd_enb_cnfg_db::LTE_fdd_enb_cnfg_db()
     var_map_int64[LTE_FDD_ENB_PARAM_N_RB_DL]                   = LIBLTE_PHY_N_RB_DL_10MHZ;
     var_map_int64[LTE_FDD_ENB_PARAM_N_RB_UL]                   = LIBLTE_PHY_N_RB_UL_10MHZ;
     var_map_int64[LTE_FDD_ENB_PARAM_DL_BW]                     = LIBLTE_RRC_DL_BANDWIDTH_50;
-    var_map_int64[LTE_FDD_ENB_PARAM_N_SC_RB]                   = LIBLTE_PHY_N_SC_RB_NORMAL_CP;
+    var_map_int64[LTE_FDD_ENB_PARAM_N_SC_RB_DL]                = LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP;
+    var_map_int64[LTE_FDD_ENB_PARAM_N_SC_RB_UL]                = LIBLTE_PHY_N_SC_RB_UL;
     var_map_int64[LTE_FDD_ENB_PARAM_N_ANT]                     = 1;
     var_map_int64[LTE_FDD_ENB_PARAM_N_ID_CELL]                 = 0;
     var_map_int64[LTE_FDD_ENB_PARAM_N_ID_2]                    = 0;
@@ -781,10 +783,15 @@ void LTE_fdd_enb_cnfg_db::construct_sys_info(void)
     {
         sys_info.N_rb_ul = (*int64_iter).second;
     }
-    int64_iter = var_map_int64.find(LTE_FDD_ENB_PARAM_N_SC_RB);
+    int64_iter = var_map_int64.find(LTE_FDD_ENB_PARAM_N_SC_RB_DL);
     if(var_map_int64.end() != int64_iter)
     {
-        sys_info.N_sc_rb = (*int64_iter).second;
+        sys_info.N_sc_rb_dl = (*int64_iter).second;
+    }
+    int64_iter = var_map_int64.find(LTE_FDD_ENB_PARAM_N_SC_RB_UL);
+    if(var_map_int64.end() != int64_iter)
+    {
+        sys_info.N_sc_rb_ul = (*int64_iter).second;
     }
     sys_info.si_periodicity_T = liblte_rrc_si_periodicity_num[sys_info.sib1.sched_info[0].si_periodicity];
     sys_info.si_win_len       = liblte_rrc_si_window_length_num[sys_info.sib1.si_window_length];

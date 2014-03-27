@@ -26,6 +26,7 @@
     ----------    -------------    --------------------------------------------
     11/09/2013    Ben Wojtowicz    Created file
     01/18/2014    Ben Wojtowicz    Added set/get routines for uint32 values.
+    03/26/2014    Ben Wojtowicz    Using the latest LTE library.
 
 *******************************************************************************/
 
@@ -74,7 +75,8 @@ typedef struct{
     uint32                                  N_id_2;
     uint32                                  N_rb_dl;
     uint32                                  N_rb_ul;
-    uint32                                  N_sc_rb;
+    uint32                                  N_sc_rb_dl;
+    uint32                                  N_sc_rb_ul;
     uint32                                  si_periodicity_T;
     uint32                                  si_win_len;
     bool                                    sib3_present;

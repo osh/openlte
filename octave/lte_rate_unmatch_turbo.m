@@ -1,5 +1,5 @@
 %
-% Copyright 2012 Ben Wojtowicz
+% Copyright 2012, 2014 Ben Wojtowicz
 %
 %    This program is free software: you can redistribute it and/or modify
 %    it under the terms of the GNU Affero General Public License as published by
@@ -22,12 +22,15 @@
 %              tx_mode   - Transmission mode used
 %              N_soft    - Number of soft bits
 %              M_dl_harq - Maximum number of DL HARQ processes
-%              chan_type - "dlsch", "ulsch", "pch", or "mch"
+%              chan_type - "dlsch", "ulsch", "_pch_", or "_mch_"
 %              rv_idx    - Redundancy version number
 % Outputs:     out_bits - Output bits from the rate unmatcher
 % Spec:        3GPP TS 36.212 section 5.1.4.1 v10.1.0
 % Notes:       None
 % Rev History: Ben Wojtowicz 01/10/2012 Created
+%              Ben Wojtowicz 03/26/2014 Made all the chan_type values the same
+%                                       length and moved all of the N_cb calculations
+%                                       to dlsch and _pch_ chan_type values.
 %
 function [out_bits] = lte_rate_unmatch_turbo(in_bits, C, dummy_out, tx_mode, N_soft, M_dl_harq, chan_type, rv_idx)
     % Check dummy_out
@@ -114,15 +117,15 @@ function [out_bits] = lte_rate_unmatch_turbo(in_bits, C, dummy_out, tx_mode, N_s
     endfor
     K_w     = 3*K_pi;
     w       = 10000*ones(1,K_w);
-    if(tx_mode == 3 || tx_mode == 4 || tx_mode == 8 || tx_mode == 9)
-        K_mimo = 2;
-    else
-        K_mimo = 1;
-    endif
-    M_limit = 8;
-    N_ir    = floor(N_soft/(K_mimo*min(M_dl_harq,M_limit)));
-    if(chan_type == "dlsch" || chan_type == "pch")
-        N_cb = min(floor(N_ir/C), K_w);
+    if(chan_type == "dlsch" || chan_type == "_pch_")
+        if(tx_mode == 3 || tx_mode == 4 || tx_mode == 8 || tx_mode == 9)
+            K_mimo = 2;
+        else
+            K_mimo = 1;
+        endif
+        M_limit = 8;
+        N_ir    = floor(N_soft/(K_mimo*min(M_dl_harq,M_limit)));
+        N_cb    = min(floor(N_ir/C), K_w);
     else
         N_cb = K_w;
     endif

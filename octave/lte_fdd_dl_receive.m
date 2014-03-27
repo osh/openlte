@@ -1,5 +1,5 @@
 %
-% Copyright 2011-2013 Ben Wojtowicz
+% Copyright 2011-2014 Ben Wojtowicz
 %
 %    This program is free software: you can redistribute it and/or modify
 %    it under the terms of the GNU Affero General Public License as published by
@@ -30,6 +30,9 @@
 %              Ben Wojtowicz 03/17/2013 Fixed a bug calculating the number
 %                                       of CCE resources and skipped PBCH,
 %                                       PSS and SSS while decoding PDSCH
+%              Ben Wojtowicz 03/26/2014 Using the renamed lte_layer_demapper_dl
+%                                       and lte_pre_decoder_and_matched_filter_dl
+%                                       functions.
 %
 function [] = lte_fdd_dl_receive(input_samps)
     % DEFINES
@@ -624,8 +627,8 @@ function [mib_s] = decode_mib(ce_sf, symb, N_id_cell)
 
     % Try decoding with 1, 2, and 4 antennas
     for(n=[1,2,4])
-        x    = lte_pre_decoder_and_matched_filter(y_est, ce(1:n,:), "tx_diversity");
-        d    = lte_layer_demapper(x, 1, "tx_diversity");
+        x    = lte_pre_decoder_and_matched_filter_dl(y_est, ce(1:n,:), "tx_diversity");
+        d    = lte_layer_demapper_dl(x, 1, "tx_diversity");
         bits = lte_modulation_demapper(d, "qpsk");
 
         % Try decoding at each mod 4 offset
@@ -689,8 +692,8 @@ function [pcfich_s, phich_s, pdcch_s] = decode_pdcch(ce_sf, symb, N_sf, mib_s, N
     % Decode 36.211 section 6.7 v10.1.0
     pcfich_c_init = (N_sf + 1)*(2*N_id_cell + 1)*2^9 + N_id_cell;
     pcfich_c      = 1 - 2*lte_generate_prs_c(pcfich_c_init, 32);
-    pcfich_x      = lte_pre_decoder_and_matched_filter(pcfich_y_est, pcfich_ce, "tx_diversity");
-    pcfich_d      = lte_layer_demapper(pcfich_x, 1, "tx_diversity");
+    pcfich_x      = lte_pre_decoder_and_matched_filter_dl(pcfich_y_est, pcfich_ce, "tx_diversity");
+    pcfich_d      = lte_layer_demapper_dl(pcfich_x, 1, "tx_diversity");
     pcfich_bits   = lte_modulation_demapper(pcfich_d, "qpsk");
     pcfich_s.cfi  = lte_cfi_channel_decode(pcfich_bits.*pcfich_c);
 
@@ -971,8 +974,8 @@ function [pcfich_s, phich_s, pdcch_s] = decode_pdcch(ce_sf, symb, N_sf, mib_s, N
             pdcch_ce    = [pdcch_ce, reshape(pdcch_cce_ce(:,idx+2,:),mib_s.N_ant,[])];
             pdcch_ce    = [pdcch_ce, reshape(pdcch_cce_ce(:,idx+3,:),mib_s.N_ant,[])];
             pdcch_ce    = [pdcch_ce, reshape(pdcch_cce_ce(:,idx+4,:),mib_s.N_ant,[])];
-            pdcch_x     = lte_pre_decoder_and_matched_filter(pdcch_y_est, pdcch_ce, "tx_diversity");
-            pdcch_d     = lte_layer_demapper(pdcch_x, 1, "tx_diversity");
+            pdcch_x     = lte_pre_decoder_and_matched_filter_dl(pdcch_y_est, pdcch_ce, "tx_diversity");
+            pdcch_d     = lte_layer_demapper_dl(pdcch_x, 1, "tx_diversity");
             pdcch_bits  = lte_modulation_demapper(pdcch_d, "qpsk");
             pdcch_bits  = pdcch_bits.*pdcch_c((n*288)+1:(n+1)*288);
             pdcch_dci   = lte_dci_channel_decode(pdcch_bits, SI_RNTI, 0, dci_1a_size);
@@ -998,8 +1001,8 @@ function [pcfich_s, phich_s, pdcch_s] = decode_pdcch(ce_sf, symb, N_sf, mib_s, N
             pdcch_ce    = [pdcch_ce, reshape(pdcch_cce_ce(:,idx+6,:),mib_s.N_ant,[])];
             pdcch_ce    = [pdcch_ce, reshape(pdcch_cce_ce(:,idx+7,:),mib_s.N_ant,[])];
             pdcch_ce    = [pdcch_ce, reshape(pdcch_cce_ce(:,idx+8,:),mib_s.N_ant,[])];
-            pdcch_x     = lte_pre_decoder_and_matched_filter(pdcch_y_est, pdcch_ce, "tx_diversity");
-            pdcch_d     = lte_layer_demapper(pdcch_x, 1, "tx_diversity");
+            pdcch_x     = lte_pre_decoder_and_matched_filter_dl(pdcch_y_est, pdcch_ce, "tx_diversity");
+            pdcch_d     = lte_layer_demapper_dl(pdcch_x, 1, "tx_diversity");
             pdcch_bits  = lte_modulation_demapper(pdcch_d, "qpsk");
             pdcch_bits  = pdcch_bits.*pdcch_c((n*576)+1:(n+1)*576);
             pdcch_dci   = lte_dci_channel_decode(pdcch_bits, SI_RNTI, 0, dci_1a_size);
@@ -1104,8 +1107,8 @@ function [pdsch_s] = decode_pdsch(ce_sf, symb, N_sf, pcfich_s, phich_s, pdcch_s,
         tbs         = pdcch_s.alloc_s(alloc_idx+1).tbs;
         tx_mode     = pdcch_s.alloc_s(alloc_idx+1).tx_mode;
         rv_idx      = pdcch_s.alloc_s(alloc_idx+1).rv_idx;
-        x           = lte_pre_decoder_and_matched_filter(y_est, ce, pre_coder);
-        d           = lte_layer_demapper(x, N_codewords, pre_coder);
+        x           = lte_pre_decoder_and_matched_filter_dl(y_est, ce, pre_coder);
+        d           = lte_layer_demapper_dl(x, N_codewords, pre_coder);
         bits        = lte_modulation_demapper(d, mod_type);
         for(q=0:N_codewords-1)
             c_init   = rnti*2^14 + q*2^13 + N_sf*2^9 + N_id_cell;

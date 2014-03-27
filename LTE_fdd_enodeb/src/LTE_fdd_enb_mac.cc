@@ -29,6 +29,7 @@
                                    real-time priority to PHY->MAC message queue,
                                    added level to debug prints, and fixed
                                    subframe scheduling.
+    03/26/2014    Ben Wojtowicz    Fixed the uplink decode subframe scheduling.
 
 *******************************************************************************/
 
@@ -390,6 +391,7 @@ void LTE_fdd_enb_mac::construct_random_access_response(uint8  preamble,
         ul_alloc.mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
         ul_alloc.rv_idx         = 0; // From 36.213 v10.3.0 section 8.6.1
         ul_alloc.N_codewords    = 1;
+        ul_alloc.N_layers       = 1;
         ul_alloc.tx_mode        = 1; // From 36.213 v10.3.0 section 7.1
         ul_alloc.rnti           = rar.temp_crnti;
         sys_info_mutex.lock();
@@ -556,10 +558,10 @@ void LTE_fdd_enb_mac::scheduler(void)
                        sizeof(LIBLTE_PHY_ALLOCATION_STRUCT));
                 sched_dl_subfr[sched_cur_dl_subfn].pdcch.N_alloc++;
                 // Schedule UL decode 6 subframes from now
-                memcpy(&sched_ul_subfr[(sched_cur_ul_subfn+6)%10].decodes.alloc[sched_ul_subfr[(sched_cur_ul_subfn+6)%10].decodes.N_alloc],
+                memcpy(&sched_ul_subfr[(sched_cur_dl_subfn+6)%10].decodes.alloc[sched_ul_subfr[(sched_cur_dl_subfn+6)%10].decodes.N_alloc],
                        &rar_sched->ul_alloc,
                        sizeof(LIBLTE_PHY_ALLOCATION_STRUCT));
-                sched_ul_subfr[(sched_cur_ul_subfn+6)%10].decodes.N_alloc++;
+                sched_ul_subfr[(sched_cur_dl_subfn+6)%10].decodes.N_alloc++;
 
                 // Remove RAR from queue
                 rar_sched_queue.pop_front();

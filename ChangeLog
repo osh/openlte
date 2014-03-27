@@ -89,3 +89,6 @@ v00.11.00     Fixed a bug with transmitting SIB2 for 1.4MHz bandwidth in
               LTE_fdd_dl_file_gen and LTE_fdd_enodeb, fixed several bugs in
               liblte_phy.cc, LTE_fdd_enodeb, and lte_prach_detector.m, and
               added PRACH detection processing in LTE_fdd_enodeb.
+v00.12.00     Added DL-SCH/UL-SCH MAC PDU processing, added PUSCH mod/demod
+              support, added more RRC support, and added PUSCH mod/demod support
+              in octave.

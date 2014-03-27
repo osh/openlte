@@ -1,5 +1,5 @@
 %
-% Copyright 2011-2013 Ben Wojtowicz
+% Copyright 2011-2014 Ben Wojtowicz
 %
 %    This program is free software: you can redistribute it and/or modify
 %    it under the terms of the GNU Affero General Public License as published by
@@ -34,6 +34,8 @@
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
 %              Ben Wojtowicz 02/16/2012 Added control channel and SIB1 encode
 %              Ben Wojtowicz 12/14/2013 Fixed a bug in PDSCH mapping
+%              Ben Wojtowicz 03/26/2014 Using the renamed lte_layer_mapper_dl
+%                                       and lte_pre_coder_dl functions.
 %
 function [output_samps] = lte_fdd_dl_transmit(bandwidth, N_frames, N_id_2, N_id_1, N_ant, mcc, mnc, tac, cell_id, band)
     % DEFINES
@@ -208,8 +210,8 @@ function [output_samps] = lte_fdd_dl_transmit(bandwidth, N_frames, N_id_2, N_id_
                     pbch_bits  = lte_bch_channel_encode(pbch_mib, N_ant);
                     pbch_bits  = mod(pbch_bits+pbch_c, 2);
                     pbch_symbs = lte_modulation_mapper(pbch_bits, "qpsk");
-                    pbch_x     = lte_layer_mapper(pbch_symbs, N_ant, "tx_diversity");
-                    pbch_y     = lte_pre_coder(pbch_x, N_ant, "tx_diversity");
+                    pbch_x     = lte_layer_mapper_dl(pbch_symbs, N_ant, "tx_diversity");
+                    pbch_y     = lte_pre_coder_dl(pbch_x, N_ant, "tx_diversity");
                 endif
                 for(p=0:N_ant-1)
                     idx = 0;
@@ -404,8 +406,8 @@ function [mod_vec_out, N_pdcch_symbs] = map_pdcch(mod_vec_in, cfi, cfi_c, N_sf, 
     N_pcfich_reg = 4;
     cfi_bits     = mod(lte_cfi_channel_encode(cfi) + cfi_c, 2);
     cfi_symbs    = lte_modulation_mapper(cfi_bits, "qpsk");
-    cfi_x        = lte_layer_mapper(cfi_symbs, N_ant, "tx_diversity");
-    cfi_y        = lte_pre_coder(cfi_x, N_ant, "tx_diversity");
+    cfi_x        = lte_layer_mapper_dl(cfi_symbs, N_ant, "tx_diversity");
+    cfi_y        = lte_pre_coder_dl(cfi_x, N_ant, "tx_diversity");
     k_hat        = (N_sc_rb/2)*mod(N_id_cell, 2*N_rb_dl);
     for(n=0:N_pcfich_reg-1)
         cfi_k(n+1) = mod(k_hat + floor(n*N_rb_dl/2)*N_sc_rb/2, N_rb_dl*N_sc_rb);
@@ -495,8 +497,8 @@ function [mod_vec_out, N_pdcch_symbs] = map_pdcch(mod_vec_in, cfi, cfi_c, N_sf, 
         pdcch_c      = lte_generate_prs_c(pdcch_c_init, length(pdcch_bits));
         pdcch_bits   = mod(pdcch_bits+pdcch_c, 2);
         pdcch_d      = lte_modulation_mapper(pdcch_bits, alloc_s.modulation);
-        pdcch_x      = lte_layer_mapper(pdcch_d, N_ant, alloc_s.pre_coding);
-        pdcch_y      = lte_pre_coder(pdcch_x, N_ant, alloc_s.pre_coding);
+        pdcch_x      = lte_layer_mapper_dl(pdcch_d, N_ant, alloc_s.pre_coding);
+        pdcch_y      = lte_pre_coder_dl(pdcch_x, N_ant, alloc_s.pre_coding);
         pdcch_cce    = zeros(N_ant, N_pdcch_cce, 4*N_pdcch_reg_cce);
         if(alloc_s.rnti == 65535)
             % Common search space
@@ -697,8 +699,8 @@ function [mod_vec_out] = map_pdsch(mod_vec_in, N_ctrl_symbs, N_sf, N_rb_dl, N_sc
     endfor
     pdsch_bits = mod(pdsch_bits+c, 2);
     pdsch_d    = lte_modulation_mapper(pdsch_bits, alloc_s.modulation);
-    pdsch_x    = lte_layer_mapper(pdsch_d, N_ant, alloc_s.pre_coding);
-    pdsch_y    = lte_pre_coder(pdsch_x, N_ant, alloc_s.pre_coding);
+    pdsch_x    = lte_layer_mapper_dl(pdsch_d, N_ant, alloc_s.pre_coding);
+    pdsch_y    = lte_pre_coder_dl(pdsch_x, N_ant, alloc_s.pre_coding);
     for(p=0:N_ant-1)
         idx = 0;
         for(L=N_ctrl_symbs:13)

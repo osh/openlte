@@ -1,5 +1,5 @@
 %
-% Copyright 2011-2012 Ben Wojtowicz
+% Copyright 2011-2012, 2014 Ben Wojtowicz
 %
 %    This program is free software: you can redistribute it and/or modify
 %    it under the terms of the GNU Affero General Public License as published by
@@ -14,8 +14,8 @@
 %    You should have received a copy of the GNU Affero General Public License
 %    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 %
-% Function:    lte_pre_decoder_and_matched_filter
-% Description: Matched filters and unmaps a block of vectors
+% Function:    lte_pre_decoder_and_matched_filter_dl
+% Description: Matched filters and unmaps a block of downlink vectors
 %              from resources on each antenna port
 % Inputs:      y            - Block of input vectors
 %              h            - Channel estimate
@@ -27,8 +27,9 @@
 % Rev History: Ben Wojtowicz 10/28/2011 Created
 %              Ben Wojtowicz 01/29/2012 Fixed license statement
 %              Ben Wojtowicz 02/19/2012 Added newline to EOF
+%              Ben Wojtowicz 03/26/2014 Changed name to lte_pre_decoder_and_matched_filter_dl
 %
-function [x] = lte_pre_decoder_and_matched_filter(y, h, style)
+function [x] = lte_pre_decoder_and_matched_filter_dl(y, h, style)
 
     [N_ant, M_ap_symb] = size(h);
 

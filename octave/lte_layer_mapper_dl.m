@@ -1,5 +1,5 @@
 %
-% Copyright 2011-2012 Ben Wojtowicz
+% Copyright 2011-2012, 2014 Ben Wojtowicz
 %
 %    This program is free software: you can redistribute it and/or modify
 %    it under the terms of the GNU Affero General Public License as published by
@@ -14,9 +14,9 @@
 %    You should have received a copy of the GNU Affero General Public License
 %    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 %
-% Function:    lte_layer_mapper
+% Function:    lte_layer_mapper_dl
 % Description: Maps complex-valued modulation symbols onto one
-%              or several layers
+%              or several downlink layers
 % Inputs:      d            - Complex valued modulation symbols
 %              v            - Number of layers
 %              style        - Style of mapping (tx_diversity or
@@ -30,8 +30,9 @@
 %              Ben Wojtowicz 02/19/2012 Added newline to EOF
 %              Ben Wojtowicz 03/28/2012 Fixed a bug in 3 antenna spatial
 %                                       multiplexing
+%              Ben Wojtowicz 03/26/2014 Changed name to lte_layer_mapper_dl
 %
-function [x] = lte_layer_mapper(d, v, style)
+function [x] = lte_layer_mapper_dl(d, v, style)
 
     [N_cw, M_symb] = size(d);
 

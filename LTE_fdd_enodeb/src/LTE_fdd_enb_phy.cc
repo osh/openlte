@@ -30,6 +30,8 @@
                                    handle late subframes, fixed a bug with
                                    transmitting SIB2 for 1.4MHz bandwidth, and
                                    added PRACH detection.
+    03/26/2014    Ben Wojtowicz    Using the latest LTE library and added PUSCH
+                                   decode support.
 
 *******************************************************************************/
 
@@ -142,15 +144,21 @@ void LTE_fdd_enb_phy::start(LTE_fdd_enb_interface *iface)
                         sys_info.N_id_cell,
                         sys_info.N_ant,
                         sys_info.N_rb_dl,
-                        sys_info.N_sc_rb,
-                        liblte_rrc_phich_resource_num[sys_info.mib.phich_config.res],
-                        sys_info.sib2.rr_config_common_sib.prach_cnfg.root_sequence_index,
-                        sys_info.sib2.rr_config_common_sib.prach_cnfg.prach_cnfg_info.prach_config_index>>4,
-                        sys_info.sib2.rr_config_common_sib.prach_cnfg.prach_cnfg_info.zero_correlation_zone_config,
-                        sys_info.sib2.rr_config_common_sib.prach_cnfg.prach_cnfg_info.high_speed_flag);
+                        sys_info.N_sc_rb_dl,
+                        liblte_rrc_phich_resource_num[sys_info.mib.phich_config.res]);
+        liblte_phy_ul_init(phy_struct,
+                           sys_info.N_id_cell,
+                           sys_info.sib2.rr_config_common_sib.prach_cnfg.root_sequence_index,
+                           sys_info.sib2.rr_config_common_sib.prach_cnfg.prach_cnfg_info.prach_config_index>>4,
+                           sys_info.sib2.rr_config_common_sib.prach_cnfg.prach_cnfg_info.zero_correlation_zone_config,
+                           sys_info.sib2.rr_config_common_sib.prach_cnfg.prach_cnfg_info.high_speed_flag,
+                           sys_info.sib2.rr_config_common_sib.pusch_cnfg.ul_rs.group_assignment_pusch,
+                           sys_info.sib2.rr_config_common_sib.pusch_cnfg.ul_rs.group_hopping_enabled,
+                           sys_info.sib2.rr_config_common_sib.pusch_cnfg.ul_rs.sequence_hopping_enabled,
+                           sys_info.sib2.rr_config_common_sib.pusch_cnfg.ul_rs.cyclic_shift,
+                           0);
 
         // Downlink
-        // FIXME: Check this against MAC and RADIO
         for(i=0; i<10; i++)
         {
             mac_pdsch_schedule[i].fn_combo            = i;
@@ -271,6 +279,9 @@ void LTE_fdd_enb_phy::stop(void)
     {
         started = false;
 
+        liblte_phy_ul_cleanup(phy_struct);
+        liblte_phy_cleanup(phy_struct);
+
         delete mac_comm_msgq;
     }
 }
@@ -374,7 +385,7 @@ void LTE_fdd_enb_phy::handle_pdsch_schedule(LTE_FDD_ENB_PDSCH_SCHEDULE_MSG_STRUC
                                   LTE_FDD_ENB_DEBUG_LEVEL_PHY,
                                   __FILE__,
                                   __LINE__,
-                                  "Late subframe from MAC:%u, PHY is currently on %u",
+                                  "Late DL subframe from MAC:%u, PHY is currently on %u",
                                   pdsch_schedule->fn_combo,
                                   dl_fn_combo);
 
@@ -401,16 +412,26 @@ void LTE_fdd_enb_phy::handle_pusch_schedule(LTE_FDD_ENB_PUSCH_SCHEDULE_MSG_STRUC
 {
     boost::mutex::scoped_lock lock(pusch_mutex);
 
-    interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
-                              LTE_FDD_ENB_DEBUG_LEVEL_PHY,
-                              __FILE__,
-                              __LINE__,
-                              "Received PUSCH schedule from MAC %u:%u",
-                              pusch_schedule->fn_combo,
-                              mac_pusch_schedule[pusch_schedule->fn_combo%10].fn_combo);
-
-    if(mac_pusch_schedule[pusch_schedule->fn_combo%10].fn_combo == pusch_schedule->fn_combo)
+    if(pusch_schedule->fn_combo                 < ul_fn_combo &&
+       (ul_fn_combo - pusch_schedule->fn_combo) < (LTE_FDD_ENB_FN_COMBO_MAX/2))
     {
+        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_PHY,
+                                  __FILE__,
+                                  __LINE__,
+                                  "Late UL subframe from MAC:%u, PHY is currently on %u",
+                                  pusch_schedule->fn_combo,
+                                  ul_fn_combo);
+    }else{
+        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_PHY,
+                                  __FILE__,
+                                  __LINE__,
+                                  "Received PUSCH schedule from MAC %u:%u %u",
+                                  pusch_schedule->fn_combo,
+                                  ul_fn_combo,
+                                  pusch_schedule->decodes.N_alloc);
+
         memcpy(&mac_pusch_schedule[pusch_schedule->fn_combo%10], pusch_schedule, sizeof(LTE_FDD_ENB_PUSCH_SCHEDULE_MSG_STRUCT));
     }
 }
@@ -432,7 +453,7 @@ void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
     {
         for(i=0; i<14; i++)
         {
-            for(j=0; j<LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP; j++)
+            for(j=0; j<LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP; j++)
             {
                 dl_subframe.tx_symb_re[p][i][j] = 0;
                 dl_subframe.tx_symb_im[p][i][j] = 0;
@@ -622,7 +643,7 @@ void LTE_fdd_enb_phy::process_ul(LTE_FDD_ENB_RADIO_RX_BUF_STRUCT *rx_buf)
 {
     uint32 N_skipped_subfrs = 0;
     uint32 sfn;
-    uint32 subfn;
+    uint32 i;
 
     // Check the received fn_combo
     if(rx_buf->fn_combo != ul_fn_combo)
@@ -638,16 +659,16 @@ void LTE_fdd_enb_phy::process_ul(LTE_FDD_ENB_RADIO_RX_BUF_STRUCT *rx_buf)
         dl_fn_combo = (dl_fn_combo + N_skipped_subfrs) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
         ul_fn_combo = (ul_fn_combo + N_skipped_subfrs) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
     }
-    sfn   = ul_fn_combo/10;
-    subfn = ul_fn_combo%10;
+    sfn             = ul_fn_combo/10;
+    ul_subframe.num = ul_fn_combo%10;
 
     // Handle PRACH
     if((sfn % prach_sfn_mod) == 0)
     {
-        if((subfn % prach_subfn_mod) == prach_subfn_check)
+        if((ul_subframe.num % prach_subfn_mod) == prach_subfn_check)
         {
-            if(subfn != 0 ||
-               true  == prach_subfn_zero_allowed)
+            if(ul_subframe.num != 0 ||
+               true            == prach_subfn_zero_allowed)
             {
                 prach_decode.fn_combo = ul_fn_combo;
                 liblte_phy_detect_prach(phy_struct,
@@ -666,6 +687,41 @@ void LTE_fdd_enb_phy::process_ul(LTE_FDD_ENB_RADIO_RX_BUF_STRUCT *rx_buf)
             }
         }
     }
+
+    // Handle PUCCH
+    // FIXME
+
+    // Handle PUSCH
+    if(0 != mac_pusch_schedule[ul_subframe.num].decodes.N_alloc)
+    {
+        if(LIBLTE_SUCCESS == liblte_phy_get_ul_subframe(phy_struct,
+                                                        rx_buf->i_buf,
+                                                        rx_buf->q_buf,
+                                                        &ul_subframe))
+        {
+            for(i=0; i<mac_pusch_schedule[ul_subframe.num].decodes.N_alloc; i++)
+            {
+                if(LIBLTE_SUCCESS == liblte_phy_pusch_channel_decode(phy_struct,
+                                                                     &ul_subframe,
+                                                                     &mac_pusch_schedule[ul_subframe.num].decodes.alloc[i],
+                                                                     sys_info.N_id_cell,
+                                                                     1,
+                                                                     pusch_decode.msg.msg,
+                                                                     &pusch_decode.msg.N_bits))
+                {
+                    pusch_decode.fn_combo = ul_fn_combo;
+                    pusch_decode.rnti     = mac_pusch_schedule[ul_subframe.num].decodes.alloc[i].rnti;
+
+                    LTE_fdd_enb_msgq::send(phy_mac_mq,
+                                           LTE_FDD_ENB_MESSAGE_TYPE_PUSCH_DECODE,
+                                           LTE_FDD_ENB_DEST_LAYER_MAC,
+                                           (LTE_FDD_ENB_MESSAGE_UNION *)&pusch_decode,
+                                           sizeof(LTE_FDD_ENB_PUSCH_DECODE_MSG_STRUCT));
+                }
+            }
+        }
+    }
+    mac_pusch_schedule[ul_subframe.num].decodes.N_alloc = 0;
 
     // Update counters
     ul_fn_combo = (ul_fn_combo + 1) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);

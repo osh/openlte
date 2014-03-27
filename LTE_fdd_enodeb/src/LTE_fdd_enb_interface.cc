@@ -28,6 +28,7 @@
     01/18/2014    Ben Wojtowicz    Added dynamic variable support, added level
                                    to debug prints, fixed usec time in debug
                                    prints, and added uint32 variables.
+    03/26/2014    Ben Wojtowicz    Added message printing.
 
 *******************************************************************************/
 
@@ -366,15 +367,20 @@ void LTE_fdd_enb_interface::send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ENUM   type,
             tmp_msg += args_msg;
         }
         tmp_msg += " ";
+        hex_val  = 0;
         for(i=0; i<lte_msg->N_bits; i++)
         {
-            if((i % 8) == 0 && i != 0)
+            hex_val <<= 1;
+            hex_val  |= lte_msg->msg[i];
+            if((i % 4) == 3)
             {
-                // FIXME: print
-                hex_val = lte_msg->msg[i];
-            }else{
-                hex_val <<= 1;
-                hex_val  |= lte_msg->msg[i];
+                if(hex_val < 0xA)
+                {
+                    tmp_msg += (char)(hex_val + '0');
+                }else{
+                    tmp_msg += (char)((hex_val-0xA) + 'A');
+                }
+                hex_val = 0;
             }
         }
         tmp_msg += "\n";

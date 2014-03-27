@@ -1,5 +1,5 @@
 %
-% Copyright 2012 Ben Wojtowicz
+% Copyright 2012, 2014 Ben Wojtowicz
 %
 %    This program is free software: you can redistribute it and/or modify
 %    it under the terms of the GNU Affero General Public License as published by
@@ -41,6 +41,8 @@
 % Spec:        3GPP TS 36.212 section 5.1.3.2 v10.1.0
 % Notes:       Currently not handling filler bits
 % Rev History: Ben Wojtowicz 02/18/2012 Created
+%              Ben Wojtowicz 03/26/2014 Added hard decision conversion before
+%                                       combining the 4 bit streams
 %
 function [out_bits] = lte_turbo_decode(in_bits, F)
     % Undo trellis termination
@@ -99,6 +101,11 @@ function [out_bits] = lte_turbo_decode(in_bits, F)
 
     % Step 14: Soft combine rx_in_1, in_calc_1, in_calc_2, and in_calc_3 to get output
     for(n=0:length(rx_in_1)-1)
+        if(rx_in_1(n+1) > 0)
+            rx_in_1(n+1) = 1;
+        else
+            rx_in_1(n+1) = -1;
+        endif
         tmp = rx_in_1(n+1) + in_calc_1(n+1) + in_calc_2(n+1) + in_calc_3(n+1);
         if(tmp >= 0)
             out_bits(n+1) = 0;

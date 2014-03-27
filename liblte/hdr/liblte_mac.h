@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     07/21/2013    Ben Wojtowicz    Created file.
+    03/26/2014    Ben Wojtowicz    Added DL-SCH/UL-SCH PDU handling.
 
 *******************************************************************************/
 
@@ -63,7 +64,7 @@
 *******************************************************************************/
 
 /*********************************************************************
-    PDU Name: DL-SCH and UL-SCH
+    PDU Name: DL-SCH and UL-SCH MAC PDU
 
     Description: PDU containing a MAC header, zero or more MAC SDUs,
                  and zero or more MAC control elements
@@ -71,10 +72,23 @@
     Document Reference: 36.321 v10.2.0 Section 6.1.2
 *********************************************************************/
 // Defines
+#define LIBLTE_MAC_PDU_MAX_N_SUBHEADERS 10
 // Enums
+// FIXME: LCID
 // Structs
+typedef struct{
+    LIBLTE_MSG_STRUCT sdu;
+    uint32            lcid;
+}LIBLTE_MAC_PDU_SUBHEADER_STRUCT;
+typedef struct{
+    LIBLTE_MAC_PDU_SUBHEADER_STRUCT subheader[LIBLTE_MAC_PDU_MAX_N_SUBHEADERS];
+    uint32                          N_subheaders;
+}LIBLTE_MAC_PDU_STRUCT;
 // Functions
-// FIXME
+LIBLTE_ERROR_ENUM liblte_mac_pack_mac_pdu(LIBLTE_MAC_PDU_STRUCT *pdu,
+                                          LIBLTE_MSG_STRUCT     *msg);
+LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_MSG_STRUCT     *msg,
+                                            LIBLTE_MAC_PDU_STRUCT *pdu);
 
 /*********************************************************************
     PDU Name: Transparent

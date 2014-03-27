@@ -26,6 +26,7 @@
     11/09/2013    Ben Wojtowicz    Created file
     01/18/2014    Ben Wojtowicz    Added dynamic variables and added level to
                                    debug prints.
+    03/26/2014    Ben Wojtowicz    Using the latest LTE library.
 
 *******************************************************************************/
 
@@ -141,7 +142,8 @@ typedef enum{
     LTE_FDD_ENB_PARAM_N_RB_DL,
     LTE_FDD_ENB_PARAM_N_RB_UL,
     LTE_FDD_ENB_PARAM_DL_BW,
-    LTE_FDD_ENB_PARAM_N_SC_RB,
+    LTE_FDD_ENB_PARAM_N_SC_RB_DL,
+    LTE_FDD_ENB_PARAM_N_SC_RB_UL,
     LTE_FDD_ENB_PARAM_N_ANT,
     LTE_FDD_ENB_PARAM_N_ID_CELL,
     LTE_FDD_ENB_PARAM_N_ID_2,
@@ -185,7 +187,8 @@ static const char lte_fdd_enb_param_text[LTE_FDD_ENB_PARAM_N_ITEMS][100] = {"ban
                                                                             "n_rb_dl",
                                                                             "n_rb_ul",
                                                                             "dl_bw",
-                                                                            "n_sc_rb",
+                                                                            "n_sc_rb_dl",
+                                                                            "n_sc_rb_ul",
                                                                             "n_ant",
                                                                             "n_id_cell",
                                                                             "n_id_2",

@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2012-2013 Ben Wojtowicz
+    Copyright 2012-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -36,6 +36,9 @@
                                    SIB5, SIB6, SIB7, and paging packing and
                                    unpacking.
     07/21/2013    Ben Wojtowicz    Using the common msg structure.
+    03/26/2014    Ben Wojtowicz    Added support for RRC Connection Request,
+                                   RRC Connection Reestablishment Request,
+                                   and UL CCCH Messages.
 
 *******************************************************************************/
 
@@ -3694,6 +3697,105 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_8_ie(uint8              
 *******************************************************************************/
 
 /*********************************************************************
+    Message Name: RRC Connection Reestablishment Request
+
+    Description: Used to request the reestablishment of an RRC
+                 connection
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// Defines
+// Enums
+typedef enum{
+    LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_C_RNTI = 0,
+    LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_PHYS_CELL_ID,
+    LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_SHORT_MAC_I,
+    LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_N_ITEMS,
+}LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_ENUM;
+static const char liblte_rrc_con_reest_req_ue_id_type_text[LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_N_ITEMS][20] = {"C-RNTI",
+                                                                                                               "Phys Cell ID",
+                                                                                                               "Short MAC I"};
+typedef enum{
+    LIBLTE_RRC_CON_REEST_REQ_CAUSE_RECONFIG_FAILURE = 0,
+    LIBLTE_RRC_CON_REEST_REQ_CAUSE_HANDOVER_FAILURE,
+    LIBLTE_RRC_CON_REEST_REQ_CAUSE_OTHER_FAILURE,
+    LIBLTE_RRC_CON_REEST_REQ_CAUSE_SPARE1,
+    LIBLTE_RRC_CON_REEST_REQ_CAUSE_N_ITEMS,
+}LIBLTE_RRC_CON_REEST_REQ_CAUSE_ENUM;
+static const char liblte_rrc_con_reest_req_cause_text[LIBLTE_RRC_CON_REEST_REQ_CAUSE_N_ITEMS][100] = {"Reconfiguration Failure",
+                                                                                                      "Handover Failure",
+                                                                                                      "Other Failure",
+                                                                                                      "SPARE"};
+// Structs
+typedef union{
+    uint16 c_rnti;
+    uint16 phys_cell_id;
+    uint16 short_mac_i;
+}LIBLTE_RRC_CON_REEST_REQ_UE_ID_UNION;
+typedef struct{
+    LIBLTE_RRC_CON_REEST_REQ_UE_ID_UNION     ue_id;
+    LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_ENUM ue_id_type;
+    LIBLTE_RRC_CON_REEST_REQ_CAUSE_ENUM      cause;
+}LIBLTE_RRC_CON_REEST_REQ_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_con_reest_req_msg(LIBLTE_RRC_CON_REEST_REQ_STRUCT *con_reest_req,
+                                                        LIBLTE_MSG_STRUCT               *msg);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_con_reest_req_msg(LIBLTE_MSG_STRUCT               *msg,
+                                                          LIBLTE_RRC_CON_REEST_REQ_STRUCT *con_reest_req);
+
+/*********************************************************************
+    Message Name: RRC Connection Request
+
+    Description: Used to request the establishment of an RRC
+                 connection
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// Defines
+// Enums
+typedef enum{
+    LIBLTE_RRC_CON_REQ_UE_ID_TYPE_S_TMSI = 0,
+    LIBLTE_RRC_CON_REQ_UE_ID_TYPE_RANDOM_VALUE,
+    LIBLTE_RRC_CON_REQ_UE_ID_TYPE_N_ITEMS,
+}LIBLTE_RRC_CON_REQ_UE_ID_TYPE_ENUM;
+static const char liblte_rrc_con_req_ue_id_type_text[LIBLTE_RRC_CON_REQ_UE_ID_TYPE_N_ITEMS][20] = {"S-TMSI",
+                                                                                                   "Random Value"};
+typedef enum{
+    LIBLTE_RRC_CON_REQ_EST_CAUSE_EMERGENCY = 0,
+    LIBLTE_RRC_CON_REQ_EST_CAUSE_HIGH_PRIO_ACCESS,
+    LIBLTE_RRC_CON_REQ_EST_CAUSE_MT_ACCESS,
+    LIBLTE_RRC_CON_REQ_EST_CAUSE_MO_SIGNALLING,
+    LIBLTE_RRC_CON_REQ_EST_CAUSE_MO_DATA,
+    LIBLTE_RRC_CON_REQ_EST_CAUSE_SPARE3,
+    LIBLTE_RRC_CON_REQ_EST_CAUSE_SPARE2,
+    LIBLTE_RRC_CON_REQ_EST_CAUSE_SPARE1,
+    LIBLTE_RRC_CON_REQ_EST_CAUSE_N_ITEMS,
+}LIBLTE_RRC_CON_REQ_EST_CAUSE_ENUM;
+static const char liblte_rrc_con_req_est_cause_text[LIBLTE_RRC_CON_REQ_EST_CAUSE_N_ITEMS][100] = {"Emergency",
+                                                                                                  "High Priority Access",
+                                                                                                  "MT Access",
+                                                                                                  "MO Signalling",
+                                                                                                  "MO Data",
+                                                                                                  "SPARE",
+                                                                                                  "SPARE",
+                                                                                                  "SPARE"};
+// Structs
+typedef union{
+    LIBLTE_RRC_S_TMSI_STRUCT s_tmsi;
+    uint64                   random;
+}LIBLTE_RRC_CON_REQ_UE_ID_UNION;
+typedef struct{
+    LIBLTE_RRC_CON_REQ_UE_ID_UNION     ue_id;
+    LIBLTE_RRC_CON_REQ_UE_ID_TYPE_ENUM ue_id_type;
+    LIBLTE_RRC_CON_REQ_EST_CAUSE_ENUM  cause;
+}LIBLTE_RRC_CON_REQ_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_con_req_msg(LIBLTE_RRC_CON_REQ_STRUCT *con_req,
+                                                  LIBLTE_MSG_STRUCT         *msg);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_con_req_msg(LIBLTE_MSG_STRUCT         *msg,
+                                                    LIBLTE_RRC_CON_REQ_STRUCT *con_req);
+
+/*********************************************************************
     Message Name: System Information Block Type 1
 
     Description: Contains information relevant when evaluating if a
@@ -4002,6 +4104,21 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_dlsch_msg(LIBLTE_MSG_STRUCT            
                                                    LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT *bcch_dlsch_msg);
 
 /*********************************************************************
+    Message Name: MCCH Message
+
+    Description: Contains the set of RRC messages that may be sent
+                 from the E-UTRAN to the UE on the MCCH logical
+                 channel
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
     Message Name: PCCH Message
 
     Description: Contains the set of RRC messages that may be sent
@@ -4019,5 +4136,83 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_pcch_msg(LIBLTE_RRC_PCCH_MSG_STRUCT *pcch_msg,
                                            LIBLTE_MSG_STRUCT          *msg);
 LIBLTE_ERROR_ENUM liblte_rrc_unpack_pcch_msg(LIBLTE_MSG_STRUCT          *msg,
                                              LIBLTE_RRC_PCCH_MSG_STRUCT *pcch_msg);
+
+/*********************************************************************
+    Message Name: DL CCCH Message
+
+    Description: Contains the set of RRC messages that may be sent
+                 from the E-UTRAN to the UE on the CCCH logical
+                 channel
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    Message Name: DL DCCH Message
+
+    Description: Contains the set of RRC messages that may be sent
+                 from the E-UTRAN to the UE on the DCCH logical
+                 channel
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    Message Name: UL CCCH Message
+
+    Description: Contains the set of RRC messages that may be sent
+                 from the UE to the E-UTRAN on the CCCH logical
+                 channel
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.1
+*********************************************************************/
+// Defines
+// Enums
+typedef enum{
+    LIBLTE_RRC_UL_CCCH_MSG_TYPE_RRC_CON_REEST_REQ = 0,
+    LIBLTE_RRC_UL_CCCH_MSG_TYPE_RRC_CON_REQ,
+    LIBLTE_RRC_UL_CCCH_MSG_TYPE_N_ITEMS,
+}LIBLTE_RRC_UL_CCCH_MSG_TYPE_ENUM;
+static const char liblte_rrc_ul_ccch_msg_type_text[LIBLTE_RRC_UL_CCCH_MSG_TYPE_N_ITEMS][100] = {"RRC Connection Reestablishment Request",
+                                                                                                "RRC Connection Request"};
+// Structs
+typedef union{
+    LIBLTE_RRC_CON_REEST_REQ_STRUCT rrc_con_reest_req;
+    LIBLTE_RRC_CON_REQ_STRUCT       rrc_con_req;
+}LIBLTE_RRC_UL_CCCH_MSG_TYPE_UNION;
+typedef struct{
+    LIBLTE_RRC_UL_CCCH_MSG_TYPE_UNION msg;
+    LIBLTE_RRC_UL_CCCH_MSG_TYPE_ENUM  msg_type;
+}LIBLTE_RRC_UL_CCCH_MSG_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_rrc_pack_ul_ccch_msg(LIBLTE_RRC_UL_CCCH_MSG_STRUCT *ul_ccch_msg,
+                                              LIBLTE_MSG_STRUCT             *msg);
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_ul_ccch_msg(LIBLTE_MSG_STRUCT             *msg,
+                                                LIBLTE_RRC_UL_CCCH_MSG_STRUCT *ul_ccch_msg);
+
+/*********************************************************************
+    Message Name: UL DCCH Message
+
+    Description: Contains the set of RRC messages that may be sent
+                 from the UE to the E-UTRAN on the DCCH logical
+                 channel
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
 
 #endif /* __LIBLTE_RRC_H__ */

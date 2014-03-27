@@ -44,6 +44,7 @@
                                    and output data type.
     01/18/2014    Ben Wojtowicz    Fixed a bug with transmitting SIB2 for 1.4MHz
                                    bandwidth.
+    03/26/2014    Ben Wojtowicz    Using the latest LTE library.
 
 *******************************************************************************/
 
@@ -291,12 +292,8 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                             N_id_cell,
                             N_ant,
                             N_rb_dl,
-                            LIBLTE_PHY_N_SC_RB_NORMAL_CP,
-                            phich_res,
-                            0,
-                            0,
-                            1,
-                            false);
+                            LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP,
+                            phich_res);
         }
     }
     free(line);
@@ -313,7 +310,7 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                 {
                     for(j=0; j<16; j++)
                     {
-                        for(k=0; k<LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_NORMAL_CP; k++)
+                        for(k=0; k<LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP; k++)
                         {
                             subframe.tx_symb_re[p][j][k] = 0;
                             subframe.tx_symb_im[p][j][k] = 0;

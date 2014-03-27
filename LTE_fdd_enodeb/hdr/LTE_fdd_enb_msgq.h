@@ -26,6 +26,7 @@
     ----------    -------------    --------------------------------------------
     11/09/2013    Ben Wojtowicz    Created file
     01/18/2014    Ben Wojtowicz    Added the ability to set priorities.
+    03/26/2014    Ben Wojtowicz    Added RNTI to PUSCH decode message.
 
 *******************************************************************************/
 
@@ -133,6 +134,7 @@ typedef struct{
 typedef struct{
     LIBLTE_MSG_STRUCT msg;
     uint32            fn_combo;
+    uint16            rnti;
 }LTE_FDD_ENB_PUSCH_DECODE_MSG_STRUCT;
 
 typedef union{

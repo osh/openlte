@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2012-2013 Ben Wojtowicz
+    Copyright 2012-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -38,6 +38,9 @@
                                    message struct.
     09/16/2013    Ben Wojtowicz    Added error checking on sizes passed to
                                    memcpy.
+    03/26/2014    Ben Wojtowicz    Added support for RRC Connection Request,
+                                   RRC Connection Reestablishment Request,
+                                   and UL CCCH Messages.
 
 *******************************************************************************/
 
@@ -5806,6 +5809,172 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_8_ie(uint8              
 *******************************************************************************/
 
 /*********************************************************************
+    Message Name: RRC Connection Reestablishment Request
+
+    Description: Used to request the reestablishment of an RRC
+                 connection
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_con_reest_req_msg(LIBLTE_RRC_CON_REEST_REQ_STRUCT *con_reest_req,
+                                                        LIBLTE_MSG_STRUCT               *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint8              ext     = false;
+
+    if(con_reest_req != NULL &&
+       msg           != NULL)
+    {
+        // Extension choice
+        rrc_value_2_bits(ext, &msg_ptr, 1);
+
+        if(!ext)
+        {
+            // UE Identity Type
+            rrc_value_2_bits(con_reest_req->ue_id_type, &msg_ptr, 2);
+
+            // UE Identity
+            if(LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_C_RNTI == con_reest_req->ue_id_type)
+            {
+                liblte_rrc_pack_c_rnti_ie((uint16)con_reest_req->ue_id.c_rnti, &msg_ptr);
+            }else if(LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_PHYS_CELL_ID == con_reest_req->ue_id_type){
+                liblte_rrc_pack_phys_cell_id_ie((uint16)con_reest_req->ue_id.phys_cell_id, &msg_ptr);
+            }else{ // LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_SHORT_MAC_I == con_reest_req->ue_id_type
+                liblte_rrc_pack_short_mac_i_ie((uint16)con_reest_req->ue_id.short_mac_i, &msg_ptr);
+            }
+
+            // Reestablishment Cause
+            rrc_value_2_bits(con_reest_req->cause, &msg_ptr, 2);
+
+            // Spare
+            rrc_value_2_bits(0, &msg_ptr, 2);
+
+            err = LIBLTE_SUCCESS;
+        }
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_con_reest_req_msg(LIBLTE_MSG_STRUCT               *msg,
+                                                          LIBLTE_RRC_CON_REEST_REQ_STRUCT *con_reest_req)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg           != NULL &&
+       con_reest_req != NULL)
+    {
+        // Extension Choice
+        if(!rrc_bits_2_value(&msg_ptr, 1))
+        {
+            // UE Identity Type
+            con_reest_req->ue_id_type = (LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_ENUM)rrc_bits_2_value(&msg_ptr, 2);
+
+            // UE Identity
+            if(LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_C_RNTI == con_reest_req->ue_id_type)
+            {
+                liblte_rrc_unpack_c_rnti_ie(&msg_ptr, (uint16 *)&con_reest_req->ue_id);
+            }else if(LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_PHYS_CELL_ID == con_reest_req->ue_id_type){
+                liblte_rrc_unpack_phys_cell_id_ie(&msg_ptr, (uint16 *)&con_reest_req->ue_id);
+            }else{ // LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_SHORT_MAC_I == con_reest_req->ue_id_type
+                liblte_rrc_unpack_short_mac_i_ie(&msg_ptr, (uint16 *)&con_reest_req->ue_id);
+            }
+
+            // Reestablishment Cause
+            con_reest_req->cause = (LIBLTE_RRC_CON_REEST_REQ_CAUSE_ENUM)rrc_bits_2_value(&msg_ptr, 2);
+
+            err = LIBLTE_SUCCESS;
+        }
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    Message Name: RRC Connection Request
+
+    Description: Used to request the establishment of an RRC
+                 connection
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_con_req_msg(LIBLTE_RRC_CON_REQ_STRUCT *con_req,
+                                                  LIBLTE_MSG_STRUCT         *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint8              ext     = false;
+
+    if(con_req != NULL &&
+       msg     != NULL)
+    {
+        // Extension choice
+        rrc_value_2_bits(ext, &msg_ptr, 1);
+
+        if(!ext)
+        {
+            // UE Identity Type
+            rrc_value_2_bits(con_req->ue_id_type, &msg_ptr, 1);
+
+            // UE Identity
+            if(LIBLTE_RRC_CON_REQ_UE_ID_TYPE_S_TMSI == con_req->ue_id_type)
+            {
+                liblte_rrc_pack_s_tmsi_ie((LIBLTE_RRC_S_TMSI_STRUCT *)&con_req->ue_id,
+                                          &msg_ptr);
+            }else{ // LIBLTE_RRC_CON_REQ_UE_ID_TYPE_RANDOM_VALUE == con_req->ue_id_type
+                rrc_value_2_bits((uint32)(con_req->ue_id.random >> 32), &msg_ptr, 8);
+                rrc_value_2_bits((uint32)(con_req->ue_id.random), &msg_ptr, 32);
+            }
+
+            // Establishment Cause
+            rrc_value_2_bits(con_req->cause, &msg_ptr, 3);
+
+            // Spare
+            rrc_value_2_bits(0, &msg_ptr, 1);
+
+            err = LIBLTE_SUCCESS;
+        }
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_con_req_msg(LIBLTE_MSG_STRUCT         *msg,
+                                                    LIBLTE_RRC_CON_REQ_STRUCT *con_req)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg     != NULL &&
+       con_req != NULL)
+    {
+        // Extension Choice
+        if(!rrc_bits_2_value(&msg_ptr, 1))
+        {
+            // UE Identity Type
+            con_req->ue_id_type = (LIBLTE_RRC_CON_REQ_UE_ID_TYPE_ENUM)rrc_bits_2_value(&msg_ptr, 1);
+
+            // UE Identity
+            if(LIBLTE_RRC_CON_REQ_UE_ID_TYPE_S_TMSI == con_req->ue_id_type)
+            {
+                liblte_rrc_unpack_s_tmsi_ie(&msg_ptr,
+                                            (LIBLTE_RRC_S_TMSI_STRUCT *)&con_req->ue_id);
+            }else{ // LIBLTE_RRC_CON_REQ_UE_ID_TYPE_RANDOM_VALUE == con_req->ue_id_type
+                con_req->ue_id.random  = (uint64)rrc_bits_2_value(&msg_ptr, 8) << 32;
+                con_req->ue_id.random |= rrc_bits_2_value(&msg_ptr, 32);
+            }
+
+            // Establishment Cause
+            con_req->cause = (LIBLTE_RRC_CON_REQ_EST_CAUSE_ENUM)rrc_bits_2_value(&msg_ptr, 3);
+
+            err = LIBLTE_SUCCESS;
+        }
+    }
+
+    return(err);
+}
+
+/*********************************************************************
     Message Name: System Information Block Type 1
 
     Description: Contains information relevant when evaluating if a
@@ -6588,6 +6757,117 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_pcch_msg(LIBLTE_MSG_STRUCT          *msg,
 
     return(err);
 }
+
+/*********************************************************************
+    Message Name: DL CCCH Message
+
+    Description: Contains the set of RRC messages that may be sent
+                 from the E-UTRAN to the UE on the downlink CCCH
+                 logical channel
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.1
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: DL DCCH Message
+
+    Description: Contains the set of RRC messages that may be sent
+                 from the E-UTRAN to the UE on the downlink DCCH
+                 logical channel
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.1
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: UL CCCH Message
+
+    Description: Contains the set of RRC messages that may be sent
+                 from the UE to the E-UTRAN on the uplink CCCH
+                 logical channel
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.1
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_rrc_pack_ul_ccch_msg(LIBLTE_RRC_UL_CCCH_MSG_STRUCT *ul_ccch_msg,
+                                              LIBLTE_MSG_STRUCT             *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint8              ext     = false;
+
+    if(ul_ccch_msg != NULL &&
+       msg         != NULL)
+    {
+        // Extension indicator
+        rrc_value_2_bits(ext, &msg_ptr, 1);
+
+        // Message type choice
+        rrc_value_2_bits(ul_ccch_msg->msg_type, &msg_ptr, 1);
+
+        if(LIBLTE_RRC_UL_CCCH_MSG_TYPE_RRC_CON_REEST_REQ == ul_ccch_msg->msg_type)
+        {
+            err = liblte_rrc_pack_rrc_con_reest_req_msg((LIBLTE_RRC_CON_REEST_REQ_STRUCT *)&ul_ccch_msg->msg,
+                                                        &global_msg);
+        }else{ // LIBLTE_RRC_UL_CCCH_MSG_TYPE_RRC_CON_REQ == ul_ccch_msg->msg_type
+            err = liblte_rrc_pack_rrc_con_req_msg((LIBLTE_RRC_CON_REQ_STRUCT *)&ul_ccch_msg->msg,
+                                                  &global_msg);
+        }
+
+        if(global_msg.N_bits <= (LIBLTE_MAX_MSG_SIZE - 2))
+        {
+            memcpy(msg_ptr, global_msg.msg, global_msg.N_bits);
+            msg->N_bits = global_msg.N_bits + 2;
+        }else{
+            msg->N_bits = 0;
+            err         = LIBLTE_ERROR_INVALID_INPUTS;
+        }
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_ul_ccch_msg(LIBLTE_MSG_STRUCT             *msg,
+                                                LIBLTE_RRC_UL_CCCH_MSG_STRUCT *ul_ccch_msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint8              ext;
+
+    if(msg         != NULL &&
+       ul_ccch_msg != NULL)
+    {
+        // Extension indicator
+        ext = rrc_bits_2_value(&msg_ptr, 1);
+
+        // Message type choice
+        ul_ccch_msg->msg_type = (LIBLTE_RRC_UL_CCCH_MSG_TYPE_ENUM)rrc_bits_2_value(&msg_ptr, 1);
+
+        // Message
+        memcpy(global_msg.msg, msg_ptr, msg->N_bits-(msg_ptr-msg->msg));
+        global_msg.N_bits = msg->N_bits-(msg_ptr-msg->msg);
+        if(LIBLTE_RRC_UL_CCCH_MSG_TYPE_RRC_CON_REEST_REQ == ul_ccch_msg->msg_type)
+        {
+            err = liblte_rrc_unpack_rrc_con_reest_req_msg(&global_msg,
+                                                          (LIBLTE_RRC_CON_REEST_REQ_STRUCT *)&ul_ccch_msg->msg);
+        }else{ // LIBLTE_RRC_UL_CCCH_MSG_TYPE_RRC_CON_REQ == ul_ccch_msg->msg_type
+            err = liblte_rrc_unpack_rrc_con_req_msg(&global_msg,
+                                                    (LIBLTE_RRC_CON_REQ_STRUCT *)&ul_ccch_msg->msg);
+        }
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    Message Name: UL DCCH Message
+
+    Description: Contains the set of RRC messages that may be sent
+                 from the UE to the E-UTRAN on the uplink DCCH
+                 logical channel
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.1
+*********************************************************************/
+// FIXME
 
 /*******************************************************************************
                               LOCAL FUNCTIONS
