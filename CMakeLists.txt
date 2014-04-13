@@ -23,7 +23,7 @@
 ########################################################################
 cmake_minimum_required(VERSION 2.6)
 project(openLTE CXX C)
-set(openLTE_version 0.12.0)
+set(openLTE_version 0.12.1)
 enable_testing()
 
 #select the release build type by default to get optimization flags
@@ -88,7 +88,7 @@ set(GRC_BLOCKS_DIR      ${GR_PKG_DATA_DIR}/grc/blocks)
 ########################################################################
 # Find gnuradio build dependencies
 ########################################################################
-set(GR_REQUIRED_COMPONENTS RUNTIME BLOCKS PMT)
+set(GR_REQUIRED_COMPONENTS RUNTIME BLOCKS FILTER PMT)
 find_package(Gnuradio "3.7.0")
 find_package(GnuradioOsmosdr)
 find_package(Uhd)
@@ -117,6 +117,8 @@ include_directories(
     ${Boost_INCLUDE_DIRS}
     ${FFTW3F_INCLUDE_DIRS}
     ${GNURADIO_RUNTIME_INCLUDE_DIRS}
+    ${GNURADIO_BLOCKS_INCLUDE_DIRS}
+    ${GNURADIO_FILTER_INCLUDE_DIRS}
     ${GNURADIO_PMT_INCLUDE_DIRS}
     ${GNURADIO_OSMOSDR_INCLUDE_DIRS}
     ${GR_UHD_INCLUDE_DIRS}
@@ -127,6 +129,8 @@ link_directories(
     ${Boost_LIBRARY_DIRS}
     ${FFTW3F_LIBRARY_DIRS}
     ${GNURADIO_RUNTIME_LIBRARY_DIRS}
+    ${GNURADIO_BLOCKS_LIBRARY_DIRS}
+    ${GNURADIO_FILTER_LIBRARY_DIRS}
     ${GNURADIO_PMT_LIBRARY_DIRS}
     ${GNURADIO_OSMOSDR_LIBRARY_DIRS}
     ${UHD_LIBRARY_DIRS}

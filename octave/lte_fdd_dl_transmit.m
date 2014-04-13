@@ -36,6 +36,7 @@
 %              Ben Wojtowicz 12/14/2013 Fixed a bug in PDSCH mapping
 %              Ben Wojtowicz 03/26/2014 Using the renamed lte_layer_mapper_dl
 %                                       and lte_pre_coder_dl functions.
+%              Ben Wojtowicz 04/12/2014 Fixed a bug in PDCCH REG mapping.
 %
 function [output_samps] = lte_fdd_dl_transmit(bandwidth, N_frames, N_id_2, N_id_1, N_ant, mcc, mnc, tac, cell_id, band)
     % DEFINES
@@ -477,7 +478,6 @@ function [mod_vec_out, N_pdcch_symbs] = map_pdcch(mod_vec_in, cfi, cfi_c, N_sf, 
             N_pdcch_reg = N_pdcch_reg - N_rb_dl; % Remove CRS
         endif
         N_pdcch_cce = floor(N_pdcch_reg/9);
-        N_pdcch_reg = N_pdcch_cce*9;
         % Pack the DCI
         pdcch_dci = lte_dci_1a_pack(alloc_s, 0, N_rb_dl);
         if(length(pdcch_dci) == 12 ||
@@ -514,6 +514,7 @@ function [mod_vec_out, N_pdcch_symbs] = map_pdcch(mod_vec_in, cfi, cfi_c, N_sf, 
             endfor
         endif
         % Construct REGs
+        pdcch_reg = zeros(N_ant, N_pdcch_reg, 4);
         for(p=0:N_ant-1)
             for(n=0:N_pdcch_cce-1)
                 for(m=0:N_pdcch_reg_cce-1)

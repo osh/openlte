@@ -31,6 +31,8 @@
     01/18/2014    Ben Wojtowicz    Handling multiple antennas, added ability to
                                    update EARFCNs, and fixed sleep time for
                                    no_rf case.
+    04/12/2014    Ben Wojtowicz    Pulled in a patch from Max Suraev for more
+                                   descriptive start failures.
 
 *******************************************************************************/
 
@@ -185,6 +187,7 @@ LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_radio::start(void)
                     }
                 }else{
                     started = false;
+                    err     = LTE_FDD_ENB_ERROR_MASTER_CLOCK_FAIL;
                 }
             }catch(...){
                 started = false;

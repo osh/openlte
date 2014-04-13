@@ -30,6 +30,7 @@
                                    added level to debug prints, and fixed
                                    subframe scheduling.
     03/26/2014    Ben Wojtowicz    Fixed the uplink decode subframe scheduling.
+    04/12/2014    Ben Wojtowicz    Using the latest LTE library.
 
 *******************************************************************************/
 
@@ -524,7 +525,8 @@ void LTE_fdd_enb_mac::scheduler(void)
                 // Fill in the PRBs for the UL allocation
                 for(i=0; i<rar_sched->ul_alloc.N_prb; i++)
                 {
-                    rar_sched->ul_alloc.prb[i] = rb_start+i;
+                    rar_sched->ul_alloc.prb[0][i] = rb_start+i;
+                    rar_sched->ul_alloc.prb[1][i] = rb_start+i;
                 }
 
                 // Determine the RIV for the UL and re-pack the RAR

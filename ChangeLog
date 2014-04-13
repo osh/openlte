@@ -92,3 +92,10 @@ v00.11.00     Fixed a bug with transmitting SIB2 for 1.4MHz bandwidth in
 v00.12.00     Added DL-SCH/UL-SCH MAC PDU processing, added PUSCH mod/demod
               support, added more RRC support, and added PUSCH mod/demod support
               in octave.
+v00.12.01     Pulled in patches from Astrasel to initialize the frequency offset
+              estimate array in liblte_phy_dl_find_coarse_timing_and_freq_offset,
+              from Jevgenij for supporting non-B2X0 USRPs in LTE_fdd_dl_scan, from
+              Max Suraev for more descriptive start failures in LTE_fdd_enodeb, and
+              from Andrew Murphy to add DCI 1C unpacking to the LTE library, also
+              added support for PRB allocation differences in each slot and fixed
+              a bug in lte_fdd_dl_transmit relating to PDCCH REG mapping.

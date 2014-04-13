@@ -32,6 +32,7 @@
                                    added PRACH detection.
     03/26/2014    Ben Wojtowicz    Using the latest LTE library and added PUSCH
                                    decode support.
+    04/12/2014    Ben Wojtowicz    Using the latest LTE library.
 
 *******************************************************************************/
 
@@ -576,7 +577,8 @@ void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
     {
         for(j=0; j<pdcch.alloc[i].N_prb; j++)
         {
-            pdcch.alloc[i].prb[j] = last_prb++;
+            pdcch.alloc[i].prb[0][j] = last_prb;
+            pdcch.alloc[i].prb[1][j] = last_prb++;
         }
     }
     if(last_prb > phy_struct->N_rb_dl)

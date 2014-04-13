@@ -143,6 +143,7 @@ function [pusch_bb] = lte_pusch_mod(bits, prb_offset, N_prb, N_id_cell, rnti, N_
     pusch_x = lte_layer_mapper_ul(pusch_d, 1);
 
     % Transform precoding
+    % FIXME: Normalization
     for(L=0:(length(pusch_x)/M_pusch_sc)-1)
         pusch_y(L*M_pusch_sc+1:(L+1)*M_pusch_sc) = fft(pusch_x(L*M_pusch_sc+1:(L+1)*M_pusch_sc));
     endfor

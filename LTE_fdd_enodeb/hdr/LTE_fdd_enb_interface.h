@@ -27,6 +27,8 @@
     01/18/2014    Ben Wojtowicz    Added dynamic variables and added level to
                                    debug prints.
     03/26/2014    Ben Wojtowicz    Using the latest LTE library.
+    04/12/2014    Ben Wojtowicz    Pulled in a patch from Max Suraev for more
+                                   descriptive start failures.
 
 *******************************************************************************/
 
@@ -74,6 +76,7 @@ typedef enum{
     LTE_FDD_ENB_ERROR_C_RNTI_NOT_FOUND,
     LTE_FDD_ENB_ERROR_CANT_SCHEDULE,
     LTE_FDD_ENB_ERROR_VARIABLE_NOT_DYNAMIC,
+    LTE_FDD_ENB_ERROR_MASTER_CLOCK_FAIL,
     LTE_FDD_ENB_ERROR_N_ITEMS,
 }LTE_FDD_ENB_ERROR_ENUM;
 static const char LTE_fdd_enb_error_text[LTE_FDD_ENB_ERROR_N_ITEMS][100] = {"none",
@@ -90,7 +93,8 @@ static const char LTE_fdd_enb_error_text[LTE_FDD_ENB_ERROR_N_ITEMS][100] = {"non
                                                                             "no free C-RNTI",
                                                                             "C-RNTI not found",
                                                                             "cant schedule",
-                                                                            "variable not dynamic"};
+                                                                            "variable not dynamic",
+                                                                            "unable to set master clock rate"};
 
 typedef enum{
     LTE_FDD_ENB_DEBUG_TYPE_ERROR = 0,

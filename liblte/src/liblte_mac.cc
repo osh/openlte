@@ -25,7 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     07/21/2013    Ben Wojtowicz    Created file.
-    03/26/3014    Ben Wojtowicz    Added DL-SCH/UL-SCH PDU handling.
+    03/26/2014    Ben Wojtowicz    Added DL-SCH/UL-SCH PDU handling.
 
 *******************************************************************************/
 

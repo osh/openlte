@@ -56,6 +56,8 @@
                                    version.
     11/13/2013    Ben Wojtowicz    Started adding PUSCH functionality.
     03/26/2014    Ben Wojtowicz    Added PUSCH functionality.
+    04/12/2014    Ben Wojtowicz    Added support for PRB allocation differences
+                                   in each slot.
 
 *******************************************************************************/
 
@@ -601,7 +603,7 @@ typedef struct{
     uint32                          tbs;
     uint32                          rv_idx;
     uint32                          N_prb;
-    uint32                          prb[LIBLTE_PHY_N_RB_DL_MAX];
+    uint32                          prb[LIBLTE_PHY_N_SLOTS_PER_SUBFR][LIBLTE_PHY_N_RB_DL_MAX];
     uint32                          N_codewords;
     uint32                          N_layers;
     uint32                          tx_mode;

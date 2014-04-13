@@ -45,6 +45,7 @@
     01/18/2014    Ben Wojtowicz    Fixed a bug with transmitting SIB2 for 1.4MHz
                                    bandwidth.
     03/26/2014    Ben Wojtowicz    Using the latest LTE library.
+    04/12/2014    Ben Wojtowicz    Using the latest LTE library.
 
 *******************************************************************************/
 
@@ -526,7 +527,8 @@ int32 LTE_fdd_dl_fg_samp_buf::work(int32                      noutput_items,
                 {
                     for(j=0; j<pdcch.alloc[i].N_prb; j++)
                     {
-                        pdcch.alloc[i].prb[j] = last_prb++;
+                        pdcch.alloc[i].prb[0][j] = last_prb;
+                        pdcch.alloc[i].prb[1][j] = last_prb++;
                     }
                 }
                 if(0 != pdcch.N_alloc)

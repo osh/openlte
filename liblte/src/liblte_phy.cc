@@ -1,6 +1,7 @@
 /*******************************************************************************
 
     Copyright 2012-2014 Ben Wojtowicz
+    Copyright 2014 Andrew Murphy (DCI 1C Unpack)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -82,7 +83,13 @@
                                    in pre_decoder_and_matched_filter, coding
                                    rate in get_tbs_mcs_and_n_prb_for_dl, N_REs
                                    in get_num_bits_in_prb.
+    03/05/2104    Andrew Murphy    Added DCI 1C unpack.
     03/26/2014    Ben Wojtowicz    Added PUSCH functionality.
+    04/12/2014    Ben Wojtowicz    Pulled in a patch from Astrasel to initialize
+                                   the frequency offset estimate array in
+                                   dl_find_coarse_timing_and_freq_offset and
+                                   added support for PRB allocation differences
+                                   in each slot.
 
 *******************************************************************************/
 
@@ -660,6 +667,10 @@ uint32 TBS_71721[27][110] = {{   16,   32,   56,   88,  120,  152,  176,  208,  
                               57336,57336,59256,59256,59256,61664,61664,61664,63776,63776,63776,
                               66592,66592,66592,68808,68808,68808,71112,71112,71112,73712,73712,
                               75376,75376,75376,75376,75376,75376,75376,75376,75376,75376,75376}};
+
+// Transport Block Size from 3GPP TS 36.213 v10.3.0 table 7.1.7.2.3-1
+uint32 TBS_71723[32] = {  40,  56,  72, 120, 136, 144, 176, 208, 224, 256, 280, 296, 328, 336, 392, 488,
+                         552, 600, 632, 696, 776, 840, 904,1000,1064,1128,1224,1288,1384,1480,1608,1736};
 
 /*******************************************************************************
                               LOCAL FUNCTION PROTOTYPES
@@ -1883,6 +1894,45 @@ void dci_1a_unpack(uint8                           *in_bits,
                    LIBLTE_PHY_ALLOCATION_STRUCT    *alloc);
 
 /*********************************************************************
+    Name: dci_1c_pack
+
+    Description: Packs all of the fields into the Downlink Control
+                 Information format 1C
+
+    Document Reference: 3GPP TS 36.212 v10.1.0 section 5.3.3.1.4
+                        3GPP TS 36.213 v10.3.0 section 7.1.6.3
+                        3GPP TS 36.213 v10.3.0 section 7.1.7
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
+    Name: dci_1c_unpack
+
+    Description: Unpacks all of the fields from the Downlink Control
+                 Information format 1C
+
+    Document Reference: 3GPP TS 36.212 v10.1.0 section 5.3.3.1.4
+                        3GPP TS 36.213 v10.3.0 section 7.1.6.3
+                        3GPP TS 36.213 v10.3.0 section 7.1.7
+
+    Notes: Currently only handling SI-RNTI, P-RNTI, and RA-RNTI
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+void dci_1c_unpack(uint8                        *in_bits,
+                   uint32                        N_in_bits,
+                   uint16                        rnti,
+                   uint32                        N_rb_dl,
+                   uint8                         N_ant,
+                   LIBLTE_PHY_ALLOCATION_STRUCT *alloc);
+
+/*********************************************************************
     Name: cfi_channel_encode
 
     Description: Channel encodes the Control Format Indicator channel
@@ -2622,7 +2672,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pusch_channel_decode(LIBLTE_PHY_STRUCT            *
         {
             for(prb_idx=0; prb_idx<alloc->N_prb; prb_idx++)
             {
-                i = alloc->prb[prb_idx];
+                i = alloc->prb[L/7][prb_idx];
                 for(j=0; j<phy_struct->N_sc_rb_ul; j++)
                 {
                     if(3 == L)
@@ -3050,7 +3100,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *ph
             {
                 N_bits_tot += get_num_bits_in_prb(subframe->num,
                                                   pdcch->N_symbs,
-                                                  pdcch->alloc[alloc_idx].prb[i],
+                                                  pdcch->alloc[alloc_idx].prb[0][i],
                                                   phy_struct->N_rb_dl,
                                                   N_ant,
                                                   pdcch->alloc[alloc_idx].mod_type);
@@ -3109,7 +3159,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *ph
                 {
                     for(prb_idx=0; prb_idx<pdcch->alloc[alloc_idx].N_prb; prb_idx++)
                     {
-                        i = pdcch->alloc[alloc_idx].prb[prb_idx];
+                        i = pdcch->alloc[alloc_idx].prb[L/7][prb_idx];
                         for(j=0; j<phy_struct->N_sc_rb_dl; j++)
                         {
                             if(N_ant           == 1 &&
@@ -3233,7 +3283,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_decode(LIBLTE_PHY_STRUCT            *
         {
             for(prb_idx=0; prb_idx<alloc->N_prb; prb_idx++)
             {
-                i = alloc->prb[prb_idx];
+                i = alloc->prb[L/7][prb_idx];
                 for(j=0; j<phy_struct->N_sc_rb_dl; j++)
                 {
                     if(N_ant           == 1 &&
@@ -4604,7 +4654,13 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                                                      dci_1c_size,
                                                      &rnti)))
             {
-                printf("DCI 1C FOUND L = 4, %u\n", i);
+                err = LIBLTE_SUCCESS;
+                dci_1c_unpack(phy_struct->pdcch_dci,
+                              dci_1c_size,
+                              rnti,
+                              phy_struct->N_rb_dl,
+                              N_ant,
+                              &pdcch->alloc[pdcch->N_alloc++]);
             }
         }
         for(i=0; i<2; i++)
@@ -4722,7 +4778,13 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                                                      dci_1c_size,
                                                      &rnti)))
             {
-                printf("DCI 1C FOUND L = 8, %u\n", i);
+                err = LIBLTE_SUCCESS;
+                dci_1c_unpack(phy_struct->pdcch_dci,
+                              dci_1c_size,
+                              rnti,
+                              phy_struct->N_rb_dl,
+                              N_ant,
+                              &pdcch->alloc[pdcch->N_alloc++]);
             }
         }
     }
@@ -5404,6 +5466,10 @@ LIBLTE_ERROR_ENUM liblte_phy_dl_find_coarse_timing_and_freq_offset(LIBLTE_PHY_ST
         }
 
         // Determine frequency offset
+        for(i=0; i<timing_struct->n_corr_peaks; i++)
+        {
+            freq_err[i] = 0;
+        }
         for(slot=0; slot<N_slots; slot++)
         {
             for(i=0; i<timing_struct->n_corr_peaks; i++)
@@ -10702,6 +10768,7 @@ void code_block_concatenation(uint8  *e_bits,
     // Concatenate code blocks
     while(r < N_codeblocks)
     {
+        j = 0;
         while(j < N_e_bits[r])
         {
             f_bits[k++] = e_bits[r*N_e_bits_max+j];
@@ -12017,9 +12084,9 @@ void dci_1a_pack(LIBLTE_PHY_ALLOCATION_STRUCT    *alloc,
         RIV_length = (uint32)ceilf(logf(N_rb_dl*(N_rb_dl+1)/2)/logf(2));
         if((alloc->N_prb-1) <= (N_rb_dl/2))
         {
-            RIV = N_rb_dl*(alloc->N_prb-1) + alloc->prb[0];
+            RIV = N_rb_dl*(alloc->N_prb-1) + alloc->prb[0][0];
         }else{
-            RIV = N_rb_dl*(N_rb_dl-alloc->N_prb+1) + (N_rb_dl - 1 - alloc->prb[0]);
+            RIV = N_rb_dl*(N_rb_dl-alloc->N_prb+1) + (N_rb_dl - 1 - alloc->prb[0][0]);
         }
         phy_value_2_bits(RIV, &dci, RIV_length);
 
@@ -12168,7 +12235,8 @@ void dci_1a_unpack(uint8                           *in_bits,
             // Convert allocation into array of prbs
             for(i=0; i<alloc->N_prb; i++)
             {
-                alloc->prb[i] = RB_start + i;
+                alloc->prb[0][i] = RB_start + i;
+                alloc->prb[1][i] = RB_start + i;
             }
         }
 
@@ -12186,6 +12254,230 @@ void dci_1a_unpack(uint8                           *in_bits,
         alloc->rnti        = rnti;
     }else{
         printf("ERROR: Not handling DCI 1As for C-RNTI\n");
+    }
+}
+
+/*********************************************************************
+    Name: dci_1c_pack
+
+    Description: Packs all of the fields into the Downlink Control
+                 Information format 1C
+
+    Document Reference: 3GPP TS 36.212 v10.1.0 section 5.3.3.1.4
+                        3GPP TS 36.213 v10.3.0 section 7.1.6.3
+                        3GPP TS 36.213 v10.3.0 section 7.1.7
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Name: dci_1c_unpack
+
+    Description: Unpacks all of the fields from the Downlink Control
+                 Information format 1C
+
+    Document Reference: 3GPP TS 36.212 v10.1.0 section 5.3.3.1.4
+                        3GPP TS 36.213 v10.3.0 section 7.1.6.3
+                        3GPP TS 36.213 v10.3.0 section 7.1.7
+
+    Notes: Currently only handling SI-RNTI, P-RNTI, and RA-RNTI
+*********************************************************************/
+void dci_1c_unpack(uint8                        *in_bits,
+                   uint32                        N_in_bits,
+                   uint16                        rnti,
+                   uint32                        N_rb_dl,
+                   uint8                         N_ant,
+                   LIBLTE_PHY_ALLOCATION_STRUCT *alloc)
+{
+    uint32  RB_start = 0;
+    uint32  RIV;
+    uint32  RIV_length;
+    uint32  i;
+    uint32  idash;
+    uint32  j;
+    uint32  jdash;
+    uint32  gap_ind;
+    uint32  N_gap;
+    uint32  N_vrb_gap1_dl;
+    uint32  N_vrb_gap2_dl;
+    uint32  N_vrb_dl;
+    uint32  Ndash_vrb_dl;
+    uint32  N_rb_step;
+    uint32  Ntilde_vrb_dl;
+    uint32  P;
+    uint32  N_row;
+    uint32  N_col;
+    uint32  N_null;
+    uint32  n_vrb;
+    uint32  ntilde_vrb;
+    uint32  ntildedash_prb;
+    uint32  ntildedashdash_prb;
+    uint32  ntilde_prb_even;
+    uint32  ntilde_prb_odd;
+    uint32  n_prb_even;
+    uint32  n_prb_odd;
+    uint8  *dci = in_bits;
+
+    if(N_rb_dl < 50)
+    {
+        gap_ind = 0;
+    }else{
+        gap_ind = phy_bits_2_value(&dci, 1);
+    }
+
+    if(N_rb_dl <= 10)
+    {
+        N_gap = (uint32)ceilf(N_rb_dl/2.0);
+    }else if(N_rb_dl == 11){
+        N_gap = 4;
+    }else if(N_rb_dl <= 19){
+        N_gap = 8;
+    }else if(N_rb_dl <= 26){
+        N_gap = 12;
+    }else if(N_rb_dl <= 44){
+        N_gap = 18;
+    }else if(N_rb_dl <= 49){
+        N_gap = 27;
+    }else if(N_rb_dl <= 63){
+        N_gap = (gap_ind == 0) ? 27 : 9;
+    }else if(N_rb_dl <= 70){
+        N_gap = (gap_ind == 0) ? 32 : 16;
+    }else{
+        N_gap = (gap_ind == 0) ? 48 : 16;
+    }
+
+    if(N_gap < (N_rb_dl-N_gap))
+    {
+        N_vrb_gap1_dl = 2 * N_gap;
+    }else{
+        N_vrb_gap1_dl = 2 * (N_rb_dl-N_gap);
+    }
+
+    N_vrb_gap2_dl = (N_rb_dl/(2*N_gap)) * 2 * N_gap;
+
+    if(gap_ind == 0)
+    {
+        N_vrb_dl = N_vrb_gap1_dl;
+    }else{
+        N_vrb_dl = N_vrb_gap2_dl;
+    }
+
+    if(N_rb_dl <= 49)
+    {
+        N_rb_step = 2;
+    }else{
+        N_rb_step = 4;
+    }
+
+    Ntilde_vrb_dl = (gap_ind == 0) ? N_vrb_dl : 2*N_gap;
+
+    if(LIBLTE_MAC_SI_RNTI        == rnti ||
+       LIBLTE_MAC_P_RNTI         == rnti ||
+       (LIBLTE_MAC_RA_RNTI_START <= rnti &&
+        LIBLTE_MAC_RA_RNTI_END   >= rnti))
+    {
+        RIV_length = ceilf(logf((N_vrb_gap1_dl/N_rb_step) * ((N_vrb_gap1_dl/N_rb_step)+1) / 2.0)/logf(2));
+        RIV        = phy_bits_2_value(&dci, RIV_length);
+
+        for(i=N_rb_step; i<=(N_vrb_dl/N_rb_step)*N_rb_step; i+=N_rb_step) // L_crb running variable N_rb_step to floor(N_vrb_dl/N_rb_step)*N_rb_step
+        {
+            for(j=0; j<=((N_vrb_dl/N_rb_step)-1)*N_rb_step; j+=N_rb_step) // RB_start running variable 0 to (floor(N_vrb_dl/N_rb_step)-1)*N_rb_step
+            {
+                idash        = i/N_rb_step;
+                jdash        = j/N_rb_step;
+                Ndash_vrb_dl = N_vrb_dl/N_rb_step;
+
+                if((idash-1) <= (Ndash_vrb_dl/2))
+                {
+                    if(RIV == (Ndash_vrb_dl*(idash-1)+jdash)) // RB_start to RB_start+alloc->N_prb gives n_vrb(i).  These are then mapped to PRBs as below
+                    {
+                        alloc->N_prb = i;
+                        RB_start     = j;
+                    }
+                }else{
+                    if(RIV == (Ndash_vrb_dl*(Ndash_vrb_dl-idash+1)+(Ndash_vrb_dl-1-jdash)))
+                    {
+                        alloc->N_prb = i;
+                        RB_start     = j;
+                    }
+                }
+            }
+        }
+        // Extract the rest of the fields
+        alloc->mcs = phy_bits_2_value(&dci, 5);
+
+        // Convert allocation into array of PRBs
+        // Calculate Resource Block Group size (P)
+        if(N_rb_dl <= 10)
+        {
+            P = 1;
+        }else if(N_rb_dl <= 26){
+            P = 2;
+        }else if(N_rb_dl <= 63){
+            P = 3;
+        }else{
+            P = 4;
+        }
+
+        N_col  = 4;
+        N_row  = ceilf(Ntilde_vrb_dl/(4.0*P)) * P;
+        N_null = 4*N_row - Ntilde_vrb_dl;
+        n_vrb  = RB_start;
+
+        // 3GPP TS 36.211 v10.6.0 section 6.2.3.2
+        for(i=0; i<alloc->N_prb; i++)
+        {
+            ntilde_vrb         = n_vrb % Ntilde_vrb_dl;
+            ntildedash_prb     = 2*N_row*(ntilde_vrb % 2) + (ntilde_vrb/2) + Ntilde_vrb_dl*(n_vrb/Ntilde_vrb_dl);
+            ntildedashdash_prb = N_row*(ntilde_vrb % 4) + (ntilde_vrb/4) + Ntilde_vrb_dl*(n_vrb/Ntilde_vrb_dl);
+            // even slot
+            if((N_null != 0) && (ntilde_vrb >= (Ntilde_vrb_dl-N_null)) && (ntilde_vrb%2 == 1))
+            {
+                ntilde_prb_even = ntildedash_prb - N_row;
+            }else if((N_null != 0) && (ntilde_vrb >= (Ntilde_vrb_dl-N_null)) && (ntilde_vrb%2 == 0)){
+                ntilde_prb_even = ntildedash_prb - N_row + N_null/2;
+            }else if((N_null != 0) && (ntilde_vrb < (Ntilde_vrb_dl-N_null)) && (ntilde_vrb%4 >= 2)){
+                ntilde_prb_even = ntildedashdash_prb - N_null/2;
+            }else{
+                ntilde_prb_even = ntildedashdash_prb;
+            }
+            // odd slot
+            ntilde_prb_odd = (ntilde_prb_even + Ntilde_vrb_dl/2)%Ntilde_vrb_dl + Ntilde_vrb_dl * (n_vrb/Ntilde_vrb_dl);
+
+            // even slot
+            if(ntilde_prb_even < Ntilde_vrb_dl/2)
+            {
+                n_prb_even = ntilde_prb_even;
+            }else{
+                n_prb_even = ntilde_prb_even + N_gap - Ntilde_vrb_dl/2;
+            }
+
+            // odd slot
+            if(ntilde_prb_odd < Ntilde_vrb_dl/2)
+            {
+                n_prb_odd = ntilde_prb_odd;
+            }else{
+                n_prb_odd = ntilde_prb_odd + N_gap - Ntilde_vrb_dl/2;
+            }
+
+            alloc->prb[0][i] = n_prb_even;
+            alloc->prb[1][i] = n_prb_odd;
+            n_vrb++;
+        }
+
+        // Fill in the allocation structure 3GPP TS 36.213 v10.3.0 section 7.1.7
+        alloc->mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
+        alloc->pre_coder_type = LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY;
+        if(N_ant == 1)
+        {
+            alloc->tx_mode = 1;
+        }else{
+            alloc->tx_mode = 2;
+        }
+        alloc->N_codewords = 1;
+        alloc->tbs         = TBS_71723[alloc->mcs];
+        alloc->rnti        = rnti;
+    }else{
+        printf("ERROR: Not handling DCI 1Cs for C-RNTI\n");
     }
 }
 

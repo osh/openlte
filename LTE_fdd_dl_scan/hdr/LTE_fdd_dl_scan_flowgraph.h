@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -29,6 +29,8 @@
     08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7.
     11/13/2013    Ben Wojtowicz    Added support for USRP B2X0.
     11/30/2013    Ben Wojtowicz    Added support for bladeRF.
+    04/12/2014    Ben Wojtowicz    Pulled in a patch from Jevgenij for
+                                   supporting non-B2X0 USRPs.
 
 *******************************************************************************/
 
@@ -43,6 +45,8 @@
 #include "LTE_fdd_dl_scan_state_machine.h"
 #include <boost/thread/mutex.hpp>
 #include <gnuradio/top_block.h>
+#include <gnuradio/filter/rational_resampler_base_ccf.h>
+#include <gnuradio/filter/firdes.h>
 #include <osmosdr/source.h>
 
 /*******************************************************************************
@@ -62,7 +66,8 @@
 typedef enum{
     LTE_FDD_DL_SCAN_HW_TYPE_RTL_SDR = 0,
     LTE_FDD_DL_SCAN_HW_TYPE_HACKRF,
-    LTE_FDD_DL_SCAN_HW_TYPE_USRP,
+    LTE_FDD_DL_SCAN_HW_TYPE_USRP_B,
+    LTE_FDD_DL_SCAN_HW_TYPE_USRP_N,
     LTE_FDD_DL_SCAN_HW_TYPE_BLADERF,
     LTE_FDD_DL_SCAN_HW_TYPE_UNKNOWN,
 }LTE_FDD_DL_SCAN_HW_TYPE_ENUM;
@@ -94,9 +99,11 @@ private:
     static void* run_thread(void *inputs);
 
     // Variables
-    gr::top_block_sptr                 top_block;
-    osmosdr::source::sptr              samp_src;
-    LTE_fdd_dl_scan_state_machine_sptr state_machine;
+    std::vector<float>                            resample_taps;
+    gr::top_block_sptr                            top_block;
+    gr::filter::rational_resampler_base_ccf::sptr resampler_filter;
+    osmosdr::source::sptr                         samp_src;
+    LTE_fdd_dl_scan_state_machine_sptr            state_machine;
 
     pthread_t    start_thread;
     boost::mutex start_mutex;
