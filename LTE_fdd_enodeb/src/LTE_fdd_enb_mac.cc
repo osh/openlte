@@ -31,6 +31,8 @@
                                    subframe scheduling.
     03/26/2014    Ben Wojtowicz    Fixed the uplink decode subframe scheduling.
     04/12/2014    Ben Wojtowicz    Using the latest LTE library.
+    05/04/2014    Ben Wojtowicz    Added RLC communication handling and UL and
+                                   DL CCCH message processing.
 
 *******************************************************************************/
 
@@ -193,7 +195,7 @@ void LTE_fdd_enb_mac::handle_phy_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
                                       LTE_FDD_ENB_DEBUG_LEVEL_MAC,
                                       __FILE__,
                                       __LINE__,
-                                      "Received invalid message %s",
+                                      "Received invalid PHY message %s",
                                       LTE_fdd_enb_message_type_text[msg->type]);
             delete msg;
             break;
@@ -208,13 +210,22 @@ void LTE_fdd_enb_mac::handle_rlc_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
     if(LTE_FDD_ENB_DEST_LAYER_MAC == msg->dest_layer ||
        LTE_FDD_ENB_DEST_LAYER_ANY == msg->dest_layer)
     {
-        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
-                                  LTE_FDD_ENB_DEBUG_LEVEL_MAC,
-                                  __FILE__,
-                                  __LINE__,
-                                  "Received RLC message %s",
-                                  LTE_fdd_enb_message_type_text[msg->type]);
-        delete msg;
+        switch(msg->type)
+        {
+        case LTE_FDD_ENB_MESSAGE_TYPE_MAC_SDU_READY:
+            handle_sdu_ready(&msg->msg.mac_sdu_ready);
+            delete msg;
+            break;
+        default:
+            interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                      LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                                      __FILE__,
+                                      __LINE__,
+                                      "Received invalid RLC message %s",
+                                      LTE_fdd_enb_message_type_text[msg->type]);
+            delete msg;
+            break;
+        }
     }else{
         // Forward message to PHY
         mac_phy_mq->send(&msg, sizeof(msg), 0);
@@ -242,7 +253,7 @@ void LTE_fdd_enb_mac::handle_ready_to_send(LTE_FDD_ENB_READY_TO_SEND_MSG_STRUCT 
                               LTE_FDD_ENB_DEBUG_LEVEL_MAC,
                               __FILE__,
                               __LINE__,
-                              "RTS %u:%u %u:%u",
+                              "RTS DL_FN_COMBO:PHY=%u,MAC=%u UL_FN_COMBO:PHY=%u,MAC=%u",
                               rts->dl_fn_combo,
                               sched_dl_subfr[sched_cur_dl_subfn].fn_combo,
                               rts->ul_fn_combo,
@@ -344,28 +355,328 @@ void LTE_fdd_enb_mac::handle_prach_decode(LTE_FDD_ENB_PRACH_DECODE_MSG_STRUCT *p
 }
 void LTE_fdd_enb_mac::handle_pucch_decode(LTE_FDD_ENB_PUCCH_DECODE_MSG_STRUCT *pucch_decode)
 {
-    // FIXME
+    interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                              LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                              __FILE__,
+                              __LINE__,
+                              "Not handling PUCCH_DECODE");
 }
 void LTE_fdd_enb_mac::handle_pusch_decode(LTE_FDD_ENB_PUSCH_DECODE_MSG_STRUCT *pusch_decode)
 {
-    // FIXME
+    LTE_fdd_enb_user_mgr *user_mgr = LTE_fdd_enb_user_mgr::get_instance();
+    LTE_fdd_enb_user     *user     = NULL;
+    uint32                i;
+
+    // Find the user
+    if(LTE_FDD_ENB_ERROR_NONE == user_mgr->find_user(pusch_decode->rnti, &user))
+    {
+        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                                  __FILE__,
+                                  __LINE__,
+                                  &pusch_decode->msg,
+                                  "PUSCH decode for RNTI=%u FN_COMBO=%u",
+                                  pusch_decode->rnti,
+                                  pusch_decode->fn_combo);
+        interface->send_pcap_msg(LTE_FDD_ENB_PCAP_DIRECTION_UL,
+                                 pusch_decode->rnti,
+                                 pusch_decode->fn_combo,
+                                 &pusch_decode->msg);
+
+        // Set the correct channel type
+        user->pusch_mac_pdu.chan_type = LIBLTE_MAC_CHAN_TYPE_ULSCH;
+
+        // Unpack MAC PDU
+        liblte_mac_unpack_mac_pdu(&pusch_decode->msg,
+                                  &user->pusch_mac_pdu);
+
+        for(i=0; i<user->pusch_mac_pdu.N_subheaders; i++)
+        {
+            if(LIBLTE_MAC_ULSCH_CCCH_LCID == user->pusch_mac_pdu.subheader[i].lcid)
+            {
+                handle_ulsch_ccch_sdu(user, user->pusch_mac_pdu.subheader[i].lcid, &user->pusch_mac_pdu.subheader[i].payload.sdu);
+            }else if(LIBLTE_MAC_ULSCH_DCCH_LCID_BEGIN <= user->pusch_mac_pdu.subheader[i].lcid &&
+                     LIBLTE_MAC_ULSCH_DCCH_LCID_END   >= user->pusch_mac_pdu.subheader[i].lcid){
+                handle_ulsch_dcch_sdu(user, user->pusch_mac_pdu.subheader[i].lcid, &user->pusch_mac_pdu.subheader[i].payload.sdu);
+            }else if(LIBLTE_MAC_ULSCH_EXT_POWER_HEADROOM_REPORT_LCID == user->pusch_mac_pdu.subheader[i].lcid){
+                handle_ulsch_ext_power_headroom_report(user, &user->pusch_mac_pdu.subheader[i].payload.ext_power_headroom);
+            }else if(LIBLTE_MAC_ULSCH_POWER_HEADROOM_REPORT_LCID == user->pusch_mac_pdu.subheader[i].lcid){
+                handle_ulsch_power_headroom_report(user, &user->pusch_mac_pdu.subheader[i].payload.power_headroom);
+            }else if(LIBLTE_MAC_ULSCH_C_RNTI_LCID == user->pusch_mac_pdu.subheader[i].lcid){
+                handle_ulsch_c_rnti(user, &user->pusch_mac_pdu.subheader[i].payload.c_rnti);
+            }else if(LIBLTE_MAC_ULSCH_TRUNCATED_BSR_LCID == user->pusch_mac_pdu.subheader[i].lcid){
+                handle_ulsch_truncated_bsr(user, &user->pusch_mac_pdu.subheader[i].payload.truncated_bsr);
+            }else if(LIBLTE_MAC_ULSCH_SHORT_BSR_LCID == user->pusch_mac_pdu.subheader[i].lcid){
+                handle_ulsch_short_bsr(user, &user->pusch_mac_pdu.subheader[i].payload.short_bsr);
+            }else if(LIBLTE_MAC_ULSCH_LONG_BSR_LCID == user->pusch_mac_pdu.subheader[i].lcid){
+                handle_ulsch_long_bsr(user, &user->pusch_mac_pdu.subheader[i].payload.long_bsr);
+            }
+        }
+    }else{
+        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                                  __FILE__,
+                                  __LINE__,
+                                  &pusch_decode->msg,
+                                  "PUSCH decode for invalid RNTI (%u)",
+                                  pusch_decode->rnti);
+    }
 }
 
-/**********************/
-/*    RLC Handlers    */
-/**********************/
-
-/*************************/
-/*    Message Parsers    */
-/*************************/
-
-/************************/
-/*    State Machines    */
-/************************/
-
 /******************************/
-/*    Message Constructors    */
+/*    RLC Message Handlers    */
 /******************************/
+void LTE_fdd_enb_mac::handle_sdu_ready(LTE_FDD_ENB_MAC_SDU_READY_MSG_STRUCT *sdu_ready)
+{
+    LTE_fdd_enb_user             *user;
+    LIBLTE_PHY_ALLOCATION_STRUCT  alloc;
+    LIBLTE_MSG_STRUCT            *sdu;
+    uint32                        fn_combo;
+
+    if(LTE_FDD_ENB_ERROR_NONE == sdu_ready->rb->get_next_mac_sdu(&sdu))
+    {
+        user = sdu_ready->user;
+
+        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                                  __FILE__,
+                                  __LINE__,
+                                  sdu,
+                                  "Received SDU for RNTI=%u and RB=%s",
+                                  user->get_c_rnti(),
+                                  LTE_fdd_enb_rb_text[sdu_ready->rb->get_rb_id()]);
+
+        // Fill in the allocation
+        alloc.pre_coder_type = LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY;
+        alloc.mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
+        alloc.rv_idx         = 0;
+        alloc.N_codewords    = 1;
+        sys_info_mutex.lock();
+        if(1 == sys_info.N_ant)
+        {
+            alloc.tx_mode = 1;
+        }else{
+            alloc.tx_mode = 2;
+        }
+        sys_info_mutex.unlock();
+        alloc.rnti = user->get_c_rnti();
+        alloc.mcs  = 0;
+        alloc.tpc  = LIBLTE_PHY_TPC_COMMAND_DCI_1_1A_1B_1D_2_3_DB_ZERO;
+        alloc.ndi  = false;
+
+        // Pack the SDU
+        user->pdsch_mac_pdu.chan_type         = LIBLTE_MAC_CHAN_TYPE_DLSCH;
+        user->pdsch_mac_pdu.N_subheaders      = 1;
+        user->pdsch_mac_pdu.subheader[0].lcid = LIBLTE_MAC_DLSCH_CCCH_LCID;
+        memcpy(&user->pdsch_mac_pdu.subheader[0].payload.sdu, sdu, sizeof(LIBLTE_MSG_STRUCT));
+        liblte_mac_pack_mac_pdu(&user->pdsch_mac_pdu,
+                                &alloc.msg);
+
+        // Determine the fn_combo
+        fn_combo = (sched_dl_subfr[sched_cur_dl_subfn].fn_combo + 4) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
+
+        // Add the SDU to the scheduling queue
+        if(LTE_FDD_ENB_ERROR_NONE != add_to_dl_sched_queue(fn_combo,
+                                                           &alloc))
+        {
+            interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                      LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                                      __FILE__,
+                                      __LINE__,
+                                      "Can't schedule SDU");
+        }else{
+            interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                      LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                                      __FILE__,
+                                      __LINE__,
+                                      &alloc.msg,
+                                      "SDU scheduled for RNTI=%u, DL_QUEUE_SIZE=%u",
+                                      alloc.rnti,
+                                      dl_sched_queue.size());
+        }
+
+        // Delete the SDU
+        sdu_ready->rb->delete_next_mac_sdu();
+    }else{
+        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                                  __FILE__,
+                                  __LINE__,
+                                  "Received sdu_ready message with no SDU queued");
+    }
+}
+
+/**************************/
+/*    MAC PDU Handlers    */
+/**************************/
+void LTE_fdd_enb_mac::handle_ulsch_ccch_sdu(LTE_fdd_enb_user  *user,
+                                            uint32             lcid,
+                                            LIBLTE_MSG_STRUCT *sdu)
+{
+    LTE_fdd_enb_rb                       *rb = NULL;
+    LTE_FDD_ENB_RLC_PDU_READY_MSG_STRUCT  rlc_pdu_ready;
+    LIBLTE_PHY_ALLOCATION_STRUCT          alloc;
+    uint32                                fn_combo;
+    uint32                                i;
+
+    if(LIBLTE_MAC_ULSCH_CCCH_LCID == lcid)
+    {
+        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                                  __FILE__,
+                                  __LINE__,
+                                  sdu,
+                                  "Handling ULSCH SDU for RNTI=%u, LCID=%u",
+                                  user->get_c_rnti(),
+                                  lcid);
+
+        // Get SRB0
+        user->get_srb0(&rb);
+
+        // Fill in the contention resolution allocation
+        alloc.pre_coder_type = LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY;
+        alloc.mod_type       = LIBLTE_PHY_MODULATION_TYPE_QPSK;
+        alloc.rv_idx         = 0;
+        alloc.N_codewords    = 1;
+        sys_info_mutex.lock();
+        if(1 == sys_info.N_ant)
+        {
+            alloc.tx_mode = 1;
+        }else{
+            alloc.tx_mode = 2;
+        }
+        sys_info_mutex.unlock();
+        alloc.rnti = user->get_c_rnti();
+        alloc.mcs  = 0;
+        alloc.tpc  = LIBLTE_PHY_TPC_COMMAND_DCI_1_1A_1B_1D_2_3_DB_ZERO;
+        alloc.ndi  = false;
+
+        // Pack the contention resolution PDU
+        user->pdsch_mac_pdu.chan_type                             = LIBLTE_MAC_CHAN_TYPE_DLSCH;
+        user->pdsch_mac_pdu.N_subheaders                          = 1;
+        user->pdsch_mac_pdu.subheader[0].lcid                     = LIBLTE_MAC_DLSCH_UE_CONTENTION_RESOLUTION_ID_LCID;
+        user->pdsch_mac_pdu.subheader[0].payload.ue_con_res_id.id = 0;
+        for(i=0; i<sdu->N_bits; i++)
+        {
+            user->pdsch_mac_pdu.subheader[0].payload.ue_con_res_id.id <<= 1;
+            user->pdsch_mac_pdu.subheader[0].payload.ue_con_res_id.id  |= sdu->msg[i];
+        }
+        liblte_mac_pack_mac_pdu(&user->pdsch_mac_pdu, &alloc.msg);
+
+        // Determine the contention resolution fn_combo
+        fn_combo = (sched_dl_subfr[sched_cur_dl_subfn].fn_combo + 4) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
+
+        // Add the contention resolution PDU to the scheduling queue
+        if(LTE_FDD_ENB_ERROR_NONE != add_to_dl_sched_queue(fn_combo, &alloc))
+        {
+            interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                      LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                                      __FILE__,
+                                      __LINE__,
+                                      "Can't schedule PDU");
+        }else{
+            interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                      LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                                      __FILE__,
+                                      __LINE__,
+                                      &alloc.msg,
+                                      "PDU scheduled for RNTI=%u, DL_QUEUE_SIZE=%u",
+                                      alloc.rnti,
+                                      dl_sched_queue.size());
+        }
+
+        // Queue the SDU for RLC
+        rb->queue_rlc_pdu(sdu);
+
+        // Signal RLC
+        rlc_pdu_ready.user = user;
+        rlc_pdu_ready.rb   = rb;
+        LTE_fdd_enb_msgq::send(mac_rlc_mq,
+                               LTE_FDD_ENB_MESSAGE_TYPE_RLC_PDU_READY,
+                               LTE_FDD_ENB_DEST_LAYER_RLC,
+                               (LTE_FDD_ENB_MESSAGE_UNION *)&rlc_pdu_ready,
+                               sizeof(LTE_FDD_ENB_RLC_PDU_READY_MSG_STRUCT));
+    }else{
+        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                                  __FILE__,
+                                  __LINE__,
+                                  sdu,
+                                  "Not handling ULSCH SDU for RNTI=%u, LCID=%u",
+                                  user->get_c_rnti(),
+                                  lcid);
+    }
+}
+void LTE_fdd_enb_mac::handle_ulsch_dcch_sdu(LTE_fdd_enb_user  *user,
+                                            uint32             lcid,
+                                            LIBLTE_MSG_STRUCT *sdu)
+{
+    interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                              LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                              __FILE__,
+                              __LINE__,
+                              sdu,
+                              "Not handling ULSCH DCCH_SDU for LCID=%u",
+                              lcid);
+}
+void LTE_fdd_enb_mac::handle_ulsch_ext_power_headroom_report(LTE_fdd_enb_user                        *user,
+                                                             LIBLTE_MAC_EXT_POWER_HEADROOM_CE_STRUCT *ext_power_headroom)
+{
+    interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                              LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                              __FILE__,
+                              __LINE__,
+                              "Not handling ULSCH EXTENDED_POWER_HEADROOM_REPORT");
+}
+void LTE_fdd_enb_mac::handle_ulsch_power_headroom_report(LTE_fdd_enb_user                    *user,
+                                                         LIBLTE_MAC_POWER_HEADROOM_CE_STRUCT *power_headroom)
+{
+    interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                              LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                              __FILE__,
+                              __LINE__,
+                              "Not handling ULSCH POWER_HEADROOM_REPORT");
+}
+void LTE_fdd_enb_mac::handle_ulsch_c_rnti(LTE_fdd_enb_user            *user,
+                                          LIBLTE_MAC_C_RNTI_CE_STRUCT *c_rnti)
+{
+    interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                              LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                              __FILE__,
+                              __LINE__,
+                              "Not handling ULSCH C_RNTI");
+}
+void LTE_fdd_enb_mac::handle_ulsch_truncated_bsr(LTE_fdd_enb_user                   *user,
+                                                 LIBLTE_MAC_TRUNCATED_BSR_CE_STRUCT *truncated_bsr)
+{
+    interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                              LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                              __FILE__,
+                              __LINE__,
+                              "Not handling ULSCH TRUNCATED_BSR");
+}
+void LTE_fdd_enb_mac::handle_ulsch_short_bsr(LTE_fdd_enb_user               *user,
+                                             LIBLTE_MAC_SHORT_BSR_CE_STRUCT *short_bsr)
+{
+    interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                              LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                              __FILE__,
+                              __LINE__,
+                              "Not handling ULSCH SHORT_BSR");
+}
+void LTE_fdd_enb_mac::handle_ulsch_long_bsr(LTE_fdd_enb_user              *user,
+                                            LIBLTE_MAC_LONG_BSR_CE_STRUCT *long_bsr)
+{
+    interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                              LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                              __FILE__,
+                              __LINE__,
+                              "Not handling ULSCH LONG_BSR");
+}
+
+/***************************/
+/*    Data Constructors    */
+/***************************/
 void LTE_fdd_enb_mac::construct_random_access_response(uint8  preamble,
                                                        uint16 timing_adv,
                                                        uint32 fn_combo)
@@ -376,8 +687,8 @@ void LTE_fdd_enb_mac::construct_random_access_response(uint8  preamble,
     LIBLTE_PHY_ALLOCATION_STRUCT  ul_alloc;
 
     // Allocate a C-RNTI and a user
-    if(LTE_FDD_ENB_ERROR_NONE == user_mgr->get_free_c_rnti(rar.temp_crnti) &&
-       LTE_FDD_ENB_ERROR_NONE == user_mgr->add_user(rar.temp_crnti))
+    if(LTE_FDD_ENB_ERROR_NONE == user_mgr->get_free_c_rnti(&rar.temp_c_rnti) &&
+       LTE_FDD_ENB_ERROR_NONE == user_mgr->add_user(rar.temp_c_rnti))
     {
         // Fill in the DL allocation
         dl_alloc.pre_coder_type = LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY;
@@ -394,7 +705,7 @@ void LTE_fdd_enb_mac::construct_random_access_response(uint8  preamble,
         ul_alloc.N_codewords    = 1;
         ul_alloc.N_layers       = 1;
         ul_alloc.tx_mode        = 1; // From 36.213 v10.3.0 section 7.1
-        ul_alloc.rnti           = rar.temp_crnti;
+        ul_alloc.rnti           = rar.temp_c_rnti;
         sys_info_mutex.lock();
         liblte_phy_get_tbs_mcs_and_n_prb_for_ul(56,
                                                 sys_info.N_rb_ul,
@@ -501,6 +812,10 @@ void LTE_fdd_enb_mac::scheduler(void)
            resp_win_stop  >= sched_dl_subfr[sched_cur_dl_subfn].fn_combo)
         {
             // Determine how many PRBs are needed for the DL allocation, if using this subframe
+            interface->send_pcap_msg(LTE_FDD_ENB_PCAP_DIRECTION_DL,
+                                     rar_sched->dl_alloc.rnti,
+                                     sched_dl_subfr[sched_cur_dl_subfn].fn_combo,
+                                     &rar_sched->dl_alloc.msg);
             liblte_phy_get_tbs_mcs_and_n_prb_for_dl(rar_sched->dl_alloc.msg.N_bits,
                                                     sched_cur_dl_subfn,
                                                     sys_info.N_rb_dl,
@@ -549,10 +864,12 @@ void LTE_fdd_enb_mac::scheduler(void)
                                           LTE_FDD_ENB_DEBUG_LEVEL_MAC,
                                           __FILE__,
                                           __LINE__,
-                                          "RAR sent %u %u %u",
+                                          &rar_sched->dl_alloc.msg,
+                                          "RAR sent %u %u %u %u",
                                           resp_win_start,
                                           resp_win_stop,
-                                          sched_dl_subfr[sched_cur_dl_subfn].fn_combo);
+                                          sched_dl_subfr[sched_cur_dl_subfn].fn_combo,
+                                          sched_ul_subfr[(sched_cur_dl_subfn+6)%10].fn_combo);
 
                 // Schedule DL
                 memcpy(&sched_dl_subfr[sched_cur_dl_subfn].pdcch.alloc[sched_dl_subfr[sched_cur_dl_subfn].pdcch.N_alloc],
@@ -597,6 +914,10 @@ void LTE_fdd_enb_mac::scheduler(void)
         dl_sched = dl_sched_queue.front();
 
         // Determine how many PRBs are needed for the allocation, if using this subframe
+        interface->send_pcap_msg(LTE_FDD_ENB_PCAP_DIRECTION_DL,
+                                 dl_sched->alloc.rnti,
+                                 sched_dl_subfr[sched_cur_dl_subfn].fn_combo,
+                                 &dl_sched->alloc.msg);
         liblte_phy_get_tbs_and_n_prb_for_dl(dl_sched->alloc.msg.N_bits,
                                             sys_info.N_rb_dl,
                                             dl_sched->alloc.mcs,
@@ -610,6 +931,15 @@ void LTE_fdd_enb_mac::scheduler(void)
         if(dl_sched->alloc.N_prb <= N_avail_dl_prbs &&
            1                     <= N_avail_dcis)
         {
+            interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                      LTE_FDD_ENB_DEBUG_LEVEL_MAC,
+                                      __FILE__,
+                                      __LINE__,
+                                      &dl_sched->alloc.msg,
+                                      "DL allocation sent for RNTI=%u FN_COMBO=%u",
+                                      dl_sched->alloc.rnti,
+                                      sched_dl_subfr[sched_cur_dl_subfn].fn_combo);
+
             // Schedule DL
             memcpy(&sched_dl_subfr[sched_cur_dl_subfn].pdcch.alloc[sched_dl_subfr[sched_cur_dl_subfn].pdcch.N_alloc],
                    &dl_sched->alloc,

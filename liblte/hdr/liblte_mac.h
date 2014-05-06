@@ -26,6 +26,7 @@
     ----------    -------------    --------------------------------------------
     07/21/2013    Ben Wojtowicz    Created file.
     03/26/2014    Ben Wojtowicz    Added DL-SCH/UL-SCH PDU handling.
+    05/04/2014    Ben Wojtowicz    Added control element handling.
 
 *******************************************************************************/
 
@@ -60,6 +61,227 @@
 
 
 /*******************************************************************************
+                              CONTROL ELEMENT DECLARATIONS
+*******************************************************************************/
+
+/*********************************************************************
+    MAC CE Name: Truncated Buffer Status Report
+
+    Description: CE containing one LCG ID field and one corresponding
+                 Buffer Size field
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+typedef struct{
+    uint8 lcg_id;
+    uint8 buffer_size;
+}LIBLTE_MAC_TRUNCATED_BSR_CE_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_mac_pack_truncated_bsr_ce(LIBLTE_MAC_TRUNCATED_BSR_CE_STRUCT  *truncated_bsr,
+                                                   uint8                              **ce_ptr);
+LIBLTE_ERROR_ENUM liblte_mac_unpack_truncated_bsr_ce(uint8                              **ce_ptr,
+                                                     LIBLTE_MAC_TRUNCATED_BSR_CE_STRUCT  *truncated_bsr);
+
+/*********************************************************************
+    MAC CE Name: Short Buffer Status Report
+
+    Description: CE containing one LCG ID field and one corresponding
+                 Buffer Size field
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+typedef LIBLTE_MAC_TRUNCATED_BSR_CE_STRUCT LIBLTE_MAC_SHORT_BSR_CE_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_mac_pack_short_bsr_ce(LIBLTE_MAC_SHORT_BSR_CE_STRUCT  *short_bsr,
+                                               uint8                          **ce_ptr);
+LIBLTE_ERROR_ENUM liblte_mac_unpack_short_bsr_ce(uint8                          **ce_ptr,
+                                                 LIBLTE_MAC_SHORT_BSR_CE_STRUCT  *short_bsr);
+
+/*********************************************************************
+    MAC CE Name: Long Buffer Status Report
+
+    Description: CE containing four Buffer Size fields, corresponding
+                 to LCG IDs #0 through #3
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.1
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+typedef struct{
+    uint8 buffer_size_0;
+    uint8 buffer_size_1;
+    uint8 buffer_size_2;
+    uint8 buffer_size_3;
+}LIBLTE_MAC_LONG_BSR_CE_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_mac_pack_long_bsr_ce(LIBLTE_MAC_LONG_BSR_CE_STRUCT  *long_bsr,
+                                              uint8                         **ce_ptr);
+LIBLTE_ERROR_ENUM liblte_mac_unpack_long_bsr_ce(uint8                         **ce_ptr,
+                                                LIBLTE_MAC_LONG_BSR_CE_STRUCT  *long_bsr);
+
+/*********************************************************************
+    MAC CE Name: C-RNTI
+
+    Description: CE containing a C-RNTI
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.2
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+typedef struct{
+    uint16 c_rnti;
+}LIBLTE_MAC_C_RNTI_CE_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_mac_pack_c_rnti_ce(LIBLTE_MAC_C_RNTI_CE_STRUCT  *c_rnti,
+                                            uint8                       **ce_ptr);
+LIBLTE_ERROR_ENUM liblte_mac_unpack_c_rnti_ce(uint8                       **ce_ptr,
+                                              LIBLTE_MAC_C_RNTI_CE_STRUCT  *c_rnti);
+
+/*********************************************************************
+    MAC CE Name: DRX Command
+
+    Description: CE containing nothing
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.3
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+
+/*********************************************************************
+    MAC CE Name: UE Contention Resolution Identity
+
+    Description: CE containing the contention resolution identity for
+                 a UE
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.4
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+typedef struct{
+    uint64 id;
+}LIBLTE_MAC_UE_CONTENTION_RESOLUTION_ID_CE_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_mac_pack_ue_contention_resolution_id_ce(LIBLTE_MAC_UE_CONTENTION_RESOLUTION_ID_CE_STRUCT  *ue_con_res_id,
+                                                                 uint8                                            **ce_ptr);
+LIBLTE_ERROR_ENUM liblte_mac_unpack_ue_contention_resolution_id_ce(uint8                                            **ce_ptr,
+                                                                   LIBLTE_MAC_UE_CONTENTION_RESOLUTION_ID_CE_STRUCT  *ue_con_res_id);
+
+/*********************************************************************
+    MAC CE Name: Timing Advance Command
+
+    Description: CE containing a timing advance command for a UE
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.5
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+typedef struct{
+    uint8 ta;
+}LIBLTE_MAC_TA_COMMAND_CE_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_mac_pack_ta_command_ce(LIBLTE_MAC_TA_COMMAND_CE_STRUCT  *ta_command,
+                                                uint8                           **ce_ptr);
+LIBLTE_ERROR_ENUM liblte_mac_unpack_ta_command_ce(uint8                           **ce_ptr,
+                                                  LIBLTE_MAC_TA_COMMAND_CE_STRUCT  *ta_command);
+
+/*********************************************************************
+    MAC CE Name: Power Headroom
+
+    Description: CE containing the power headroom of the UE
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.6
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+typedef struct{
+    uint8 ph;
+}LIBLTE_MAC_POWER_HEADROOM_CE_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_mac_pack_power_headroom_ce(LIBLTE_MAC_POWER_HEADROOM_CE_STRUCT  *power_headroom,
+                                                    uint8                               **ce_ptr);
+LIBLTE_ERROR_ENUM liblte_mac_unpack_power_headroom_ce(uint8                               **ce_ptr,
+                                                      LIBLTE_MAC_POWER_HEADROOM_CE_STRUCT  *power_headroom);
+
+/*********************************************************************
+    MAC CE Name: Extended Power Headroom
+
+    Description: CE containing the power headroom of the UE
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.6a
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+typedef struct{
+    // FIXME
+}LIBLTE_MAC_EXT_POWER_HEADROOM_CE_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_mac_pack_ext_power_headroom_ce(LIBLTE_MAC_EXT_POWER_HEADROOM_CE_STRUCT  *ext_power_headroom,
+                                                        uint8                                   **ce_ptr);
+LIBLTE_ERROR_ENUM liblte_mac_unpack_ext_power_headroom_ce(uint8                                   **ce_ptr,
+                                                          LIBLTE_MAC_EXT_POWER_HEADROOM_CE_STRUCT  *ext_power_headroom);
+
+/*********************************************************************
+    MAC CE Name: MCH Scheduling Information
+
+    Description: CE containing MTCH stops
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.7
+*********************************************************************/
+// Defines
+#define LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_MAX_N_ITEMS 10
+// Enums
+// Structs
+typedef struct{
+    uint16 stop_mch[LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_MAX_N_ITEMS];
+    uint8  lcid[LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_MAX_N_ITEMS];
+    uint8  N_items;
+}LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_CE_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_mac_pack_mch_scheduling_information_ce(LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_CE_STRUCT  *mch_sched_info,
+                                                                uint8                                           **ce_ptr);
+LIBLTE_ERROR_ENUM liblte_mac_unpack_mch_scheduling_information_ce(uint8                                           **ce_ptr,
+                                                                  LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_CE_STRUCT  *mch_sched_info);
+
+/*********************************************************************
+    MAC CE Name: Activation Deactivation
+
+    Description: CE containing activation/deactivation of SCells
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.8
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+typedef struct{
+    bool c1;
+    bool c2;
+    bool c3;
+    bool c4;
+    bool c5;
+    bool c6;
+    bool c7;
+}LIBLTE_MAC_ACTIVATION_DEACTIVATION_CE_STRUCT;
+// Functions
+LIBLTE_ERROR_ENUM liblte_mac_pack_activation_deactivation_ce(LIBLTE_MAC_ACTIVATION_DEACTIVATION_CE_STRUCT  *act_deact,
+                                                             uint8                                        **ce_ptr);
+LIBLTE_ERROR_ENUM liblte_mac_unpack_activation_deactivation_ce(uint8                                        **ce_ptr,
+                                                               LIBLTE_MAC_ACTIVATION_DEACTIVATION_CE_STRUCT  *act_deact);
+
+/*******************************************************************************
                               PDU DECLARATIONS
 *******************************************************************************/
 
@@ -72,23 +294,61 @@
     Document Reference: 36.321 v10.2.0 Section 6.1.2
 *********************************************************************/
 // Defines
-#define LIBLTE_MAC_PDU_MAX_N_SUBHEADERS 10
+#define LIBLTE_MAC_MAX_MAC_PDU_N_SUBHEADERS               10
+#define LIBLTE_MAC_DLSCH_CCCH_LCID                        0x00
+#define LIBLTE_MAC_DLSCH_DCCH_LCID_BEGIN                  0x01
+#define LIBLTE_MAC_DLSCH_DCCH_LCID_END                    0x0A
+#define LIBLTE_MAC_DLSCH_ACTIVATION_DEACTIVATION_LCID     0x1B
+#define LIBLTE_MAC_DLSCH_UE_CONTENTION_RESOLUTION_ID_LCID 0x1C
+#define LIBLTE_MAC_DLSCH_TA_COMMAND_LCID                  0x1D
+#define LIBLTE_MAC_DLSCH_DRX_COMMAND_LCID                 0x1E
+#define LIBLTE_MAC_ULSCH_CCCH_LCID                        0x00
+#define LIBLTE_MAC_ULSCH_DCCH_LCID_BEGIN                  0x01
+#define LIBLTE_MAC_ULSCH_DCCH_LCID_END                    0x0A
+#define LIBLTE_MAC_ULSCH_EXT_POWER_HEADROOM_REPORT_LCID   0x19
+#define LIBLTE_MAC_ULSCH_POWER_HEADROOM_REPORT_LCID       0x1A
+#define LIBLTE_MAC_ULSCH_C_RNTI_LCID                      0x1B
+#define LIBLTE_MAC_ULSCH_TRUNCATED_BSR_LCID               0x1C
+#define LIBLTE_MAC_ULSCH_SHORT_BSR_LCID                   0x1D
+#define LIBLTE_MAC_ULSCH_LONG_BSR_LCID                    0x1E
+#define LIBLTE_MAC_MCH_MCCH_LCID                          0x00
+#define LIBLTE_MAC_MCH_MTCH_LCID_BEGIN                    0x01
+#define LIBLTE_MAC_MCH_MTCH_LCID_END                      0x1C
+#define LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_LCID        0x1E
 // Enums
-// FIXME: LCID
+typedef enum{
+    LIBLTE_MAC_CHAN_TYPE_DLSCH = 0,
+    LIBLTE_MAC_CHAN_TYPE_ULSCH,
+    LIBLTE_MAC_CHAN_TYPE_MCH,
+}LIBLTE_MAC_CHAN_TYPE_ENUM;
 // Structs
+typedef union{
+    LIBLTE_MAC_TRUNCATED_BSR_CE_STRUCT               truncated_bsr;
+    LIBLTE_MAC_SHORT_BSR_CE_STRUCT                   short_bsr;
+    LIBLTE_MAC_LONG_BSR_CE_STRUCT                    long_bsr;
+    LIBLTE_MAC_C_RNTI_CE_STRUCT                      c_rnti;
+    LIBLTE_MAC_UE_CONTENTION_RESOLUTION_ID_CE_STRUCT ue_con_res_id;
+    LIBLTE_MAC_TA_COMMAND_CE_STRUCT                  ta_command;
+    LIBLTE_MAC_POWER_HEADROOM_CE_STRUCT              power_headroom;
+    LIBLTE_MAC_EXT_POWER_HEADROOM_CE_STRUCT          ext_power_headroom;
+    LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_CE_STRUCT  mch_sched_info;
+    LIBLTE_MAC_ACTIVATION_DEACTIVATION_CE_STRUCT     act_deact;
+    LIBLTE_MSG_STRUCT                                sdu;
+}LIBLTE_MAC_SUBHEADER_PAYLOAD_UNION;
 typedef struct{
-    LIBLTE_MSG_STRUCT sdu;
-    uint32            lcid;
+    LIBLTE_MAC_SUBHEADER_PAYLOAD_UNION payload;
+    uint32                             lcid;
 }LIBLTE_MAC_PDU_SUBHEADER_STRUCT;
 typedef struct{
-    LIBLTE_MAC_PDU_SUBHEADER_STRUCT subheader[LIBLTE_MAC_PDU_MAX_N_SUBHEADERS];
+    LIBLTE_MAC_PDU_SUBHEADER_STRUCT subheader[LIBLTE_MAC_MAX_MAC_PDU_N_SUBHEADERS];
+    LIBLTE_MAC_CHAN_TYPE_ENUM       chan_type;
     uint32                          N_subheaders;
 }LIBLTE_MAC_PDU_STRUCT;
 // Functions
-LIBLTE_ERROR_ENUM liblte_mac_pack_mac_pdu(LIBLTE_MAC_PDU_STRUCT *pdu,
-                                          LIBLTE_MSG_STRUCT     *msg);
-LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_MSG_STRUCT     *msg,
-                                            LIBLTE_MAC_PDU_STRUCT *pdu);
+LIBLTE_ERROR_ENUM liblte_mac_pack_mac_pdu(LIBLTE_MAC_PDU_STRUCT *mac_pdu,
+                                          LIBLTE_MSG_STRUCT     *pdu);
+LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_MSG_STRUCT     *pdu,
+                                            LIBLTE_MAC_PDU_STRUCT *mac_pdu);
 
 /*********************************************************************
     PDU Name: Transparent
@@ -160,7 +420,7 @@ typedef struct{
     LIBLTE_MAC_RAR_CSI_REQ_ENUM     csi_req;
     uint16                          rba; // FIXME
     uint16                          timing_adv_cmd;
-    uint16                          temp_crnti;
+    uint16                          temp_c_rnti;
     uint8                           mcs; // FIXME
     uint8                           RAPID;
     uint8                           BI;

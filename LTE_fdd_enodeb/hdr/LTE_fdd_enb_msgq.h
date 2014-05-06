@@ -27,6 +27,8 @@
     11/09/2013    Ben Wojtowicz    Created file
     01/18/2014    Ben Wojtowicz    Added the ability to set priorities.
     03/26/2014    Ben Wojtowicz    Added RNTI to PUSCH decode message.
+    05/04/2014    Ben Wojtowicz    Added messages for MAC, RLC, PDCP, and RRC
+                                   communication.
 
 *******************************************************************************/
 
@@ -37,6 +39,7 @@
                               INCLUDES
 *******************************************************************************/
 
+#include "LTE_fdd_enb_user.h"
 #include "liblte_rrc.h"
 #include "liblte_phy.h"
 #include <boost/interprocess/ipc/message_queue.hpp>
@@ -71,6 +74,24 @@ typedef enum{
     LTE_FDD_ENB_MESSAGE_TYPE_PUCCH_DECODE,
     LTE_FDD_ENB_MESSAGE_TYPE_PUSCH_DECODE,
 
+    // RLC -> MAC Messages
+    LTE_FDD_ENB_MESSAGE_TYPE_MAC_SDU_READY,
+
+    // MAC -> RLC Messages
+    LTE_FDD_ENB_MESSAGE_TYPE_RLC_PDU_READY,
+
+    // PDCP -> RLC Messages
+    LTE_FDD_ENB_MESSAGE_TYPE_RLC_SDU_READY,
+
+    // RLC -> PDCP Messages
+    LTE_FDD_ENB_MESSAGE_TYPE_PDCP_PDU_READY,
+
+    // RRC -> PDCP Messages
+    LTE_FDD_ENB_MESSAGE_TYPE_PDCP_SDU_READY,
+
+    // PDCP -> RRC Messages
+    LTE_FDD_ENB_MESSAGE_TYPE_RRC_PDU_READY,
+
     LTE_FDD_ENB_MESSAGE_TYPE_N_ITEMS,
 }LTE_FDD_ENB_MESSAGE_TYPE_ENUM;
 static const char LTE_fdd_enb_message_type_text[LTE_FDD_ENB_MESSAGE_TYPE_N_ITEMS][100] = {"Kill",
@@ -79,7 +100,13 @@ static const char LTE_fdd_enb_message_type_text[LTE_FDD_ENB_MESSAGE_TYPE_N_ITEMS
                                                                                           "Ready to send",
                                                                                           "PRACH decode",
                                                                                           "PUCCH decode",
-                                                                                          "PUSCH decode"};
+                                                                                          "PUSCH decode",
+                                                                                          "MAC sdu ready",
+                                                                                          "RLC pdu ready",
+                                                                                          "RLC sdu ready",
+                                                                                          "PDCP pdu ready",
+                                                                                          "PDCP sdu ready",
+                                                                                          "RRC pdu ready"};
 
 typedef enum{
     LTE_FDD_ENB_DEST_LAYER_PHY = 0,
@@ -137,6 +164,42 @@ typedef struct{
     uint16            rnti;
 }LTE_FDD_ENB_PUSCH_DECODE_MSG_STRUCT;
 
+// RLC -> MAC Messages
+typedef struct{
+    LTE_fdd_enb_user *user;
+    LTE_fdd_enb_rb   *rb;
+}LTE_FDD_ENB_MAC_SDU_READY_MSG_STRUCT;
+
+// MAC -> RLC Messages
+typedef struct{
+    LTE_fdd_enb_user *user;
+    LTE_fdd_enb_rb   *rb;
+}LTE_FDD_ENB_RLC_PDU_READY_MSG_STRUCT;
+
+// PDCP -> RLC Messages
+typedef struct{
+    LTE_fdd_enb_user *user;
+    LTE_fdd_enb_rb   *rb;
+}LTE_FDD_ENB_RLC_SDU_READY_MSG_STRUCT;
+
+// RLC -> PDCP Messages
+typedef struct{
+    LTE_fdd_enb_user *user;
+    LTE_fdd_enb_rb   *rb;
+}LTE_FDD_ENB_PDCP_PDU_READY_MSG_STRUCT;
+
+// RRC -> PDCP Messages
+typedef struct{
+    LTE_fdd_enb_user *user;
+    LTE_fdd_enb_rb   *rb;
+}LTE_FDD_ENB_PDCP_SDU_READY_MSG_STRUCT;
+
+// PDCP -> RRC Messages
+typedef struct{
+    LTE_fdd_enb_user *user;
+    LTE_fdd_enb_rb   *rb;
+}LTE_FDD_ENB_RRC_PDU_READY_MSG_STRUCT;
+
 typedef union{
     // Generic Messages
 
@@ -149,6 +212,24 @@ typedef union{
     LTE_FDD_ENB_PRACH_DECODE_MSG_STRUCT  prach_decode;
     LTE_FDD_ENB_PUCCH_DECODE_MSG_STRUCT  pucch_decode;
     LTE_FDD_ENB_PUSCH_DECODE_MSG_STRUCT  pusch_decode;
+
+    // RLC -> MAC Messages
+    LTE_FDD_ENB_MAC_SDU_READY_MSG_STRUCT mac_sdu_ready;
+
+    // MAC -> RLC Messages
+    LTE_FDD_ENB_RLC_PDU_READY_MSG_STRUCT rlc_pdu_ready;
+
+    // PDCP -> RLC Messages
+    LTE_FDD_ENB_RLC_SDU_READY_MSG_STRUCT rlc_sdu_ready;
+
+    // RLC -> PDCP Messages
+    LTE_FDD_ENB_PDCP_PDU_READY_MSG_STRUCT pdcp_pdu_ready;
+
+    // RRC -> PDCP Messages
+    LTE_FDD_ENB_PDCP_SDU_READY_MSG_STRUCT pdcp_sdu_ready;
+
+    // PDCP -> RRC Messages
+    LTE_FDD_ENB_RRC_PDU_READY_MSG_STRUCT rrc_pdu_ready;
 }LTE_FDD_ENB_MESSAGE_UNION;
 
 typedef struct{

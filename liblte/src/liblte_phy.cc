@@ -83,13 +83,16 @@
                                    in pre_decoder_and_matched_filter, coding
                                    rate in get_tbs_mcs_and_n_prb_for_dl, N_REs
                                    in get_num_bits_in_prb.
-    03/05/2104    Andrew Murphy    Added DCI 1C unpack.
+    03/05/2014    Andrew Murphy    Added DCI 1C unpack.
     03/26/2014    Ben Wojtowicz    Added PUSCH functionality.
     04/12/2014    Ben Wojtowicz    Pulled in a patch from Astrasel to initialize
                                    the frequency offset estimate array in
                                    dl_find_coarse_timing_and_freq_offset and
                                    added support for PRB allocation differences
                                    in each slot.
+    05/04/2014    Ben Wojtowicz    Added PHICH support, C-RNTI support for
+                                   DCIs, and seperated PHICH and PCFICH from
+                                   PDCCH encode/decode.
 
 *******************************************************************************/
 
@@ -331,6 +334,32 @@ uint32 PRACH_5_7_2_5[138] = {   1, 138,   2, 137,   3, 136,   4, 135,   5, 134, 
                                55,  84,  56,  83,  57,  82,  58,  81,  59,  80,  60,  79,
                                61,  78,  62,  77,  63,  76,  64,  75,  65,  74,  66,  73,
                                67,  72,  68,  71,  69,  70};
+
+// PHICH orthogonal sequences table from 3GPP TS 36.211 v10.1.0 table 6.9.1-2
+float PHICH_w_re_normal_cp_6_9_1_2[8][4] = {{ 1, 1, 1, 1},
+                                            { 1,-1, 1,-1},
+                                            { 1, 1,-1,-1},
+                                            { 1,-1,-1, 1},
+                                            { 0, 0, 0, 0},
+                                            { 0, 0, 0, 0},
+                                            { 0, 0, 0, 0},
+                                            { 0, 0, 0, 0}};
+float PHICH_w_im_normal_cp_6_9_1_2[8][4] = {{ 0, 0, 0, 0},
+                                            { 0, 0, 0, 0},
+                                            { 0, 0, 0, 0},
+                                            { 0, 0, 0, 0},
+                                            { 1, 1, 1, 1},
+                                            { 1,-1, 1,-1},
+                                            { 1, 1,-1,-1},
+                                            { 1,-1,-1, 1}};
+float PHICH_w_re_extended_cp_6_9_1_2[4][2] = {{ 1, 1},
+                                              { 1,-1},
+                                              { 0, 0},
+                                              { 0, 0}};
+float PHICH_w_im_extended_cp_6_9_1_2[4][2] = {{ 0, 0},
+                                              { 0, 0},
+                                              { 1, 1},
+                                              { 1,-1}};
 
 // Control Format Indicator
 uint8 CFI_BITS_1[32] = {0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1,1,0,1};
@@ -982,6 +1011,40 @@ void pre_decoder_and_matched_filter_dl(float                          *y_re,
                                        uint32                         *M_layer_symb);
 
 /*********************************************************************
+    Name: pcfich_channel_map
+
+    Description: Channel maps the PCFICH
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 6.7
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+void pcfich_channel_map(LIBLTE_PHY_STRUCT          *phy_struct,
+                        LIBLTE_PHY_PCFICH_STRUCT   *pcfich,
+                        uint32                      N_id_cell,
+                        uint8                       N_ant,
+                        LIBLTE_PHY_SUBFRAME_STRUCT *subframe);
+
+/*********************************************************************
+    Name: pcfich_channel_demap
+
+    Description: Channel demaps the PCFICH
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 6.7
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+void pcfich_channel_demap(LIBLTE_PHY_STRUCT          *phy_struct,
+                          LIBLTE_PHY_SUBFRAME_STRUCT *subframe,
+                          uint32                      N_id_cell,
+                          uint8                       N_ant,
+                          LIBLTE_PHY_PCFICH_STRUCT   *pcfich);
+
+/*********************************************************************
     Name: pdcch_permute_pre_calc
 
     Description: Pre calculates the PDCCH REG permutation.
@@ -995,6 +1058,46 @@ void pre_decoder_and_matched_filter_dl(float                          *y_re,
 void pdcch_permute_pre_calc(LIBLTE_PHY_STRUCT *phy_struct,
                             uint32             N_ant,
                             float              phich_res);
+
+/*********************************************************************
+    Name: phich_channel_map
+
+    Description: Channel maps the PHICH
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 6.9
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+void phich_channel_map(LIBLTE_PHY_STRUCT              *phy_struct,
+                       LIBLTE_PHY_PHICH_STRUCT        *phich,
+                       LIBLTE_PHY_PCFICH_STRUCT       *pcfich,
+                       uint32                          N_id_cell,
+                       uint8                           N_ant,
+                       float                           phich_res,
+                       LIBLTE_RRC_PHICH_DURATION_ENUM  phich_dur,
+                       LIBLTE_PHY_SUBFRAME_STRUCT     *subframe);
+
+/*********************************************************************
+    Name: phich_channel_demap
+
+    Description: Channel demaps the PHICH
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 6.9
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+void phich_channel_demap(LIBLTE_PHY_STRUCT              *phy_struct,
+                         LIBLTE_PHY_PCFICH_STRUCT       *pcfich,
+                         LIBLTE_PHY_SUBFRAME_STRUCT     *subframe,
+                         uint32                          N_id_cell,
+                         uint8                           N_ant,
+                         float                           phich_res,
+                         LIBLTE_RRC_PHICH_DURATION_ENUM  phich_dur,
+                         LIBLTE_PHY_PHICH_STRUCT        *phich);
 
 /*********************************************************************
     Name: generate_crs
@@ -2146,6 +2249,16 @@ LIBLTE_ERROR_ENUM liblte_phy_init(LIBLTE_PHY_STRUCT  **phy_struct,
         (*phy_struct)->N_sc_rb_ul = LIBLTE_PHY_N_SC_RB_UL;
         liblte_phy_update_n_rb_dl((*phy_struct), N_rb_dl);
         (*phy_struct)->ul_init = false;
+
+        // PHICH
+        if(LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP == (*phy_struct)->N_sc_rb_dl)
+        {
+            (*phy_struct)->N_group_phich = (uint32)ceilf((float)phich_res*((float)(*phy_struct)->N_rb_dl/(float)8));
+            (*phy_struct)->N_sf_phich    = 4;
+        }else{
+            (*phy_struct)->N_group_phich = 2*(uint32)ceilf((float)phich_res*((float)(*phy_struct)->N_rb_dl/(float)8));
+            (*phy_struct)->N_sf_phich    = 2;
+        }
 
         // PDCCH Permutation
         pdcch_permute_pre_calc(*phy_struct,
@@ -3655,8 +3768,6 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
                                                   LIBLTE_PHY_SUBFRAME_STRUCT     *subframe)
 {
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
-    float             cfi_n[4];
-    uint32            cfi_k[4];
     uint32            i;
     uint32            j;
     uint32            k;
@@ -3667,12 +3778,6 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
     uint32            M_symb;
     uint32            M_layer_symb;
     uint32            M_ap_symb;
-    uint32            N_reg_pcfich;
-    uint32            k_hat;
-    uint32            N_reg_phich;
-    uint32            N_group_phich;
-    uint32            phich_k[75];
-    uint32            n_hat[3];
     uint32            N_reg_rb;
     uint32            N_reg_pdcch;
     uint32            N_cce_pdcch;
@@ -3686,7 +3791,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
     uint32            k_prime;
     uint32            l_prime;
     uint32            m_prime;
-    uint32            n_l_prime;
+    uint32            Y_k;
     bool              valid_reg;
 
     if(phy_struct != NULL &&
@@ -3698,119 +3803,14 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
        subframe   != NULL)
     {
         // PCFICH
-        // Encode, 3GPP TS 36.211 v10.1.0 section 6.7
-        cfi_channel_encode(phy_struct,
-                           pcfich->cfi,
-                           phy_struct->pdcch_encode_bits,
-                           &N_bits);
-        c_init = (((subframe->num + 1)*(2*N_id_cell + 1)) << 9) + N_id_cell;
-        generate_prs_c(c_init, N_bits, phy_struct->pdcch_c);
-        for(i=0; i<N_bits; i++)
-        {
-            phy_struct->pdcch_scramb_bits[i] = phy_struct->pdcch_encode_bits[i] ^ phy_struct->pdcch_c[i];
-        }
-        modulation_mapper(phy_struct->pdcch_scramb_bits,
-                          N_bits,
-                          LIBLTE_PHY_MODULATION_TYPE_QPSK,
-                          phy_struct->pdcch_d_re,
-                          phy_struct->pdcch_d_im,
-                          &M_symb);
-        layer_mapper_dl(phy_struct->pdcch_d_re,
-                        phy_struct->pdcch_d_im,
-                        M_symb,
-                        N_ant,
-                        1,
-                        LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
-                        phy_struct->pdcch_x_re,
-                        phy_struct->pdcch_x_im,
-                        &M_layer_symb);
-        pre_coder_dl(phy_struct->pdcch_x_re,
-                     phy_struct->pdcch_x_im,
-                     M_layer_symb,
-                     N_ant,
-                     LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
-                     phy_struct->pdcch_y_re[0],
-                     phy_struct->pdcch_y_im[0],
-                     576,
-                     &M_ap_symb);
-        // Map the symbols to resource elements, 3GPP TS 36.211 v10.1.0 section 6.7.4
-        N_reg_pcfich = 4;
-        k_hat        = (phy_struct->N_sc_rb_dl/2)*(N_id_cell % (2*phy_struct->N_rb_dl));
-        for(i=0; i<N_reg_pcfich; i++)
-        {
-            cfi_k[i] = (k_hat + (i*phy_struct->N_rb_dl/2)*phy_struct->N_sc_rb_dl/2) % (phy_struct->N_rb_dl*phy_struct->N_sc_rb_dl);
-            cfi_n[i] = (cfi_k[i]/6) - 0.5;
-            for(p=0; p<N_ant; p++)
-            {
-                idx = 0;
-                for(j=0; j<6; j++)
-                {
-                    if((N_id_cell % 3) != (j % 3))
-                    {
-                        subframe->tx_symb_re[p][0][cfi_k[i]+j] = phy_struct->pdcch_y_re[p][idx+(i*4)];
-                        subframe->tx_symb_im[p][0][cfi_k[i]+j] = phy_struct->pdcch_y_im[p][idx+(i*4)];
-                        idx++;
-                    }
-                }
-            }
-        }
+        pcfich_channel_map(phy_struct, pcfich, N_id_cell, N_ant, subframe);
 
+        // PHICH
+        phich_channel_map(phy_struct, phich, pcfich, N_id_cell, N_ant, phich_res, phich_dur, subframe);
+
+        // PDCCH
         if(pdcch->N_alloc != 0)
         {
-            // PHICH
-            // Map the symbols to resource elements, 3GPP TS 36.211 v10.1.0 section 6.9
-            if(LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP == phy_struct->N_sc_rb_dl)
-            {
-                N_group_phich = (uint32)ceilf((float)phich_res*((float)phy_struct->N_rb_dl/(float)8));
-            }else{
-                N_group_phich = 2*(uint32)ceilf((float)phich_res*((float)phy_struct->N_rb_dl/(float)8));
-            }
-            N_reg_phich   = N_group_phich*3;
-            // Step 4
-            m_prime = 0;
-            idx     = 0;
-            // Step 10
-            while(m_prime < N_group_phich)
-            {
-                if(phich_dur == LIBLTE_RRC_PHICH_DURATION_NORMAL)
-                {
-                    // Step 7
-                    l_prime = 0;
-                    // Step 1, 2, and 3
-                    n_l_prime = phy_struct->N_rb_dl*2 - N_reg_pcfich;
-                    // Step 8
-                    for(i=0; i<3; i++)
-                    {
-                        n_hat[i] = (N_id_cell + m_prime + i*n_l_prime/3) % n_l_prime;
-                    }
-                    // Avoid PCFICH
-                    for(i=0; i<N_reg_pcfich; i++)
-                    {
-                        for(j=0; j<3; j++)
-                        {
-                            if(n_hat[j] > cfi_n[i])
-                            {
-                                n_hat[j]++;
-                            }
-                        }
-                    }
-                    // Step 5
-                    for(i=0; i<3; i++)
-                    {
-                        phich_k[idx+i] = n_hat[i]*6;
-                        // FIXME: Not currently implementing step 6
-                    }
-                    idx += 3;
-                }else{
-                    // FIXME: Not handling extended PHICH duration
-                    err = LIBLTE_ERROR_INVALID_INPUTS;
-                    return(err);
-                }
-                // Step 9
-                m_prime++;
-            }
-
-            // PDCCH
             // Calculate number of symbols, 3GPP TS 36.211 v10.1.0 section 6.7
             pdcch->N_symbs = pcfich->cfi;
             if(phy_struct->N_rb_dl <= 10)
@@ -3820,7 +3820,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
             // Calculate resources, 3GPP TS 36.211 v10.1.0 section 6.8.1
             N_reg_rb    = 3;
             N_reg_cce   = 9;
-            N_reg_pdcch = pdcch->N_symbs*(phy_struct->N_rb_dl*N_reg_rb) - phy_struct->N_rb_dl - N_reg_pcfich - N_reg_phich;
+            N_reg_pdcch = pdcch->N_symbs*(phy_struct->N_rb_dl*N_reg_rb) - phy_struct->N_rb_dl - pcfich->N_reg - phich->N_reg;
             if(N_ant == 4)
             {
                 // Remove CRS
@@ -3904,7 +3904,25 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
                     }
                 }
             }else{
-                printf("ERROR: Not handling user search space\n");
+                // Add to the user search space, using aggregation level of 8
+                Y_k = pdcch->alloc[0].rnti; // FIXME
+                for(i=0; i<subframe->num; i++)
+                {
+                    Y_k = (39827 * Y_k) % 65537;
+                }
+                for(p=0; p<N_ant; p++)
+                {
+                    idx = 0;
+                    for(i=0; i<8; i++)
+                    {
+                        for(j=0; j<(4*N_reg_cce); j++)
+                        {
+                            phy_struct->pdcch_cce_re[p][8 * (Y_k % (N_cce_pdcch/8)) + i][j] = phy_struct->pdcch_y_re[p][idx];
+                            phy_struct->pdcch_cce_im[p][8 * (Y_k % (N_cce_pdcch/8)) + i][j] = phy_struct->pdcch_y_im[p][idx];
+                            idx++;
+                        }
+                    }
+                }
             }
             // Construct REGs
             for(p=0; p<N_ant; p++)
@@ -3963,16 +3981,16 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
                         // Step 4
                         // Avoid PCFICH and PHICH
                         valid_reg = true;
-                        for(i=0; i<N_reg_pcfich; i++)
+                        for(i=0; i<pcfich->N_reg; i++)
                         {
-                            if(k_prime == cfi_k[i])
+                            if(k_prime == pcfich->k[i])
                             {
                                 valid_reg = false;
                             }
                         }
-                        for(i=0; i<N_reg_phich; i++)
+                        for(i=0; i<phich->N_reg; i++)
                         {
-                            if(k_prime == phich_k[i])
+                            if(k_prime == phich->k[i])
                             {
                                 valid_reg = false;
                             }
@@ -4080,14 +4098,11 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                                                   LIBLTE_PHY_PDCCH_STRUCT        *pdcch)
 {
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
-    float             cfi_n[4];
-    uint32            cfi_k[4];
     uint32            i;
     uint32            j;
     uint32            k;
     uint32            p;
     uint32            idx;
-    uint32            k_hat;
     uint32            c_init;
     uint32            M_layer_symb;
     uint32            M_symb;
@@ -4095,20 +4110,14 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
     uint32            k_prime;
     uint32            l_prime;
     uint32            m_prime;
-    uint32            n_l_prime;
     uint32            dci_1a_size;
     uint32            dci_1c_size;
-    uint32            n_hat[3];
     uint32            N_reg_rb;
     uint32            shift_idx;
     uint32            C_cc_sb;
     uint32            R_cc_sb;
     uint32            K_pi;
-    uint32            phich_k[75];
     uint32            N_dummy;
-    uint32            N_reg_pcfich;
-    uint32            N_reg_phich;
-    uint32            N_group_phich;
     uint32            N_reg_pdcch;
     uint32            N_cce_pdcch;
     uint32            N_reg_cce;
@@ -4122,64 +4131,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
        pdcch      != NULL)
     {
         // PCFICH
-        // Calculate resources, 3GPP TS 36.211 v10.1.0 section 6.7.4
-        N_reg_pcfich = 4;
-        k_hat        = (phy_struct->N_sc_rb_dl/2)*(N_id_cell % (2*phy_struct->N_rb_dl));
-        for(i=0; i<N_reg_pcfich; i++)
-        {
-            cfi_k[i] = (k_hat + (i*phy_struct->N_rb_dl/2)*phy_struct->N_sc_rb_dl/2) % (phy_struct->N_rb_dl*phy_struct->N_sc_rb_dl);
-            cfi_n[i] = (cfi_k[i]/6) - 0.5;
-
-            // Extract resource elements and channel estimate
-            idx = 0;
-            for(j=0; j<6; j++)
-            {
-                if((N_id_cell % 3) != (j % 3))
-                {
-                    phy_struct->pdcch_y_est_re[idx+(i*4)] = subframe->rx_symb_re[0][cfi_k[i]+j];
-                    phy_struct->pdcch_y_est_im[idx+(i*4)] = subframe->rx_symb_im[0][cfi_k[i]+j];
-                    for(p=0; p<N_ant; p++)
-                    {
-                        phy_struct->pdcch_c_est_re[p][idx+(i*4)] = subframe->rx_ce_re[p][0][cfi_k[i]+j];
-                        phy_struct->pdcch_c_est_im[p][idx+(i*4)] = subframe->rx_ce_im[p][0][cfi_k[i]+j];
-                    }
-                    idx++;
-                }
-            }
-        }
-        // Decode, 3GPP TS 36.211 v10.1.0 section 6.7
-        c_init = (((subframe->num + 1)*(2*N_id_cell + 1)) << 9) + N_id_cell;
-        generate_prs_c(c_init, 32, phy_struct->pdcch_c);
-        pre_decoder_and_matched_filter_dl(phy_struct->pdcch_y_est_re,
-                                          phy_struct->pdcch_y_est_im,
-                                          phy_struct->pdcch_c_est_re[0],
-                                          phy_struct->pdcch_c_est_im[0],
-                                          576,
-                                          16,
-                                          N_ant,
-                                          LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
-                                          phy_struct->pdcch_x_re,
-                                          phy_struct->pdcch_x_im,
-                                          &M_layer_symb);
-        layer_demapper_dl(phy_struct->pdcch_x_re,
-                          phy_struct->pdcch_x_im,
-                          M_layer_symb,
-                          N_ant,
-                          1,
-                          LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
-                          phy_struct->pdcch_d_re,
-                          phy_struct->pdcch_d_im,
-                          &M_symb);
-        modulation_demapper(phy_struct->pdcch_d_re,
-                            phy_struct->pdcch_d_im,
-                            M_symb,
-                            LIBLTE_PHY_MODULATION_TYPE_QPSK,
-                            phy_struct->pdcch_soft_bits,
-                            &N_bits);
-        for(i=0; i<N_bits; i++)
-        {
-            phy_struct->pdcch_descramb_bits[i] = (float)phy_struct->pdcch_soft_bits[i]*(1-2*(float)phy_struct->pdcch_c[i]);
-        }
+        pcfich_channel_demap(phy_struct, subframe, N_id_cell, N_ant, pcfich);
         if(LIBLTE_SUCCESS != cfi_channel_decode(phy_struct,
                                                 phy_struct->pdcch_descramb_bits,
                                                 N_bits,
@@ -4190,57 +4142,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
         }
 
         // PHICH
-        // Calculate resources, 3GPP TS 36.211 v10.1.0 section 6.9
-        if(LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP == phy_struct->N_sc_rb_dl)
-        {
-            N_group_phich = (uint32)ceilf((float)phich_res*((float)phy_struct->N_rb_dl/(float)8));
-        }else{
-            N_group_phich = 2*(uint32)ceilf((float)phich_res*((float)phy_struct->N_rb_dl/(float)8));
-        }
-        N_reg_phich   = N_group_phich*3;
-        // Step 4
-        m_prime = 0;
-        idx     = 0;
-        // Step 10
-        while(m_prime < N_group_phich)
-        {
-            if(phich_dur == LIBLTE_RRC_PHICH_DURATION_NORMAL)
-            {
-                // Step 7
-                l_prime = 0;
-                // Step 1, 2, and 3
-                n_l_prime = phy_struct->N_rb_dl*2 - N_reg_pcfich;
-                // Step 8
-                for(i=0; i<3; i++)
-                {
-                    n_hat[i] = (N_id_cell + m_prime + i*n_l_prime/3) % n_l_prime;
-                }
-                // Avoid PCFICH
-                for(i=0; i<N_reg_pcfich; i++)
-                {
-                    for(j=0; j<3; j++)
-                    {
-                        if(n_hat[j] > cfi_n[i])
-                        {
-                            n_hat[j]++;
-                        }
-                    }
-                }
-                // Step 5
-                for(i=0; i<3; i++)
-                {
-                    phich_k[idx+i] = n_hat[i]*6;
-                    // FIXME: Not currently implementing step 6
-                }
-                idx += 3;
-            }else{
-                // FIXME: Not handling extended PHICH duration
-                err = LIBLTE_ERROR_INVALID_INPUTS;
-                return(err);
-            }
-            // Step 9
-            m_prime++;
-        }
+        phich_channel_demap(phy_struct, pcfich, subframe, N_id_cell, N_ant, phich_res, phich_dur, phich);
 
         // PDCCH
         // Calculate number of symbols, 3GPP TS 36.211 v10.1.0 section 6.7
@@ -4251,7 +4153,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
         }
         // Calculate resources, 3GPP TS 36.211 v10.1.0 section 6.8.1
         N_reg_rb    = 3;
-        N_reg_pdcch = pdcch->N_symbs*(phy_struct->N_rb_dl*N_reg_rb) - phy_struct->N_rb_dl - N_reg_pcfich - N_reg_phich;
+        N_reg_pdcch = pdcch->N_symbs*(phy_struct->N_rb_dl*N_reg_rb) - phy_struct->N_rb_dl - pcfich->N_reg - phich->N_reg;
         if(N_ant == 4)
         {
             // Remove CRS
@@ -4275,16 +4177,16 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_decode(LIBLTE_PHY_STRUCT             
                     // Step 4
                     // Avoid PCFICH and PHICH
                     valid_reg = true;
-                    for(i=0; i<N_reg_pcfich; i++)
+                    for(i=0; i<pcfich->N_reg; i++)
                     {
-                        if(k_prime == cfi_k[i])
+                        if(k_prime == pcfich->k[i])
                         {
                             valid_reg = false;
                         }
                     }
-                    for(i=0; i<N_reg_phich; i++)
+                    for(i=0; i<phich->N_reg; i++)
                     {
-                        if(k_prime == phich_k[i])
+                        if(k_prime == phich->k[i])
                         {
                             valid_reg = false;
                         }
@@ -6101,21 +6003,13 @@ LIBLTE_ERROR_ENUM liblte_phy_get_n_cce(LIBLTE_PHY_STRUCT *phy_struct,
                                        uint8              N_ant,
                                        uint32            *N_cce)
 {
-    uint32 N_group_phich;
     uint32 N_reg_phich;
     uint32 N_reg_pcfich = 4;
     uint32 N_reg_rb     = 3;
     uint32 N_reg_pdcch;
     uint32 N_reg_cce = 9;
 
-    // From liblte_phy_pdcch_channel_encode
-    if(LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP == phy_struct->N_sc_rb_dl)
-    {
-        N_group_phich = (uint32)ceilf((float)phich_res*((float)phy_struct->N_rb_dl/(float)8));
-    }else{
-        N_group_phich = 2*(uint32)ceilf((float)phich_res*((float)phy_struct->N_rb_dl/(float)8));
-    }
-    N_reg_phich = N_group_phich*3;
+    N_reg_phich = phy_struct->N_group_phich*3;
     N_reg_pdcch = N_pdcch_symbs*(phy_struct->N_rb_dl*N_reg_rb) - phy_struct->N_rb_dl - N_reg_pcfich - N_reg_phich;
     if(N_ant == 4)
     {
@@ -7273,6 +7167,171 @@ void pre_decoder_and_matched_filter_dl(float                          *y_re,
 }
 
 /*********************************************************************
+    Name: pcfich_channel_map
+
+    Description: Channel maps the PCFICH
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 6.7
+*********************************************************************/
+void pcfich_channel_map(LIBLTE_PHY_STRUCT          *phy_struct,
+                        LIBLTE_PHY_PCFICH_STRUCT   *pcfich,
+                        uint32                      N_id_cell,
+                        uint8                       N_ant,
+                        LIBLTE_PHY_SUBFRAME_STRUCT *subframe)
+{
+    uint32 N_bits;
+    uint32 M_symb;
+    uint32 M_layer_symb;
+    uint32 M_ap_symb;
+    uint32 c_init;
+    uint32 k_hat;
+    uint32 i;
+    uint32 j;
+    uint32 p;
+    uint32 idx;
+
+    // Encode, 3GPP TS 36.211 v10.1.0 section 6.7
+    cfi_channel_encode(phy_struct,
+                       pcfich->cfi,
+                       phy_struct->pdcch_encode_bits,
+                       &N_bits);
+    c_init = (((subframe->num + 1)*(2*N_id_cell + 1)) << 9) + N_id_cell;
+    generate_prs_c(c_init, N_bits, phy_struct->pdcch_c);
+    for(i=0; i<N_bits; i++)
+    {
+        phy_struct->pdcch_scramb_bits[i] = phy_struct->pdcch_encode_bits[i] ^ phy_struct->pdcch_c[i];
+    }
+    modulation_mapper(phy_struct->pdcch_scramb_bits,
+                      N_bits,
+                      LIBLTE_PHY_MODULATION_TYPE_QPSK,
+                      phy_struct->pdcch_d_re,
+                      phy_struct->pdcch_d_im,
+                      &M_symb);
+    layer_mapper_dl(phy_struct->pdcch_d_re,
+                    phy_struct->pdcch_d_im,
+                    M_symb,
+                    N_ant,
+                    1,
+                    LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
+                    phy_struct->pdcch_x_re,
+                    phy_struct->pdcch_x_im,
+                    &M_layer_symb);
+    pre_coder_dl(phy_struct->pdcch_x_re,
+                 phy_struct->pdcch_x_im,
+                 M_layer_symb,
+                 N_ant,
+                 LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
+                 phy_struct->pdcch_y_re[0],
+                 phy_struct->pdcch_y_im[0],
+                 576,
+                 &M_ap_symb);
+    // Map the symbols to resource elements, 3GPP TS 36.211 v10.1.0 section 6.7.4
+    pcfich->N_reg = 4;
+    k_hat         = (phy_struct->N_sc_rb_dl/2)*(N_id_cell % (2*phy_struct->N_rb_dl));
+    for(i=0; i<pcfich->N_reg; i++)
+    {
+        pcfich->k[i] = (k_hat + (i*phy_struct->N_rb_dl/2)*phy_struct->N_sc_rb_dl/2) % (phy_struct->N_rb_dl*phy_struct->N_sc_rb_dl);
+        pcfich->n[i] = (pcfich->k[i]/6) - 0.5;
+        for(p=0; p<N_ant; p++)
+        {
+            idx = 0;
+            for(j=0; j<6; j++)
+            {
+                if((N_id_cell % 3) != (j % 3))
+                {
+                    subframe->tx_symb_re[p][0][pcfich->k[i]+j] = phy_struct->pdcch_y_re[p][idx+(i*4)];
+                    subframe->tx_symb_im[p][0][pcfich->k[i]+j] = phy_struct->pdcch_y_im[p][idx+(i*4)];
+                    idx++;
+                }
+            }
+        }
+    }
+}
+
+/*********************************************************************
+    Name: pcfich_channel_demap
+
+    Description: Channel demaps the PCFICH
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 6.7
+*********************************************************************/
+void pcfich_channel_demap(LIBLTE_PHY_STRUCT          *phy_struct,
+                          LIBLTE_PHY_SUBFRAME_STRUCT *subframe,
+                          uint32                      N_id_cell,
+                          uint8                       N_ant,
+                          LIBLTE_PHY_PCFICH_STRUCT   *pcfich)
+{
+    uint32 M_layer_symb;
+    uint32 M_symb;
+    uint32 N_bits;
+    uint32 c_init;
+    uint32 k_hat;
+    uint32 i;
+    uint32 j;
+    uint32 p;
+    uint32 idx;
+
+    // Calculate resources, 3GPP TS 36.211 v10.1.0 section 6.7.4
+    pcfich->N_reg = 4;
+    k_hat         = (phy_struct->N_sc_rb_dl/2)*(N_id_cell % (2*phy_struct->N_rb_dl));
+    for(i=0; i<pcfich->N_reg; i++)
+    {
+        pcfich->k[i] = (k_hat + (i*phy_struct->N_rb_dl/2)*phy_struct->N_sc_rb_dl/2) % (phy_struct->N_rb_dl*phy_struct->N_sc_rb_dl);
+        pcfich->n[i] = (pcfich->k[i]/6) - 0.5;
+
+        // Extract resource elements and channel estimate
+        idx = 0;
+        for(j=0; j<6; j++)
+        {
+            if((N_id_cell % 3) != (j % 3))
+            {
+                phy_struct->pdcch_y_est_re[idx+(i*4)] = subframe->rx_symb_re[0][pcfich->k[i]+j];
+                phy_struct->pdcch_y_est_im[idx+(i*4)] = subframe->rx_symb_im[0][pcfich->k[i]+j];
+                for(p=0; p<N_ant; p++)
+                {
+                    phy_struct->pdcch_c_est_re[p][idx+(i*4)] = subframe->rx_ce_re[p][0][pcfich->k[i]+j];
+                    phy_struct->pdcch_c_est_im[p][idx+(i*4)] = subframe->rx_ce_im[p][0][pcfich->k[i]+j];
+                }
+                idx++;
+            }
+        }
+    }
+    // Decode, 3GPP TS 36.211 v10.1.0 section 6.7
+    c_init = (((subframe->num + 1)*(2*N_id_cell + 1)) << 9) + N_id_cell;
+    generate_prs_c(c_init, 32, phy_struct->pdcch_c);
+    pre_decoder_and_matched_filter_dl(phy_struct->pdcch_y_est_re,
+                                      phy_struct->pdcch_y_est_im,
+                                      phy_struct->pdcch_c_est_re[0],
+                                      phy_struct->pdcch_c_est_im[0],
+                                      576,
+                                      16,
+                                      N_ant,
+                                      LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
+                                      phy_struct->pdcch_x_re,
+                                      phy_struct->pdcch_x_im,
+                                      &M_layer_symb);
+    layer_demapper_dl(phy_struct->pdcch_x_re,
+                      phy_struct->pdcch_x_im,
+                      M_layer_symb,
+                      N_ant,
+                      1,
+                      LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
+                      phy_struct->pdcch_d_re,
+                      phy_struct->pdcch_d_im,
+                      &M_symb);
+    modulation_demapper(phy_struct->pdcch_d_re,
+                        phy_struct->pdcch_d_im,
+                        M_symb,
+                        LIBLTE_PHY_MODULATION_TYPE_QPSK,
+                        phy_struct->pdcch_soft_bits,
+                        &N_bits);
+    for(i=0; i<N_bits; i++)
+    {
+        phy_struct->pdcch_descramb_bits[i] = (float)phy_struct->pdcch_soft_bits[i]*(1-2*(float)phy_struct->pdcch_c[i]);
+    }
+}
+
+/*********************************************************************
     Name: pdcch_permute_pre_calc
 
     Description: Pre calculates the PDCCH REG permutation.
@@ -7297,15 +7356,8 @@ void pdcch_permute_pre_calc(LIBLTE_PHY_STRUCT *phy_struct,
     uint32 N_symbs;
     uint32 N_reg_pcfich = 4;
     uint32 N_reg_phich;
-    uint32 N_group_phich;
 
-    if(LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP == phy_struct->N_sc_rb_dl)
-    {
-        N_group_phich = (uint32)ceilf((float)phich_res*((float)phy_struct->N_rb_dl/(float)8));
-    }else{
-        N_group_phich = 2*(uint32)ceilf((float)phich_res*((float)phy_struct->N_rb_dl/(float)8));
-    }
-    N_reg_phich = N_group_phich*3;
+    N_reg_phich = phy_struct->N_group_phich*3;
 
     for(N_symbs=1; N_symbs<=3; N_symbs++)
     {
@@ -7382,6 +7434,230 @@ void pdcch_permute_pre_calc(LIBLTE_PHY_STRUCT *phy_struct,
                 phy_struct->pdcch_permute_map[N_reg_pdcch][i] = phy_struct->pdcch_reg_perm_vec[i];
             }
         }
+    }
+}
+
+/*********************************************************************
+    Name: phich_channel_map
+
+    Description: Channel maps the PHICH
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 6.9
+*********************************************************************/
+void phich_channel_map(LIBLTE_PHY_STRUCT              *phy_struct,
+                       LIBLTE_PHY_PHICH_STRUCT        *phich,
+                       LIBLTE_PHY_PCFICH_STRUCT       *pcfich,
+                       uint32                          N_id_cell,
+                       uint8                           N_ant,
+                       float                           phich_res,
+                       LIBLTE_RRC_PHICH_DURATION_ENUM  phich_dur,
+                       LIBLTE_PHY_SUBFRAME_STRUCT     *subframe)
+{
+    uint32  m_prime;
+    uint32  l_prime;
+    uint32  n_l_prime;
+    uint32  n_hat[3];
+    uint32  M_symb;
+    uint32  M_layer_symb;
+    uint32  M_ap_symb;
+    uint32  c_init;
+    uint32  seq;
+    uint32  i;
+    uint32  j;
+    uint32  p;
+    uint32  idx;
+    uint32  w_idx;
+    uint32  y_idx;
+    uint32  z_idx;
+    uint8  *bit_seq;
+    uint8   ack_seq[3]  = {1, 1, 1};
+    uint8   nack_seq[3] = {0, 0, 0};
+
+    // Determine the number of REGs
+    phich->N_reg = phy_struct->N_group_phich*3;
+
+    c_init = (((subframe->num + 1)*(2*N_id_cell + 1)) << 9) + N_id_cell;
+    generate_prs_c(c_init, 12, phy_struct->pdcch_c);
+    idx = 0;
+    for(m_prime=0; m_prime<phy_struct->N_group_phich; m_prime++)
+    {
+        for(i=0; i<12; i++)
+        {
+            phy_struct->pdcch_d_re[i] = 0;
+            phy_struct->pdcch_d_im[i] = 0;
+        }
+        for(seq=0; seq<8; seq++) // FIXME: Only handling normal CP
+        {
+            if(phich->present[m_prime][seq])
+            {
+                if(phich->b[m_prime][seq])
+                {
+                    bit_seq = ack_seq;
+                }else{
+                    bit_seq = nack_seq;
+                }
+                modulation_mapper(bit_seq,
+                                  3,
+                                  LIBLTE_PHY_MODULATION_TYPE_BPSK,
+                                  phich->z_re,
+                                  phich->z_im,
+                                  &M_symb);
+                for(i=0; i<(3 * phy_struct->N_sf_phich); i++)
+                {
+                    w_idx = i % phy_struct->N_sf_phich;
+                    z_idx = i / phy_struct->N_sf_phich;
+                    if(phy_struct->pdcch_c[i] == 1)
+                    {
+                        phy_struct->pdcch_d_re[i] += PHICH_w_re_normal_cp_6_9_1_2[seq][w_idx]*(-phich->z_re[z_idx]) - PHICH_w_im_normal_cp_6_9_1_2[seq][w_idx]*(-phich->z_im[z_idx]);
+                        phy_struct->pdcch_d_im[i] += PHICH_w_re_normal_cp_6_9_1_2[seq][w_idx]*(-phich->z_im[z_idx]) + PHICH_w_im_normal_cp_6_9_1_2[seq][w_idx]*(-phich->z_re[z_idx]);
+                    }else{
+                        phy_struct->pdcch_d_re[i] += PHICH_w_re_normal_cp_6_9_1_2[seq][w_idx]*phich->z_re[z_idx] - PHICH_w_im_normal_cp_6_9_1_2[seq][w_idx]*phich->z_im[z_idx];
+                        phy_struct->pdcch_d_im[i] += PHICH_w_re_normal_cp_6_9_1_2[seq][w_idx]*phich->z_im[z_idx] + PHICH_w_im_normal_cp_6_9_1_2[seq][w_idx]*phich->z_re[z_idx];
+                    }
+                }
+            }
+        }
+        layer_mapper_dl(phy_struct->pdcch_d_re,
+                        phy_struct->pdcch_d_im,
+                        3 * phy_struct->N_sf_phich,
+                        N_ant,
+                        1,
+                        LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
+                        phy_struct->pdcch_x_re,
+                        phy_struct->pdcch_x_im,
+                        &M_layer_symb);
+        // FIXME: Pre coder for 4 antennas is not correct
+        pre_coder_dl(phy_struct->pdcch_x_re,
+                     phy_struct->pdcch_x_im,
+                     M_layer_symb,
+                     N_ant,
+                     LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
+                     phy_struct->pdcch_y_re[0],
+                     phy_struct->pdcch_y_im[0],
+                     576,
+                     &M_ap_symb);
+
+        // Map the group
+        if(LIBLTE_RRC_PHICH_DURATION_NORMAL == phich_dur)
+        {
+            // Step 7
+            l_prime = 0;
+            // Step 1, 2, and 3
+            n_l_prime = phy_struct->N_rb_dl*2 - pcfich->N_reg;
+            // Step 8
+            for(i=0; i<3; i++)
+            {
+                n_hat[i] = (N_id_cell + m_prime + i*n_l_prime/3) % n_l_prime;
+            }
+            // Avoid PCFICH
+            for(i=0; i<pcfich->N_reg; i++)
+            {
+                for(j=0; j<3; j++)
+                {
+                    if(n_hat[j] > pcfich->n[i])
+                    {
+                        n_hat[j]++;
+                    }
+                }
+            }
+            // Step 5
+            y_idx = 0;
+            for(i=0; i<3; i++)
+            {
+                phich->k[idx+i] = n_hat[i]*6;
+                for(p=0; p<N_ant; p++)
+                {
+                    for(j=0; j<6; j++)
+                    {
+                        if((N_id_cell % 3) != (j % 3))
+                        {
+                            subframe->tx_symb_re[p][0][phich->k[idx+i]+j] = phy_struct->pdcch_y_re[p][y_idx];
+                            subframe->tx_symb_im[p][0][phich->k[idx+i]+j] = phy_struct->pdcch_y_im[p][y_idx];
+                            y_idx++;
+                        }
+                    }
+                }
+            }
+        }else{
+            // FIXME: Not handling extended PHICH duration
+        }
+        idx += 3;
+    }
+}
+
+/*********************************************************************
+    Name: phich_channel_demap
+
+    Description: Channel demaps the PHICH
+
+    Document Reference: 3GPP TS 36.211 v10.1.0 section 6.9
+*********************************************************************/
+void phich_channel_demap(LIBLTE_PHY_STRUCT              *phy_struct,
+                         LIBLTE_PHY_PCFICH_STRUCT       *pcfich,
+                         LIBLTE_PHY_SUBFRAME_STRUCT     *subframe,
+                         uint32                          N_id_cell,
+                         uint8                           N_ant,
+                         float                           phich_res,
+                         LIBLTE_RRC_PHICH_DURATION_ENUM  phich_dur,
+                         LIBLTE_PHY_PHICH_STRUCT        *phich)
+{
+    uint32 m_prime;
+    uint32 l_prime;
+    uint32 n_l_prime;
+    uint32 n_hat[3];
+    uint32 i;
+    uint32 j;
+    uint32 idx;
+
+    // Calculate resources, 3GPP TS 36.211 v10.1.0 section 6.9
+    if(LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP == phy_struct->N_sc_rb_dl)
+    {
+        phy_struct->N_group_phich = (uint32)ceilf((float)phich_res*((float)phy_struct->N_rb_dl/(float)8));
+    }else{
+        phy_struct->N_group_phich = 2*(uint32)ceilf((float)phich_res*((float)phy_struct->N_rb_dl/(float)8));
+    }
+    phich->N_reg = phy_struct->N_group_phich*3;
+    // Step 4
+    m_prime = 0;
+    idx     = 0;
+    // Step 10
+    while(m_prime < phy_struct->N_group_phich)
+    {
+        if(phich_dur == LIBLTE_RRC_PHICH_DURATION_NORMAL)
+        {
+            // Step 7
+            l_prime = 0;
+            // Step 1, 2, and 3
+            n_l_prime = phy_struct->N_rb_dl*2 - pcfich->N_reg;
+            // Step 8
+            for(i=0; i<3; i++)
+            {
+                n_hat[i] = (N_id_cell + m_prime + i*n_l_prime/3) % n_l_prime;
+            }
+            // Avoid PCFICH
+            for(i=0; i<pcfich->N_reg; i++)
+            {
+                for(j=0; j<3; j++)
+                {
+                    if(n_hat[j] > pcfich->n[i])
+                    {
+                        n_hat[j]++;
+                    }
+                }
+            }
+            // Step 5
+            for(i=0; i<3; i++)
+            {
+                phich->k[idx+i] = n_hat[i]*6;
+                // FIXME: Not currently implementing step 6
+            }
+            idx += 3;
+        }else{
+            // FIXME: Not handling extended PHICH duration
+            printf("ERROR: Not handling extended PHICH duration\n");
+        }
+        // Step 9
+        m_prime++;
     }
 }
 
@@ -12109,7 +12385,34 @@ void dci_1a_pack(LIBLTE_PHY_ALLOCATION_STRUCT    *alloc,
         // Calculate the TBS
         alloc->tbs = TBS_71721[alloc->mcs][N_prb_1a-1];
     }else{
-        printf("ERROR: Not handling DCI 1As for C-RNTI\n");
+        // FIXME: Only supporting localized VRBs
+        phy_value_2_bits(DCI_VRB_TYPE_LOCALIZED, &dci, 1);
+        RIV_length = (uint32)ceilf(logf(N_rb_dl*(N_rb_dl+1)/2)/logf(2));
+        if((alloc->N_prb-1) <= (N_rb_dl/2))
+        {
+            RIV = N_rb_dl*(alloc->N_prb-1) + alloc->prb[0][0];
+        }else{
+            RIV = N_rb_dl*(N_rb_dl-alloc->N_prb+1) + (N_rb_dl - 1 - alloc->prb[0][0]);
+        }
+        phy_value_2_bits(RIV, &dci, RIV_length);
+
+        // Modulation and coding scheme
+        phy_value_2_bits(alloc->mcs, &dci, 5);
+
+        // HARQ process number, FIXME: FDD only
+        phy_value_2_bits(0, &dci, 3);
+
+        // New data indicator
+        phy_value_2_bits(alloc->ndi, &dci, 1);
+
+        // Redundancy version
+        phy_value_2_bits(alloc->rv_idx, &dci, 2);
+
+        // TPC
+        phy_value_2_bits(alloc->tpc, &dci, 2);
+
+        // Calculate the TBS
+        alloc->tbs = TBS_71721[alloc->mcs][alloc->N_prb];
     }
 
     // Pad if needed

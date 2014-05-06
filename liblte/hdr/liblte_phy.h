@@ -58,6 +58,7 @@
     03/26/2014    Ben Wojtowicz    Added PUSCH functionality.
     04/12/2014    Ben Wojtowicz    Added support for PRB allocation differences
                                    in each slot.
+    05/04/2014    Ben Wojtowicz    Added PHICH and TPC support.
 
 *******************************************************************************/
 
@@ -367,6 +368,10 @@ typedef struct{
     uint8  pdcch_scramb_bits[576];
     int8   pdcch_soft_bits[576];
 
+    // PHICH
+    uint32 N_group_phich;
+    uint32 N_sf_phich;
+
     // CRS & Channel Estimate
     float crs_re[14][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP];
     float crs_im[14][LIBLTE_PHY_N_RB_DL_20MHZ*LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP];
@@ -595,6 +600,14 @@ LIBLTE_ERROR_ENUM liblte_phy_update_n_rb_dl(LIBLTE_PHY_STRUCT *phy_struct,
 *********************************************************************/
 // Defines
 // Enums
+typedef enum{
+    LIBLTE_PHY_TPC_COMMAND_DCI_1_1A_1B_1D_2_3_DB_NEG_1 = 0,
+    LIBLTE_PHY_TPC_COMMAND_DCI_1_1A_1B_1D_2_3_DB_ZERO,
+    LIBLTE_PHY_TPC_COMMAND_DCI_1_1A_1B_1D_2_3_DB_1,
+    LIBLTE_PHY_TPC_COMMAND_DCI_1_1A_1B_1D_2_3_DB_3,
+    LIBLTE_PHY_TPC_COMMAND_DCI_1_1A_1B_1D_2_3_N_ITEMS,
+}LIBLTE_PHY_TPC_COMMAND_DCI_1_1A_1B_1D_2_3_ENUM;
+static const char liblte_phy_tpc_command_dci_1_1a_1b_1d_2_3_text[LIBLTE_PHY_TPC_COMMAND_DCI_1_1A_1B_1D_2_3_N_ITEMS][20] = {"-1dB", "0dB", "1dB", "3dB"};
 // Structs
 typedef struct{
     LIBLTE_MSG_STRUCT               msg;
@@ -609,6 +622,8 @@ typedef struct{
     uint32                          tx_mode;
     uint16                          rnti;
     uint8                           mcs;
+    uint8                           tpc;
+    bool                            ndi;
 }LIBLTE_PHY_ALLOCATION_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_phy_pusch_channel_encode(LIBLTE_PHY_STRUCT            *phy_struct,
@@ -776,11 +791,19 @@ typedef enum{
 }LIBLTE_PHY_DCI_CA_PRESENCE_ENUM;
 // Structs
 typedef struct{
+    float  n[4];
+    uint32 k[4];
     uint32 cfi;
+    uint32 N_reg;
 }LIBLTE_PHY_PCFICH_STRUCT;
 
 typedef struct{
-    // FIXME: Place holder
+    float  z_re[3];
+    float  z_im[3];
+    uint32 k[75];
+    uint32 N_reg;
+    uint8  b[25][8];
+    bool   present[25][8];
 }LIBLTE_PHY_PHICH_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT              *phy_struct,

@@ -46,6 +46,7 @@
                                    bandwidth.
     03/26/2014    Ben Wojtowicz    Using the latest LTE library.
     04/12/2014    Ben Wojtowicz    Using the latest LTE library.
+    05/04/2014    Ben Wojtowicz    Added PHICH support.
 
 *******************************************************************************/
 
@@ -92,6 +93,9 @@ LTE_fdd_dl_fg_samp_buf::LTE_fdd_dl_fg_samp_buf(size_t out_size_val)
                       gr::io_signature::make(MIN_IN,  MAX_IN,  sizeof(int8)),
                       gr::io_signature::make(MIN_OUT, MAX_OUT, out_size_val))
 {
+    uint32 i;
+    uint32 j;
+
     // Parse the inputs
     if(out_size_val == sizeof(gr_complex))
     {
@@ -231,6 +235,14 @@ LTE_fdd_dl_fg_samp_buf::LTE_fdd_dl_fg_samp_buf(size_t out_size_val)
     sib8.params_1xrtt_present    = false;
     // PCFICH
     pcfich.cfi = 2;
+    // PHICH
+    for(i=0; i<25; i++)
+    {
+        for(j=0; j<8; j++)
+        {
+            phich.present[i][j] = false;
+        }
+    }
 
     // Initialize the configuration
     need_config = true;

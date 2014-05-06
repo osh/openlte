@@ -26,6 +26,7 @@
     ----------    -------------    --------------------------------------------
     11/09/2013    Ben Wojtowicz    Created file
     01/18/2014    Ben Wojtowicz    Cached a copy of the interface class.
+    05/04/2014    Ben Wojtowicz    Added ULSCH handling.
 
 *******************************************************************************/
 
@@ -39,6 +40,7 @@
 #include "LTE_fdd_enb_interface.h"
 #include "LTE_fdd_enb_cnfg_db.h"
 #include "LTE_fdd_enb_msgq.h"
+#include "LTE_fdd_enb_user.h"
 #include "liblte_mac.h"
 #include <boost/thread/mutex.hpp>
 #include <boost/interprocess/ipc/message_queue.hpp>
@@ -119,12 +121,19 @@ private:
     void handle_pusch_decode(LTE_FDD_ENB_PUSCH_DECODE_MSG_STRUCT *pusch_decode);
 
     // RLC Message Handlers
+    void handle_sdu_ready(LTE_FDD_ENB_MAC_SDU_READY_MSG_STRUCT *sdu_ready);
 
-    // Message Parsers
+    // MAC PDU Handlers
+    void handle_ulsch_ccch_sdu(LTE_fdd_enb_user *user, uint32 lcid, LIBLTE_MSG_STRUCT *sdu);
+    void handle_ulsch_dcch_sdu(LTE_fdd_enb_user *user, uint32 lcid, LIBLTE_MSG_STRUCT *sdu);
+    void handle_ulsch_ext_power_headroom_report(LTE_fdd_enb_user *user, LIBLTE_MAC_EXT_POWER_HEADROOM_CE_STRUCT *ext_power_headroom);
+    void handle_ulsch_power_headroom_report(LTE_fdd_enb_user *user, LIBLTE_MAC_POWER_HEADROOM_CE_STRUCT *power_headroom);
+    void handle_ulsch_c_rnti(LTE_fdd_enb_user *user, LIBLTE_MAC_C_RNTI_CE_STRUCT *c_rnti);
+    void handle_ulsch_truncated_bsr(LTE_fdd_enb_user *user, LIBLTE_MAC_TRUNCATED_BSR_CE_STRUCT *truncated_bsr);
+    void handle_ulsch_short_bsr(LTE_fdd_enb_user *user, LIBLTE_MAC_SHORT_BSR_CE_STRUCT *short_bsr);
+    void handle_ulsch_long_bsr(LTE_fdd_enb_user *user, LIBLTE_MAC_LONG_BSR_CE_STRUCT *long_bsr);
 
-    // State Machines
-
-    // Message Constructors
+    // Data Constructors
     void construct_random_access_response(uint8 preamble, uint16 timing_adv, uint32 fn_combo);
 
     // Scheduler

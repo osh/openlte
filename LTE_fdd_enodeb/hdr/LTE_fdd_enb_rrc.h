@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,8 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/09/2013    Ben Wojtowicz    Created file
+    05/04/2014    Ben Wojtowicz    Added PDCP communication and UL CCCH state
+                                   machine.
 
 *******************************************************************************/
 
@@ -36,6 +38,7 @@
 *******************************************************************************/
 
 #include "LTE_fdd_enb_cnfg_db.h"
+#include "LTE_fdd_enb_user.h"
 #include "LTE_fdd_enb_msgq.h"
 #include <boost/thread/mutex.hpp>
 #include <boost/interprocess/ipc/message_queue.hpp>
@@ -90,6 +93,20 @@ private:
     LTE_fdd_enb_msgq                   *mme_comm_msgq;
     boost::interprocess::message_queue *rrc_pdcp_mq;
     boost::interprocess::message_queue *rrc_mme_mq;
+
+    // PDCP Message Handlers
+    void handle_pdu_ready(LTE_FDD_ENB_RRC_PDU_READY_MSG_STRUCT *pdu_ready);
+
+    // MME Message Handlers
+
+    // State Machines
+    void ul_ccch_message_sm(LIBLTE_MSG_STRUCT *msg, LTE_fdd_enb_user *user, LTE_fdd_enb_rb *rb);
+
+    // Message Parsers
+    void parse_ul_ccch_message(LIBLTE_MSG_STRUCT *msg, LTE_fdd_enb_user *user, LTE_fdd_enb_rb *rb);
+
+    // Message Senders
+    void send_rrc_con_setup(LTE_fdd_enb_user *user, LTE_fdd_enb_rb *rb);
 
     // Parameters
     boost::mutex                sys_info_mutex;

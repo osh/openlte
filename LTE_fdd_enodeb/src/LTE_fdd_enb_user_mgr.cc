@@ -26,6 +26,7 @@
     ----------    -------------    --------------------------------------------
     11/10/2013    Ben Wojtowicz    Created file
     01/18/2014    Ben Wojtowicz    Added level to debug prints.
+    05/04/2014    Ben Wojtowicz    Added C-RNTI timeout timers.
 
 *******************************************************************************/
 
@@ -34,6 +35,7 @@
 *******************************************************************************/
 
 #include "LTE_fdd_enb_user_mgr.h"
+#include "LTE_fdd_enb_timer_mgr.h"
 #include "liblte_mac.h"
 #include <boost/lexical_cast.hpp>
 
@@ -97,7 +99,7 @@ LTE_fdd_enb_user_mgr::~LTE_fdd_enb_user_mgr()
 /****************************/
 /*    External Interface    */
 /****************************/
-LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_user_mgr::get_free_c_rnti(uint16 &c_rnti)
+LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_user_mgr::get_free_c_rnti(uint16 *c_rnti)
 {
     boost::mutex::scoped_lock                     lock(c_rnti_mutex);
     std::map<uint16, LTE_fdd_enb_user*>::iterator iter;
@@ -120,8 +122,8 @@ LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_user_mgr::get_free_c_rnti(uint16 &c_rnti)
 
     if(next_c_rnti != start_c_rnti)
     {
-        c_rnti = next_c_rnti-1;
-        err    = LTE_FDD_ENB_ERROR_NONE;
+        *c_rnti = next_c_rnti-1;
+        err     = LTE_FDD_ENB_ERROR_NONE;
     }
 
     return(err);
@@ -168,9 +170,12 @@ LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_user_mgr::add_user(std::string imsi)
 LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_user_mgr::add_user(uint16 c_rnti)
 {
     LTE_fdd_enb_interface  *interface = LTE_fdd_enb_interface::get_instance();
+    LTE_fdd_enb_timer_mgr  *timer_mgr = LTE_fdd_enb_timer_mgr::get_instance();
     LTE_fdd_enb_user       *new_user  = NULL;
+    timer_cb                timer_expiry_cb(&timer_cb_wrapper<LTE_fdd_enb_user_mgr, &LTE_fdd_enb_user_mgr::handle_c_rnti_timer_expiry>, this);
     std::string             fake_imsi;
     LTE_FDD_ENB_ERROR_ENUM  err = LTE_FDD_ENB_ERROR_NONE;
+    uint32                  timer_id;
 
     try
     {
@@ -181,11 +186,19 @@ LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_user_mgr::add_user(uint16 c_rnti)
 
         if(NULL != new_user)
         {
+            // Allocate new user
+            new_user->set_c_rnti(c_rnti);
             user_mutex.lock();
             user_map[fake_imsi] = new_user;
             user_mutex.unlock();
 
-            // FIXME: Need timer to control how long this RNTI stays allocated
+            // Start a C-RNTI reservation timer
+            timer_mgr->start_timer(10, timer_expiry_cb, &timer_id);
+            timer_id_mutex.lock();
+            timer_id_map[timer_id] = c_rnti;
+            timer_id_mutex.unlock();
+
+            // Assign C-RNTI
             assign_c_rnti(c_rnti, new_user);
         }else{
             err = LTE_FDD_ENB_ERROR_BAD_ALLOC;
@@ -278,4 +291,26 @@ LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_user_mgr::del_user(uint16 c_rnti)
     }
 
     return(err);
+}
+
+/**********************/
+/*    C-RNTI Timer    */
+/**********************/
+void LTE_fdd_enb_user_mgr::handle_c_rnti_timer_expiry(uint32 timer_id)
+{
+    LTE_fdd_enb_interface              *interface = LTE_fdd_enb_interface::get_instance();
+    boost::mutex::scoped_lock           lock(timer_id_mutex);
+    std::map<uint32, uint16>::iterator  iter = timer_id_map.find(timer_id);
+
+    if(timer_id_map.end() != iter)
+    {
+        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_USER,
+                                  __FILE__,
+                                  __LINE__,
+                                  "C-RNTI allocation timer expiry C-RNTI=%u",
+                                  (*iter).second);
+        free_c_rnti((*iter).second);
+        timer_id_map.erase(iter);
+    }
 }

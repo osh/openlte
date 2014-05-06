@@ -18,6 +18,14 @@ LTE_file_recorder     A gnu-radio LTE file recording application that
 LTE_fdd_enodeb        An LTE FDD eNodeB application that currently
                       supports URSP B2X0 hardware
 
+openLTE is dependant on the following:
+1) GNU Radio
+2) GrOsmoSDR
+3) rtl-sdr
+4) UHD
+5) HackRF
+6) bladeRF
+
 To build the C++ and python code use the following:
 
   $ mkdir build
@@ -32,6 +40,16 @@ To install the C++ and python code use the following:
   $ cmake ../
   $ make
   $ sudo make install
+
+All testing was performed against the following configuration:
+- Intel Core i5-2557M
+- Ubuntu 12.04
+- GNU Radio 3.7.2
+- GrOsmoSDR 0.1.1
+- rtl-sdr 0.5
+- UHD 3.6.0-1
+- HackRF 0.2
+- bladeRF 0.9.0
 
 ##################
 #  FILE SCANNER  #
@@ -125,11 +143,11 @@ to /usr/local/lib (export LD_LIBRARY_PATH=/usr/local/lib), plug in
 USRP B2X0 hardware, run LTE_fdd_enodeb, and connect (via telnet, nc,
 etc) to the control port at port number 30000.  eNodeB parameters
 can be changed on the control port.  For a list of parameters simply
-type help on the control port.
-NOTES: This application currently supports DL transmit and limited
-UL receive functionality.  It has been tested at 1.4, 3, and 5MHz
-bandwidths with few issues.  Higher bandwidths are supported, but
-may not function correctly at this time.
+type help on the control port.  A MAC and above level PCAP trace is
+output to /tmp/LTE_fdd_enodeb.pcap.
+NOTES: This application has been tested at 1.4, 3, and 5MHz
+bandwidths.  Higher bandwidths are supported and performance may
+vary based on processing hardware.
 WARNINGS: By using this application you risk disruption of service in
 a public network, even if you are not directly interfering with the
 radio transmissions.  This is a criminal act in most countries, and a

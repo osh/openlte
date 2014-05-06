@@ -41,6 +41,7 @@
     03/26/2014    Ben Wojtowicz    Added support for RRC Connection Request,
                                    RRC Connection Reestablishment Request,
                                    and UL CCCH Messages.
+    05/04/2014    Ben Wojtowicz    Added support for DL CCCH Messages.
 
 *******************************************************************************/
 
@@ -3271,7 +3272,143 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_short_mac_i_ie(uint8  **ie_ptr,
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_antenna_info_common_ie(LIBLTE_RRC_ANTENNA_PORTS_COUNT_ENUM   antenna_ports_cnt,
+                                                         uint8                               **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ie_ptr != NULL)
+    {
+        rrc_value_2_bits(antenna_ports_cnt, ie_ptr, 2);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_antenna_info_common_ie(uint8                               **ie_ptr,
+                                                           LIBLTE_RRC_ANTENNA_PORTS_COUNT_ENUM  *antenna_ports_cnt)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ie_ptr            != NULL &&
+       antenna_ports_cnt != NULL)
+    {
+        *antenna_ports_cnt = (LIBLTE_RRC_ANTENNA_PORTS_COUNT_ENUM)rrc_bits_2_value(ie_ptr, 2);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_pack_antenna_info_dedicated_ie(LIBLTE_RRC_ANTENNA_INFO_DEDICATED_STRUCT  *antenna_info,
+                                                            uint8                                    **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(antenna_info != NULL &&
+       ie_ptr       != NULL)
+    {
+        // Optional indicator
+        rrc_value_2_bits(antenna_info->codebook_subset_restriction_present, ie_ptr, 1);
+
+        // Transmission Mode
+        rrc_value_2_bits(antenna_info->tx_mode, ie_ptr, 3);
+
+        // Codebook Subset Restriction
+        if(antenna_info->codebook_subset_restriction_present)
+        {
+            rrc_value_2_bits(antenna_info->codebook_subset_restriction_choice, ie_ptr, 3);
+            switch(antenna_info->codebook_subset_restriction_choice)
+            {
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N2_TM3:
+                rrc_value_2_bits(antenna_info->codebook_subset_restriction, ie_ptr, 2);
+                break;
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N4_TM3:
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N2_TM5:
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N2_TM6:
+                rrc_value_2_bits(antenna_info->codebook_subset_restriction, ie_ptr, 4);
+                break;
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N2_TM4:
+                rrc_value_2_bits(antenna_info->codebook_subset_restriction, ie_ptr, 6);
+                break;
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N4_TM4:
+                rrc_value_2_bits(antenna_info->codebook_subset_restriction >> 32, ie_ptr, 32);
+                rrc_value_2_bits(antenna_info->codebook_subset_restriction,       ie_ptr, 32);
+                break;
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N4_TM5:
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N4_TM6:
+                rrc_value_2_bits(antenna_info->codebook_subset_restriction, ie_ptr, 16);
+                break;
+            }
+        }
+
+        // UE Transmit Antenna Selection
+        rrc_value_2_bits(antenna_info->ue_tx_antenna_selection_setup_present, ie_ptr, 1);
+        if(antenna_info->ue_tx_antenna_selection_setup_present)
+        {
+            rrc_value_2_bits(antenna_info->ue_tx_antenna_selection_setup, ie_ptr, 1);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_antenna_info_dedicated_ie(uint8                                    **ie_ptr,
+                                                              LIBLTE_RRC_ANTENNA_INFO_DEDICATED_STRUCT  *antenna_info)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ie_ptr       != NULL &&
+       antenna_info != NULL)
+    {
+        // Optional indicator
+        antenna_info->codebook_subset_restriction_present = rrc_bits_2_value(ie_ptr, 1);
+
+        // Transmission Mode
+        antenna_info->tx_mode = (LIBLTE_RRC_TRANSMISSION_MODE_ENUM)rrc_bits_2_value(ie_ptr, 3);
+
+        // Codebook Subset Restriction
+        if(antenna_info->codebook_subset_restriction_present)
+        {
+            antenna_info->codebook_subset_restriction_choice = (LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_CHOICE_ENUM)rrc_bits_2_value(ie_ptr, 3);
+            switch(antenna_info->codebook_subset_restriction_choice)
+            {
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N2_TM3:
+                antenna_info->codebook_subset_restriction = rrc_bits_2_value(ie_ptr, 2);
+                break;
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N4_TM3:
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N2_TM5:
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N2_TM6:
+                antenna_info->codebook_subset_restriction = rrc_bits_2_value(ie_ptr, 4);
+                break;
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N2_TM4:
+                antenna_info->codebook_subset_restriction = rrc_bits_2_value(ie_ptr, 6);
+                break;
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N4_TM4:
+                antenna_info->codebook_subset_restriction  = (uint64)(rrc_bits_2_value(ie_ptr, 32)) << 32;
+                antenna_info->codebook_subset_restriction |= rrc_bits_2_value(ie_ptr, 32);
+                break;
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N4_TM5:
+            case LIBLTE_RRC_CODEBOOK_SUBSET_RESTRICTION_N4_TM6:
+                antenna_info->codebook_subset_restriction = rrc_bits_2_value(ie_ptr, 16);
+                break;
+            }
+        }
+
+        // UE Transmit Antenna Selection
+        antenna_info->ue_tx_antenna_selection_setup_present = rrc_bits_2_value(ie_ptr, 1);
+        if(antenna_info->ue_tx_antenna_selection_setup_present)
+        {
+            antenna_info->ue_tx_antenna_selection_setup = (LIBLTE_RRC_UE_TX_ANTENNA_SELECTION_ENUM)rrc_bits_2_value(ie_ptr, 1);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: CQI Report Config
@@ -3280,7 +3417,124 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_short_mac_i_ie(uint8  **ie_ptr,
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_cqi_report_config_ie(LIBLTE_RRC_CQI_REPORT_CONFIG_STRUCT  *cqi_report_cnfg,
+                                                       uint8                               **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(cqi_report_cnfg != NULL &&
+       ie_ptr          != NULL)
+    {
+        // Optional indicators
+        rrc_value_2_bits(cqi_report_cnfg->report_mode_aperiodic_present, ie_ptr, 1);
+        rrc_value_2_bits(cqi_report_cnfg->report_periodic_present,       ie_ptr, 1);
+
+        // CQI Report Mode Aperiodic
+        if(cqi_report_cnfg->report_mode_aperiodic_present)
+        {
+            rrc_value_2_bits(cqi_report_cnfg->report_mode_aperiodic, ie_ptr, 3);
+        }
+
+        // Nom PDSCH RS EPRE Offset
+        rrc_value_2_bits(cqi_report_cnfg->nom_pdsch_rs_epre_offset + 1, ie_ptr, 3);
+
+        // CQI Report Periodic
+        if(cqi_report_cnfg->report_periodic_present)
+        {
+            rrc_value_2_bits(cqi_report_cnfg->report_periodic_setup_present, ie_ptr, 1);
+            if(cqi_report_cnfg->report_periodic_setup_present)
+            {
+                // Optional indicator
+                rrc_value_2_bits(cqi_report_cnfg->report_periodic.ri_cnfg_idx_present, ie_ptr, 1);
+
+                // CQI PUCCH Resource Index
+                rrc_value_2_bits(cqi_report_cnfg->report_periodic.pucch_resource_idx, ie_ptr, 11);
+
+                // CQI PMI Config Index
+                rrc_value_2_bits(cqi_report_cnfg->report_periodic.pmi_cnfg_idx, ie_ptr, 10);
+
+                // CQI Format Indicator Periodic
+                rrc_value_2_bits(cqi_report_cnfg->report_periodic.format_ind_periodic, ie_ptr, 1);
+                if(LIBLTE_RRC_CQI_FORMAT_INDICATOR_PERIODIC_SUBBAND_CQI == cqi_report_cnfg->report_periodic.format_ind_periodic)
+                {
+                    rrc_value_2_bits(cqi_report_cnfg->report_periodic.format_ind_periodic_subband_k - 1, ie_ptr, 2);
+                }
+
+                // RI Config Index
+                if(cqi_report_cnfg->report_periodic.ri_cnfg_idx_present)
+                {
+                    rrc_value_2_bits(cqi_report_cnfg->report_periodic.ri_cnfg_idx, ie_ptr, 10);
+                }
+
+                // Simultaneous Ack/Nack and CQI
+                rrc_value_2_bits(cqi_report_cnfg->report_periodic.simult_ack_nack_and_cqi, ie_ptr, 1);
+            }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_cqi_report_config_ie(uint8                               **ie_ptr,
+                                                         LIBLTE_RRC_CQI_REPORT_CONFIG_STRUCT  *cqi_report_cnfg)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ie_ptr          != NULL &&
+       cqi_report_cnfg != NULL)
+    {
+        // Optional indicators
+        cqi_report_cnfg->report_mode_aperiodic_present = rrc_bits_2_value(ie_ptr, 1);
+        cqi_report_cnfg->report_periodic_present       = rrc_bits_2_value(ie_ptr, 1);
+
+        // CQI Report Mode Aperiodic
+        if(cqi_report_cnfg->report_mode_aperiodic_present)
+        {
+            cqi_report_cnfg->report_mode_aperiodic = (LIBLTE_RRC_CQI_REPORT_MODE_APERIODIC_ENUM)rrc_bits_2_value(ie_ptr, 3);
+        }
+
+        // Nom PDSCH RS EPRE Offset
+        cqi_report_cnfg->nom_pdsch_rs_epre_offset = rrc_bits_2_value(ie_ptr, 3) - 1;
+
+        // CQI Report Periodic
+        if(cqi_report_cnfg->report_periodic_present)
+        {
+            cqi_report_cnfg->report_periodic_setup_present = rrc_bits_2_value(ie_ptr, 1);
+            if(cqi_report_cnfg->report_periodic_setup_present)
+            {
+                // Optional indicator
+                cqi_report_cnfg->report_periodic.ri_cnfg_idx_present = rrc_bits_2_value(ie_ptr, 1);
+
+                // CQI PUCCH Resource Index
+                cqi_report_cnfg->report_periodic.pucch_resource_idx = rrc_bits_2_value(ie_ptr, 11);
+
+                // CQI PMI Config Index
+                cqi_report_cnfg->report_periodic.pmi_cnfg_idx = rrc_bits_2_value(ie_ptr, 10);
+
+                // CQI Format Indicator Periodic
+                cqi_report_cnfg->report_periodic.format_ind_periodic = (LIBLTE_RRC_CQI_FORMAT_INDICATOR_PERIODIC_ENUM)rrc_bits_2_value(ie_ptr, 1);
+                if(LIBLTE_RRC_CQI_FORMAT_INDICATOR_PERIODIC_SUBBAND_CQI == cqi_report_cnfg->report_periodic.format_ind_periodic)
+                {
+                    cqi_report_cnfg->report_periodic.format_ind_periodic_subband_k = rrc_bits_2_value(ie_ptr, 2) + 1;
+                }
+
+                // RI Config Index
+                if(cqi_report_cnfg->report_periodic.ri_cnfg_idx_present)
+                {
+                    cqi_report_cnfg->report_periodic.ri_cnfg_idx = rrc_bits_2_value(ie_ptr, 10);
+                }
+
+                // Simultaneous Ack/Nack and CQI
+                cqi_report_cnfg->report_periodic.simult_ack_nack_and_cqi = rrc_bits_2_value(ie_ptr, 1);
+            }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: Cross Carrier Scheduling Config
@@ -3423,7 +3677,282 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_logical_channel_config_ie(uint8             
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_mac_main_config_ie(LIBLTE_RRC_MAC_MAIN_CONFIG_STRUCT  *mac_main_cnfg,
+                                                     uint8                             **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    bool              ext = false;
+
+    if(mac_main_cnfg != NULL &&
+       ie_ptr        != NULL)
+    {
+        // Extension indicator
+        rrc_value_2_bits(ext, ie_ptr, 1);
+
+        // Optional indicators
+        rrc_value_2_bits(mac_main_cnfg->ulsch_cnfg_present, ie_ptr, 1);
+        rrc_value_2_bits(mac_main_cnfg->drx_cnfg_present,   ie_ptr, 1);
+        rrc_value_2_bits(mac_main_cnfg->phr_cnfg_present,   ie_ptr, 1);
+
+        // ULSCH Config
+        if(mac_main_cnfg->ulsch_cnfg_present)
+        {
+            // Optional indicators
+            rrc_value_2_bits(mac_main_cnfg->ulsch_cnfg.max_harq_tx_present,        ie_ptr, 1);
+            rrc_value_2_bits(mac_main_cnfg->ulsch_cnfg.periodic_bsr_timer_present, ie_ptr, 1);
+
+            // Max HARQ TX
+            if(mac_main_cnfg->ulsch_cnfg.max_harq_tx_present)
+            {
+                rrc_value_2_bits(mac_main_cnfg->ulsch_cnfg.max_harq_tx, ie_ptr, 4);
+            }
+
+            // Periodic BSR Timer
+            if(mac_main_cnfg->ulsch_cnfg.periodic_bsr_timer_present)
+            {
+                rrc_value_2_bits(mac_main_cnfg->ulsch_cnfg.periodic_bsr_timer, ie_ptr, 4);
+            }
+
+            // Re-TX BSR Timer
+            rrc_value_2_bits(mac_main_cnfg->ulsch_cnfg.retx_bsr_timer, ie_ptr, 3);
+
+            // TTI Bundling
+            rrc_value_2_bits(mac_main_cnfg->ulsch_cnfg.tti_bundling, ie_ptr, 1);
+        }
+
+        // DRX Config
+        if(mac_main_cnfg->drx_cnfg_present)
+        {
+            rrc_value_2_bits(mac_main_cnfg->drx_cnfg.setup_present, ie_ptr, 1);
+            if(mac_main_cnfg->drx_cnfg.setup_present)
+            {
+                // Optional indicators
+                rrc_value_2_bits(mac_main_cnfg->drx_cnfg.short_drx_present, ie_ptr, 1);
+
+                // On Duration Timer
+                rrc_value_2_bits(mac_main_cnfg->drx_cnfg.on_duration_timer, ie_ptr, 4);
+
+                // DRX Inactivity Timer
+                rrc_value_2_bits(mac_main_cnfg->drx_cnfg.drx_inactivity_timer, ie_ptr, 5);
+
+                // DRX Retransmission Timer
+                rrc_value_2_bits(mac_main_cnfg->drx_cnfg.drx_retx_timer, ie_ptr, 3);
+
+                // Long DRX Cycle Start Offset
+                rrc_value_2_bits(mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset_choice, ie_ptr, 4);
+                switch(mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset_choice)
+                {
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF10:
+                    rrc_value_2_bits(mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset, ie_ptr, 4);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF20:
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF32:
+                    rrc_value_2_bits(mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset, ie_ptr, 5);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF40:
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF64:
+                    rrc_value_2_bits(mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset, ie_ptr, 6);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF80:
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF128:
+                    rrc_value_2_bits(mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset, ie_ptr, 7);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF160:
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF256:
+                    rrc_value_2_bits(mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset, ie_ptr, 8);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF320:
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF512:
+                    rrc_value_2_bits(mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset, ie_ptr, 9);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF640:
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF1024:
+                    rrc_value_2_bits(mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset, ie_ptr, 10);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF1280:
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF2048:
+                    rrc_value_2_bits(mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset, ie_ptr, 11);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF2560:
+                    rrc_value_2_bits(mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset, ie_ptr, 12);
+                    break;
+                }
+
+                // Short DRX
+                if(mac_main_cnfg->drx_cnfg.short_drx_present)
+                {
+                    // Short DRX Cycle
+                    rrc_value_2_bits(mac_main_cnfg->drx_cnfg.short_drx_cycle, ie_ptr, 4);
+
+                    // DRX Short Cycle Timer
+                    rrc_value_2_bits(mac_main_cnfg->drx_cnfg.short_drx_cycle_timer - 1, ie_ptr, 4);
+                }
+            }
+        }
+
+        // Time Alignment Timer Dedicated
+        liblte_rrc_pack_time_alignment_timer_ie(mac_main_cnfg->time_alignment_timer, ie_ptr);
+
+        // PHR Config
+        if(mac_main_cnfg->phr_cnfg_present)
+        {
+            rrc_value_2_bits(mac_main_cnfg->phr_cnfg.setup_present, ie_ptr, 1);
+            if(mac_main_cnfg->phr_cnfg.setup_present)
+            {
+                // Periodic PHR Timer
+                rrc_value_2_bits(mac_main_cnfg->phr_cnfg.periodic_phr_timer, ie_ptr, 3);
+
+                // Prohibit PHR Timer
+                rrc_value_2_bits(mac_main_cnfg->phr_cnfg.prohibit_phr_timer, ie_ptr, 3);
+
+                // DL Pathloss Change
+                rrc_value_2_bits(mac_main_cnfg->phr_cnfg.dl_pathloss_change, ie_ptr, 2);
+            }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_mac_main_config_ie(uint8                             **ie_ptr,
+                                                       LIBLTE_RRC_MAC_MAIN_CONFIG_STRUCT  *mac_main_cnfg)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    bool              ext;
+
+    if(ie_ptr        != NULL &&
+       mac_main_cnfg != NULL)
+    {
+        // Extension indicator
+        ext = rrc_bits_2_value(ie_ptr, 1);
+
+        // Optional indicators
+        mac_main_cnfg->ulsch_cnfg_present = rrc_bits_2_value(ie_ptr, 1);
+        mac_main_cnfg->drx_cnfg_present   = rrc_bits_2_value(ie_ptr, 1);
+        mac_main_cnfg->phr_cnfg_present   = rrc_bits_2_value(ie_ptr, 1);
+
+        // ULSCH Config
+        if(mac_main_cnfg->ulsch_cnfg_present)
+        {
+            // Optional indicators
+            mac_main_cnfg->ulsch_cnfg.max_harq_tx_present        = rrc_bits_2_value(ie_ptr, 1);
+            mac_main_cnfg->ulsch_cnfg.periodic_bsr_timer_present = rrc_bits_2_value(ie_ptr, 1);
+
+            // Max HARQ TX
+            if(mac_main_cnfg->ulsch_cnfg.max_harq_tx_present)
+            {
+                mac_main_cnfg->ulsch_cnfg.max_harq_tx = (LIBLTE_RRC_MAX_HARQ_TX_ENUM)rrc_bits_2_value(ie_ptr, 4);
+            }
+
+            // Periodic BSR Timer
+            if(mac_main_cnfg->ulsch_cnfg.periodic_bsr_timer_present)
+            {
+                mac_main_cnfg->ulsch_cnfg.periodic_bsr_timer = (LIBLTE_RRC_PERIODIC_BSR_TIMER_ENUM)rrc_bits_2_value(ie_ptr, 4);
+            }
+
+            // Re-TX BSR Timer
+            mac_main_cnfg->ulsch_cnfg.retx_bsr_timer = (LIBLTE_RRC_RETRANSMISSION_BSR_TIMER_ENUM)rrc_bits_2_value(ie_ptr, 3);
+
+            // TTI Bundling
+            mac_main_cnfg->ulsch_cnfg.tti_bundling = rrc_bits_2_value(ie_ptr, 1);
+        }
+
+        // DRX Config
+        if(mac_main_cnfg->drx_cnfg_present)
+        {
+            mac_main_cnfg->drx_cnfg.setup_present = rrc_bits_2_value(ie_ptr, 1);
+            if(mac_main_cnfg->drx_cnfg.setup_present)
+            {
+                // Optional indicators
+                mac_main_cnfg->drx_cnfg.short_drx_present = rrc_bits_2_value(ie_ptr, 1);
+
+                // On Duration Timer
+                mac_main_cnfg->drx_cnfg.on_duration_timer = (LIBLTE_RRC_ON_DURATION_TIMER_ENUM)rrc_bits_2_value(ie_ptr, 4);
+
+                // DRX Inactivity Timer
+                mac_main_cnfg->drx_cnfg.drx_inactivity_timer = (LIBLTE_RRC_DRX_INACTIVITY_TIMER_ENUM)rrc_bits_2_value(ie_ptr, 5);
+
+                // DRX Retransmission Timer
+                mac_main_cnfg->drx_cnfg.drx_retx_timer = (LIBLTE_RRC_DRX_RETRANSMISSION_TIMER_ENUM)rrc_bits_2_value(ie_ptr, 3);
+
+                // Long DRX Cycle Short Offset
+                mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset_choice = (LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_CHOICE_ENUM)rrc_bits_2_value(ie_ptr, 4);
+                switch(mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset_choice)
+                {
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF10:
+                    mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset = rrc_bits_2_value(ie_ptr, 4);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF20:
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF32:
+                    mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset = rrc_bits_2_value(ie_ptr, 5);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF40:
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF64:
+                    mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset = rrc_bits_2_value(ie_ptr, 6);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF80:
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF128:
+                    mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset = rrc_bits_2_value(ie_ptr, 7);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF160:
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF256:
+                    mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset = rrc_bits_2_value(ie_ptr, 8);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF320:
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF512:
+                    mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset = rrc_bits_2_value(ie_ptr, 9);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF640:
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF1024:
+                    mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset = rrc_bits_2_value(ie_ptr, 10);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF1280:
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF2048:
+                    mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset = rrc_bits_2_value(ie_ptr, 11);
+                    break;
+                case LIBLTE_RRC_LONG_DRX_CYCLE_START_OFFSET_SF2560:
+                    mac_main_cnfg->drx_cnfg.long_drx_cycle_start_offset = rrc_bits_2_value(ie_ptr, 12);
+                    break;
+                }
+
+                // Short DRX
+                if(mac_main_cnfg->drx_cnfg.short_drx_present)
+                {
+                    // Short DRX Cycle
+                    mac_main_cnfg->drx_cnfg.short_drx_cycle = (LIBLTE_RRC_SHORT_DRX_CYCLE_ENUM)rrc_bits_2_value(ie_ptr, 4);
+
+                    // DRX Short Cycle Timer
+                    mac_main_cnfg->drx_cnfg.short_drx_cycle_timer = rrc_bits_2_value(ie_ptr, 4) + 1;
+                }
+            }
+        }
+
+        // Time Alignment Timer Dedicated
+        liblte_rrc_unpack_time_alignment_timer_ie(ie_ptr, &mac_main_cnfg->time_alignment_timer);
+
+        // PHR Config
+        if(mac_main_cnfg->phr_cnfg_present)
+        {
+            mac_main_cnfg->phr_cnfg.setup_present = rrc_bits_2_value(ie_ptr, 1);
+            if(mac_main_cnfg->phr_cnfg.setup_present)
+            {
+                // Periodic PHR Timer
+                mac_main_cnfg->phr_cnfg.periodic_phr_timer = (LIBLTE_RRC_PERIODIC_PHR_TIMER_ENUM)rrc_bits_2_value(ie_ptr, 3);
+
+                // Prohibit PHR Timer
+                mac_main_cnfg->phr_cnfg.prohibit_phr_timer = (LIBLTE_RRC_PROHIBIT_PHR_TIMER_ENUM)rrc_bits_2_value(ie_ptr, 3);
+
+                // DL Pathloss Change
+                mac_main_cnfg->phr_cnfg.dl_pathloss_change = (LIBLTE_RRC_DL_PATHLOSS_CHANGE_ENUM)rrc_bits_2_value(ie_ptr, 2);
+            }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: PDCP Config
@@ -3433,7 +3962,128 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_logical_channel_config_ie(uint8             
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_pdcp_config_ie(LIBLTE_RRC_PDCP_CONFIG_STRUCT  *pdcp_cnfg,
+                                                 uint8                         **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(pdcp_cnfg != NULL &&
+       ie_ptr    != NULL)
+    {
+        // Extension indicator
+        rrc_value_2_bits(0, ie_ptr, 1);
+
+        // Optional indicators
+        rrc_value_2_bits(pdcp_cnfg->discard_timer_present,                 ie_ptr, 1);
+        rrc_value_2_bits(pdcp_cnfg->rlc_am_status_report_required_present, ie_ptr, 1);
+        rrc_value_2_bits(pdcp_cnfg->rlc_um_pdcp_sn_size_present,           ie_ptr, 1);
+
+        // Discard Timer
+        if(pdcp_cnfg->discard_timer_present)
+        {
+            rrc_value_2_bits(pdcp_cnfg->discard_timer, ie_ptr, 3);
+        }
+
+        // RLC AM
+        if(pdcp_cnfg->rlc_am_status_report_required_present)
+        {
+            rrc_value_2_bits(pdcp_cnfg->rlc_am_status_report_required, ie_ptr, 1);
+        }
+
+        // RLC UM
+        if(pdcp_cnfg->rlc_um_pdcp_sn_size_present)
+        {
+            rrc_value_2_bits(pdcp_cnfg->rlc_um_pdcp_sn_size, ie_ptr, 1);
+        }
+
+        // Header Compression
+        rrc_value_2_bits(pdcp_cnfg->hdr_compression_rohc, ie_ptr, 1);
+        if(pdcp_cnfg->hdr_compression_rohc)
+        {
+            // Extension indicator
+            rrc_value_2_bits(0, ie_ptr, 1);
+
+            // Max CID
+            rrc_value_2_bits(pdcp_cnfg->hdr_compression_max_cid - 1, ie_ptr, 14);
+
+            // Profiles
+            rrc_value_2_bits(pdcp_cnfg->hdr_compression_profile_0001, ie_ptr, 1);
+            rrc_value_2_bits(pdcp_cnfg->hdr_compression_profile_0002, ie_ptr, 1);
+            rrc_value_2_bits(pdcp_cnfg->hdr_compression_profile_0003, ie_ptr, 1);
+            rrc_value_2_bits(pdcp_cnfg->hdr_compression_profile_0004, ie_ptr, 1);
+            rrc_value_2_bits(pdcp_cnfg->hdr_compression_profile_0006, ie_ptr, 1);
+            rrc_value_2_bits(pdcp_cnfg->hdr_compression_profile_0101, ie_ptr, 1);
+            rrc_value_2_bits(pdcp_cnfg->hdr_compression_profile_0102, ie_ptr, 1);
+            rrc_value_2_bits(pdcp_cnfg->hdr_compression_profile_0103, ie_ptr, 1);
+            rrc_value_2_bits(pdcp_cnfg->hdr_compression_profile_0104, ie_ptr, 1);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_pdcp_config_ie(uint8                         **ie_ptr,
+                                                   LIBLTE_RRC_PDCP_CONFIG_STRUCT  *pdcp_cnfg)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ie_ptr    != NULL &&
+       pdcp_cnfg != NULL)
+    {
+        // Extension indicator
+        rrc_bits_2_value(ie_ptr, 1);
+
+        // Optional indicators
+        pdcp_cnfg->discard_timer_present                 = rrc_bits_2_value(ie_ptr, 1);
+        pdcp_cnfg->rlc_am_status_report_required_present = rrc_bits_2_value(ie_ptr, 1);
+        pdcp_cnfg->rlc_um_pdcp_sn_size_present           = rrc_bits_2_value(ie_ptr, 1);
+
+        // Discard Timer
+        if(pdcp_cnfg->discard_timer_present)
+        {
+            pdcp_cnfg->discard_timer = (LIBLTE_RRC_DISCARD_TIMER_ENUM)rrc_bits_2_value(ie_ptr, 3);
+        }
+
+        // RLC AM
+        if(pdcp_cnfg->rlc_am_status_report_required_present)
+        {
+            pdcp_cnfg->rlc_am_status_report_required = rrc_bits_2_value(ie_ptr, 1);
+        }
+
+        // RLC UM
+        if(pdcp_cnfg->rlc_um_pdcp_sn_size_present)
+        {
+            pdcp_cnfg->rlc_um_pdcp_sn_size = (LIBLTE_RRC_PDCP_SN_SIZE_ENUM)rrc_bits_2_value(ie_ptr, 1);
+        }
+
+        // Header Compression
+        pdcp_cnfg->hdr_compression_rohc = rrc_bits_2_value(ie_ptr, 1);
+        if(pdcp_cnfg->hdr_compression_rohc)
+        {
+            // Extension indicator
+            rrc_bits_2_value(ie_ptr, 1);
+
+            // Max CID
+            pdcp_cnfg->hdr_compression_max_cid = rrc_bits_2_value(ie_ptr, 14) + 1;
+
+            // Profiles
+            pdcp_cnfg->hdr_compression_profile_0001 = rrc_bits_2_value(ie_ptr, 1);
+            pdcp_cnfg->hdr_compression_profile_0002 = rrc_bits_2_value(ie_ptr, 1);
+            pdcp_cnfg->hdr_compression_profile_0003 = rrc_bits_2_value(ie_ptr, 1);
+            pdcp_cnfg->hdr_compression_profile_0004 = rrc_bits_2_value(ie_ptr, 1);
+            pdcp_cnfg->hdr_compression_profile_0006 = rrc_bits_2_value(ie_ptr, 1);
+            pdcp_cnfg->hdr_compression_profile_0101 = rrc_bits_2_value(ie_ptr, 1);
+            pdcp_cnfg->hdr_compression_profile_0102 = rrc_bits_2_value(ie_ptr, 1);
+            pdcp_cnfg->hdr_compression_profile_0103 = rrc_bits_2_value(ie_ptr, 1);
+            pdcp_cnfg->hdr_compression_profile_0104 = rrc_bits_2_value(ie_ptr, 1);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: PDSCH Config
@@ -3553,7 +4203,192 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_phich_config_ie(uint8                       
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_physical_config_dedicated_ie(LIBLTE_RRC_PHYSICAL_CONFIG_DEDICATED_STRUCT  *phy_cnfg_ded,
+                                                               uint8                                       **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    bool              ext = false;
+
+    if(phy_cnfg_ded != NULL &&
+       ie_ptr       != NULL)
+    {
+        // Extension indicator
+        rrc_value_2_bits(ext, ie_ptr, 1);
+
+        // Optional indicators
+        rrc_value_2_bits(phy_cnfg_ded->pdsch_cnfg_ded_present,       ie_ptr, 1);
+        rrc_value_2_bits(phy_cnfg_ded->pucch_cnfg_ded_present,       ie_ptr, 1);
+        rrc_value_2_bits(phy_cnfg_ded->pusch_cnfg_ded_present,       ie_ptr, 1);
+        rrc_value_2_bits(phy_cnfg_ded->ul_pwr_ctrl_ded_present,      ie_ptr, 1);
+        rrc_value_2_bits(phy_cnfg_ded->tpc_pdcch_cnfg_pucch_present, ie_ptr, 1);
+        rrc_value_2_bits(phy_cnfg_ded->tpc_pdcch_cnfg_pusch_present, ie_ptr, 1);
+        rrc_value_2_bits(phy_cnfg_ded->cqi_report_cnfg_present,      ie_ptr, 1);
+        rrc_value_2_bits(phy_cnfg_ded->srs_ul_cnfg_ded_present,      ie_ptr, 1);
+        rrc_value_2_bits(phy_cnfg_ded->antenna_info_present,         ie_ptr, 1);
+        rrc_value_2_bits(phy_cnfg_ded->sched_request_cnfg_present,   ie_ptr, 1);
+
+        // PDSCH Config
+        if(phy_cnfg_ded->pdsch_cnfg_ded_present)
+        {
+            liblte_rrc_pack_pdsch_config_dedicated_ie(phy_cnfg_ded->pdsch_cnfg_ded, ie_ptr);
+        }
+
+        // PUCCH Config
+        if(phy_cnfg_ded->pucch_cnfg_ded_present)
+        {
+            liblte_rrc_pack_pucch_config_dedicated_ie(&phy_cnfg_ded->pucch_cnfg_ded, ie_ptr);
+        }
+
+        // PUSCH Config
+        if(phy_cnfg_ded->pusch_cnfg_ded_present)
+        {
+            liblte_rrc_pack_pusch_config_dedicated_ie(&phy_cnfg_ded->pusch_cnfg_ded, ie_ptr);
+        }
+
+        // Uplink Power Control
+        if(phy_cnfg_ded->ul_pwr_ctrl_ded_present)
+        {
+            liblte_rrc_pack_ul_power_control_dedicated_ie(&phy_cnfg_ded->ul_pwr_ctrl_ded, ie_ptr);
+        }
+
+        // TPC PDCCH Config PUCCH
+        if(phy_cnfg_ded->tpc_pdcch_cnfg_pucch_present)
+        {
+            liblte_rrc_pack_tpc_pdcch_config_ie(&phy_cnfg_ded->tpc_pdcch_cnfg_pucch, ie_ptr);
+        }
+
+        // TPC PDCCH Config PUSCH
+        if(phy_cnfg_ded->tpc_pdcch_cnfg_pusch_present)
+        {
+            liblte_rrc_pack_tpc_pdcch_config_ie(&phy_cnfg_ded->tpc_pdcch_cnfg_pusch, ie_ptr);
+        }
+
+        // CQI Report Config
+        if(phy_cnfg_ded->cqi_report_cnfg_present)
+        {
+            liblte_rrc_pack_cqi_report_config_ie(&phy_cnfg_ded->cqi_report_cnfg, ie_ptr);
+        }
+
+        // SRS UL Config
+        if(phy_cnfg_ded->srs_ul_cnfg_ded_present)
+        {
+            liblte_rrc_pack_srs_ul_config_dedicated_ie(&phy_cnfg_ded->srs_ul_cnfg_ded, ie_ptr);
+        }
+
+        // Antenna Info
+        if(phy_cnfg_ded->antenna_info_present)
+        {
+            rrc_value_2_bits(phy_cnfg_ded->antenna_info_default_value, ie_ptr, 1);
+            if(!phy_cnfg_ded->antenna_info_default_value)
+            {
+                liblte_rrc_pack_antenna_info_dedicated_ie(&phy_cnfg_ded->antenna_info_explicit_value, ie_ptr);
+            }
+        }
+
+        // Scheduling Request Config
+        if(phy_cnfg_ded->sched_request_cnfg_present)
+        {
+            liblte_rrc_pack_scheduling_request_config_ie(&phy_cnfg_ded->sched_request_cnfg, ie_ptr);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_physical_config_dedicated_ie(uint8                                       **ie_ptr,
+                                                                 LIBLTE_RRC_PHYSICAL_CONFIG_DEDICATED_STRUCT  *phy_cnfg_ded)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    bool              ext;
+
+    if(ie_ptr       != NULL &&
+       phy_cnfg_ded != NULL)
+    {
+        // Extension indicator
+        ext = rrc_bits_2_value(ie_ptr, 1);
+
+        // Optional indicators
+        phy_cnfg_ded->pdsch_cnfg_ded_present       = rrc_bits_2_value(ie_ptr, 1);
+        phy_cnfg_ded->pucch_cnfg_ded_present       = rrc_bits_2_value(ie_ptr, 1);
+        phy_cnfg_ded->pusch_cnfg_ded_present       = rrc_bits_2_value(ie_ptr, 1);
+        phy_cnfg_ded->ul_pwr_ctrl_ded_present      = rrc_bits_2_value(ie_ptr, 1);
+        phy_cnfg_ded->tpc_pdcch_cnfg_pucch_present = rrc_bits_2_value(ie_ptr, 1);
+        phy_cnfg_ded->tpc_pdcch_cnfg_pusch_present = rrc_bits_2_value(ie_ptr, 1);
+        phy_cnfg_ded->cqi_report_cnfg_present      = rrc_bits_2_value(ie_ptr, 1);
+        phy_cnfg_ded->srs_ul_cnfg_ded_present      = rrc_bits_2_value(ie_ptr, 1);
+        phy_cnfg_ded->antenna_info_present         = rrc_bits_2_value(ie_ptr, 1);
+        phy_cnfg_ded->sched_request_cnfg_present   = rrc_bits_2_value(ie_ptr, 1);
+
+        // PDSCH Config
+        if(phy_cnfg_ded->pdsch_cnfg_ded_present)
+        {
+            liblte_rrc_unpack_pdsch_config_dedicated_ie(ie_ptr, &phy_cnfg_ded->pdsch_cnfg_ded);
+        }
+
+        // PUCCH Config
+        if(phy_cnfg_ded->pucch_cnfg_ded_present)
+        {
+            liblte_rrc_unpack_pucch_config_dedicated_ie(ie_ptr, &phy_cnfg_ded->pucch_cnfg_ded);
+        }
+
+        // PUSCH Config
+        if(phy_cnfg_ded->pusch_cnfg_ded_present)
+        {
+            liblte_rrc_unpack_pusch_config_dedicated_ie(ie_ptr, &phy_cnfg_ded->pusch_cnfg_ded);
+        }
+
+        // Uplink Power Control
+        if(phy_cnfg_ded->ul_pwr_ctrl_ded_present)
+        {
+            liblte_rrc_unpack_ul_power_control_dedicated_ie(ie_ptr, &phy_cnfg_ded->ul_pwr_ctrl_ded);
+        }
+
+        // TPC PDCCH Config PUCCH
+        if(phy_cnfg_ded->tpc_pdcch_cnfg_pucch_present)
+        {
+            liblte_rrc_unpack_tpc_pdcch_config_ie(ie_ptr, &phy_cnfg_ded->tpc_pdcch_cnfg_pucch);
+        }
+
+        // TPC PDCCH Config PUSCH
+        if(phy_cnfg_ded->tpc_pdcch_cnfg_pusch_present)
+        {
+            liblte_rrc_unpack_tpc_pdcch_config_ie(ie_ptr, &phy_cnfg_ded->tpc_pdcch_cnfg_pusch);
+        }
+
+        // CQI Report Config
+        if(phy_cnfg_ded->cqi_report_cnfg_present)
+        {
+            liblte_rrc_unpack_cqi_report_config_ie(ie_ptr, &phy_cnfg_ded->cqi_report_cnfg);
+        }
+
+        // SRS UL Config
+        if(phy_cnfg_ded->srs_ul_cnfg_ded_present)
+        {
+            liblte_rrc_unpack_srs_ul_config_dedicated_ie(ie_ptr, &phy_cnfg_ded->srs_ul_cnfg_ded);
+        }
+
+        // Antenna Info
+        if(phy_cnfg_ded->antenna_info_present)
+        {
+            phy_cnfg_ded->antenna_info_default_value = rrc_bits_2_value(ie_ptr, 1);
+            if(!phy_cnfg_ded->antenna_info_default_value)
+            {
+                liblte_rrc_unpack_antenna_info_dedicated_ie(ie_ptr, &phy_cnfg_ded->antenna_info_explicit_value);
+            }
+        }
+
+        // Scheduling Request Config
+        if(phy_cnfg_ded->sched_request_cnfg_present)
+        {
+            liblte_rrc_unpack_scheduling_request_config_ie(ie_ptr, &phy_cnfg_ded->sched_request_cnfg);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: P Max
@@ -3804,7 +4639,72 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_pucch_config_common_ie(uint8                
 
     return(err);
 }
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_pucch_config_dedicated_ie(LIBLTE_RRC_PUCCH_CONFIG_DEDICATED_STRUCT  *pucch_cnfg,
+                                                            uint8                                    **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(pucch_cnfg != NULL &&
+       ie_ptr     != NULL)
+    {
+        // Optional indicator
+        rrc_value_2_bits(pucch_cnfg->tdd_ack_nack_feedback_mode_present, ie_ptr, 1);
+
+        // Ack/Nack Repetition
+        rrc_value_2_bits(pucch_cnfg->ack_nack_repetition_setup_present, ie_ptr, 1);
+        if(pucch_cnfg->ack_nack_repetition_setup_present)
+        {
+            // Repetition Factor
+            rrc_value_2_bits(pucch_cnfg->ack_nack_repetition_factor, ie_ptr, 2);
+
+            // N1 PUCCH AN Repetition
+            rrc_value_2_bits(pucch_cnfg->ack_nack_repetition_n1_pucch_an, ie_ptr, 11);
+        }
+
+        // TDD Ack/Nack Feedback Mode
+        if(pucch_cnfg->tdd_ack_nack_feedback_mode_present)
+        {
+            rrc_value_2_bits(pucch_cnfg->tdd_ack_nack_feedback_mode, ie_ptr, 1);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_pucch_config_dedicated_ie(uint8                                    **ie_ptr,
+                                                              LIBLTE_RRC_PUCCH_CONFIG_DEDICATED_STRUCT  *pucch_cnfg)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ie_ptr     != NULL &&
+       pucch_cnfg != NULL)
+    {
+        // Optional indicator
+        pucch_cnfg->tdd_ack_nack_feedback_mode_present = rrc_bits_2_value(ie_ptr, 1);
+
+        // Ack/Nack Repetition
+        pucch_cnfg->ack_nack_repetition_setup_present = rrc_bits_2_value(ie_ptr, 1);
+        if(pucch_cnfg->ack_nack_repetition_setup_present)
+        {
+            // Repetition Factor
+            pucch_cnfg->ack_nack_repetition_factor = (LIBLTE_RRC_ACK_NACK_REPETITION_FACTOR_ENUM)rrc_bits_2_value(ie_ptr, 2);
+
+            // N1 PUCCH AN Repetition
+            pucch_cnfg->ack_nack_repetition_n1_pucch_an = rrc_bits_2_value(ie_ptr, 11);
+        }
+
+        // TDD Ack/Nack Feedback Mode
+        if(pucch_cnfg->tdd_ack_nack_feedback_mode_present)
+        {
+            pucch_cnfg->tdd_ack_nack_feedback_mode = (LIBLTE_RRC_TDD_ACK_NACK_FEEDBACK_MODE_ENUM)rrc_bits_2_value(ie_ptr, 1);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: PUSCH Config
@@ -3865,7 +4765,50 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_pusch_config_common_ie(uint8                
 
     return(err);
 }
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_pusch_config_dedicated_ie(LIBLTE_RRC_PUSCH_CONFIG_DEDICATED_STRUCT  *pusch_cnfg,
+                                                            uint8                                    **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(pusch_cnfg != NULL &&
+       ie_ptr     != NULL)
+    {
+        // Beta Offset ACK Index
+        rrc_value_2_bits(pusch_cnfg->beta_offset_ack_idx, ie_ptr, 4);
+
+        // Beta Offset RI Index
+        rrc_value_2_bits(pusch_cnfg->beta_offset_ri_idx, ie_ptr, 4);
+
+        // Beta Offset CQI Index
+        rrc_value_2_bits(pusch_cnfg->beta_offset_cqi_idx, ie_ptr, 4);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_pusch_config_dedicated_ie(uint8                                    **ie_ptr,
+                                                              LIBLTE_RRC_PUSCH_CONFIG_DEDICATED_STRUCT  *pusch_cnfg)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ie_ptr     != NULL &&
+       pusch_cnfg != NULL)
+    {
+        // Beta Offset ACK Index
+        pusch_cnfg->beta_offset_ack_idx = rrc_bits_2_value(ie_ptr, 4);
+
+        // Beta Offset RI Index
+        pusch_cnfg->beta_offset_ri_idx = rrc_bits_2_value(ie_ptr, 4);
+
+        // Beta Offset CQI Index
+        pusch_cnfg->beta_offset_cqi_idx = rrc_bits_2_value(ie_ptr, 4);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: RACH Config Common
@@ -4088,7 +5031,352 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rr_config_common_sib_ie(uint8               
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rr_config_dedicated_ie(LIBLTE_RRC_RR_CONFIG_DEDICATED_STRUCT  *rr_cnfg,
+                                                         uint8                                 **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+
+    if(rr_cnfg != NULL &&
+       ie_ptr  != NULL)
+    {
+        // Extension indicator
+        rrc_value_2_bits(rr_cnfg->rlf_timers_and_constants_present, ie_ptr, 1);
+
+        // Optional indicators
+        if(rr_cnfg->srb_to_add_mod_list_size != 0)
+        {
+            rrc_value_2_bits(1, ie_ptr, 1);
+        }else{
+            rrc_value_2_bits(0, ie_ptr, 1);
+        }
+        if(rr_cnfg->drb_to_add_mod_list_size != 0)
+        {
+            rrc_value_2_bits(1, ie_ptr, 1);
+        }else{
+            rrc_value_2_bits(0, ie_ptr, 1);
+        }
+        if(rr_cnfg->drb_to_release_list_size != 0)
+        {
+            rrc_value_2_bits(1, ie_ptr, 1);
+        }else{
+            rrc_value_2_bits(0, ie_ptr, 1);
+        }
+        rrc_value_2_bits(rr_cnfg->mac_main_cnfg_present, ie_ptr, 1);
+        rrc_value_2_bits(rr_cnfg->sps_cnfg_present,      ie_ptr, 1);
+        rrc_value_2_bits(rr_cnfg->phy_cnfg_ded_present,  ie_ptr, 1);
+
+        // SRB To Add Mod List
+        if(rr_cnfg->srb_to_add_mod_list_size != 0)
+        {
+            rrc_value_2_bits(rr_cnfg->srb_to_add_mod_list_size - 1, ie_ptr, 1);
+        }
+        for(i=0; i<rr_cnfg->srb_to_add_mod_list_size; i++)
+        {
+            // Extension indicator
+            rrc_value_2_bits(0, ie_ptr, 1);
+
+            // Optional indicators
+            rrc_value_2_bits(rr_cnfg->srb_to_add_mod_list[i].rlc_cnfg_present, ie_ptr, 1);
+            rrc_value_2_bits(rr_cnfg->srb_to_add_mod_list[i].lc_cnfg_present,  ie_ptr, 1);
+
+            // SRB Identity
+            rrc_value_2_bits(rr_cnfg->srb_to_add_mod_list[i].srb_id - 1, ie_ptr, 1);
+
+            // RLC Config
+            if(rr_cnfg->srb_to_add_mod_list[i].rlc_cnfg_present)
+            {
+                // Choice
+                rrc_value_2_bits(rr_cnfg->srb_to_add_mod_list[i].rlc_default_cnfg_present, ie_ptr, 1);
+
+                // Explicit Config
+                if(!rr_cnfg->srb_to_add_mod_list[i].rlc_default_cnfg_present)
+                {
+                    liblte_rrc_pack_rlc_config_ie(&rr_cnfg->srb_to_add_mod_list[i].rlc_explicit_cnfg, ie_ptr);
+                }
+            }
+
+            // Logical Channel Config
+            if(rr_cnfg->srb_to_add_mod_list[i].lc_cnfg_present)
+            {
+                // Choice
+                rrc_value_2_bits(rr_cnfg->srb_to_add_mod_list[i].lc_default_cnfg_present, ie_ptr, 1);
+
+                // Explicit Config
+                if(!rr_cnfg->srb_to_add_mod_list[i].lc_default_cnfg_present)
+                {
+                    liblte_rrc_pack_logical_channel_config_ie(&rr_cnfg->srb_to_add_mod_list[i].lc_explicit_cnfg, ie_ptr);
+                }
+            }
+        }
+
+        // DRB To Add Mod List
+        if(rr_cnfg->drb_to_add_mod_list_size != 0)
+        {
+            rrc_value_2_bits(rr_cnfg->drb_to_add_mod_list_size - 1, ie_ptr, 4);
+        }
+        for(i=0; i<rr_cnfg->drb_to_add_mod_list_size; i++)
+        {
+            // Extension indicator
+            rrc_value_2_bits(0, ie_ptr, 1);
+
+            // Optional indicators
+            rrc_value_2_bits(rr_cnfg->drb_to_add_mod_list[i].eps_bearer_id_present, ie_ptr, 1);
+            rrc_value_2_bits(rr_cnfg->drb_to_add_mod_list[i].pdcp_cnfg_present,     ie_ptr, 1);
+            rrc_value_2_bits(rr_cnfg->drb_to_add_mod_list[i].rlc_cnfg_present,      ie_ptr, 1);
+            rrc_value_2_bits(rr_cnfg->drb_to_add_mod_list[i].lc_id_present,         ie_ptr, 1);
+            rrc_value_2_bits(rr_cnfg->drb_to_add_mod_list[i].lc_cnfg_present,       ie_ptr, 1);
+
+            // EPS Bearer Identity
+            if(rr_cnfg->drb_to_add_mod_list[i].eps_bearer_id_present)
+            {
+                rrc_value_2_bits(rr_cnfg->drb_to_add_mod_list[i].eps_bearer_id, ie_ptr, 4);
+            }
+
+            // DRB Identity
+            liblte_rrc_pack_drb_identity_ie(rr_cnfg->drb_to_add_mod_list[i].drb_id, ie_ptr);
+
+            // PDCP Config
+            if(rr_cnfg->drb_to_add_mod_list[i].pdcp_cnfg_present)
+            {
+                liblte_rrc_pack_pdcp_config_ie(&rr_cnfg->drb_to_add_mod_list[i].pdcp_cnfg, ie_ptr);
+            }
+
+            // RLC Config
+            if(rr_cnfg->drb_to_add_mod_list[i].rlc_cnfg_present)
+            {
+                liblte_rrc_pack_rlc_config_ie(&rr_cnfg->drb_to_add_mod_list[i].rlc_cnfg, ie_ptr);
+            }
+
+            // Logical Channel Identity
+            if(rr_cnfg->drb_to_add_mod_list[i].lc_id_present)
+            {
+                rrc_value_2_bits(rr_cnfg->drb_to_add_mod_list[i].lc_id - 3, ie_ptr, 3);
+            }
+
+            // Logical Channel Configuration
+            if(rr_cnfg->drb_to_add_mod_list[i].lc_cnfg_present)
+            {
+                liblte_rrc_pack_logical_channel_config_ie(&rr_cnfg->drb_to_add_mod_list[i].lc_cnfg, ie_ptr);
+            }
+        }
+
+        // DRB To Release List
+        if(rr_cnfg->drb_to_release_list_size != 0)
+        {
+            rrc_value_2_bits(rr_cnfg->drb_to_release_list_size - 1, ie_ptr, 4);
+        }
+        for(i=0; i<rr_cnfg->drb_to_release_list_size; i++)
+        {
+            liblte_rrc_pack_drb_identity_ie(rr_cnfg->drb_to_release_list[i], ie_ptr);
+        }
+
+        // MAC Main Config
+        if(rr_cnfg->mac_main_cnfg_present)
+        {
+            rrc_value_2_bits(rr_cnfg->mac_main_cnfg.default_value, ie_ptr, 1);
+            if(!rr_cnfg->mac_main_cnfg.default_value)
+            {
+                liblte_rrc_pack_mac_main_config_ie(&rr_cnfg->mac_main_cnfg.explicit_value, ie_ptr);
+            }
+        }
+
+        // SPS Config
+        if(rr_cnfg->sps_cnfg_present)
+        {
+            liblte_rrc_pack_sps_config_ie(&rr_cnfg->sps_cnfg, ie_ptr);
+        }
+
+        // Physical Config Dedicated
+        if(rr_cnfg->phy_cnfg_ded_present)
+        {
+            liblte_rrc_pack_physical_config_dedicated_ie(&rr_cnfg->phy_cnfg_ded, ie_ptr);
+        }
+
+        // Extension
+        // Optional indicators
+        rrc_value_2_bits(rr_cnfg->rlf_timers_and_constants_present, ie_ptr, 1);
+
+        // RLF Timers and Constants
+        if(rr_cnfg->rlf_timers_and_constants_present)
+        {
+            liblte_rrc_pack_rlf_timers_and_constants_ie(&rr_cnfg->rlf_timers_and_constants, ie_ptr);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rr_config_dedicated_ie(uint8                                 **ie_ptr,
+                                                           LIBLTE_RRC_RR_CONFIG_DEDICATED_STRUCT  *rr_cnfg)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+    bool              ext;
+    bool              srb_to_add_mod_list_present;
+    bool              drb_to_add_mod_list_present;
+    bool              drb_to_release_list_present;
+
+    if(ie_ptr  != NULL &&
+       rr_cnfg != NULL)
+    {
+        // Extension indicator
+        ext = rrc_bits_2_value(ie_ptr, 1);
+
+        // Optional indicators
+        srb_to_add_mod_list_present    = rrc_bits_2_value(ie_ptr, 1);
+        drb_to_add_mod_list_present    = rrc_bits_2_value(ie_ptr, 1);
+        drb_to_release_list_present    = rrc_bits_2_value(ie_ptr, 1);
+        rr_cnfg->mac_main_cnfg_present = rrc_bits_2_value(ie_ptr, 1);
+        rr_cnfg->sps_cnfg_present      = rrc_bits_2_value(ie_ptr, 1);
+        rr_cnfg->phy_cnfg_ded_present  = rrc_bits_2_value(ie_ptr, 1);
+
+        // SRB To Add Mod List
+        if(srb_to_add_mod_list_present)
+        {
+            rr_cnfg->srb_to_add_mod_list_size = rrc_bits_2_value(ie_ptr, 1) + 1;
+            for(i=0; i<rr_cnfg->srb_to_add_mod_list_size; i++)
+            {
+                // Extension indicator
+                rrc_bits_2_value(ie_ptr, 1);
+
+                // Optional indicators
+                rr_cnfg->srb_to_add_mod_list[i].rlc_cnfg_present = rrc_bits_2_value(ie_ptr, 1);
+                rr_cnfg->srb_to_add_mod_list[i].lc_cnfg_present  = rrc_bits_2_value(ie_ptr, 1);
+
+                // SRB Identity
+                rr_cnfg->srb_to_add_mod_list[i].srb_id = rrc_bits_2_value(ie_ptr, 1) + 1;
+
+                // RLC Config
+                if(rr_cnfg->srb_to_add_mod_list[i].rlc_cnfg_present)
+                {
+                    // Choice
+                    rr_cnfg->srb_to_add_mod_list[i].rlc_default_cnfg_present = rrc_bits_2_value(ie_ptr, 1);
+
+                    // Explicit Config
+                    if(!rr_cnfg->srb_to_add_mod_list[i].rlc_default_cnfg_present)
+                    {
+                        liblte_rrc_unpack_rlc_config_ie(ie_ptr, &rr_cnfg->srb_to_add_mod_list[i].rlc_explicit_cnfg);
+                    }
+                }
+
+                // Logical Channel Config
+                if(rr_cnfg->srb_to_add_mod_list[i].lc_cnfg_present)
+                {
+                    // Choice
+                    rr_cnfg->srb_to_add_mod_list[i].lc_default_cnfg_present = rrc_bits_2_value(ie_ptr, 1);
+
+                    // Explicit Config
+                    if(!rr_cnfg->srb_to_add_mod_list[i].lc_default_cnfg_present)
+                    {
+                        liblte_rrc_unpack_logical_channel_config_ie(ie_ptr, &rr_cnfg->srb_to_add_mod_list[i].lc_explicit_cnfg);
+                    }
+                }
+            }
+        }
+
+        // DRB To Add Mod List
+        if(drb_to_add_mod_list_present)
+        {
+            rr_cnfg->drb_to_add_mod_list_size = rrc_bits_2_value(ie_ptr, 4) + 1;
+            for(i=0; i<rr_cnfg->drb_to_add_mod_list_size; i++)
+            {
+                // Extension indicator
+                rrc_bits_2_value(ie_ptr, 1);
+
+                // Optional indicators
+                rr_cnfg->drb_to_add_mod_list[i].eps_bearer_id_present = rrc_bits_2_value(ie_ptr, 1);
+                rr_cnfg->drb_to_add_mod_list[i].pdcp_cnfg_present     = rrc_bits_2_value(ie_ptr, 1);
+                rr_cnfg->drb_to_add_mod_list[i].rlc_cnfg_present      = rrc_bits_2_value(ie_ptr, 1);
+                rr_cnfg->drb_to_add_mod_list[i].lc_id_present         = rrc_bits_2_value(ie_ptr, 1);
+                rr_cnfg->drb_to_add_mod_list[i].lc_cnfg_present       = rrc_bits_2_value(ie_ptr, 1);
+
+                // EPS Bearer Identity
+                if(rr_cnfg->drb_to_add_mod_list[i].eps_bearer_id_present)
+                {
+                    rr_cnfg->drb_to_add_mod_list[i].eps_bearer_id = rrc_bits_2_value(ie_ptr, 4);
+                }
+
+                // DRB Identity
+                liblte_rrc_unpack_drb_identity_ie(ie_ptr, &rr_cnfg->drb_to_add_mod_list[i].drb_id);
+
+                // PDCP Config
+                if(rr_cnfg->drb_to_add_mod_list[i].pdcp_cnfg_present)
+                {
+                    liblte_rrc_unpack_pdcp_config_ie(ie_ptr, &rr_cnfg->drb_to_add_mod_list[i].pdcp_cnfg);
+                }
+
+                // RLC Config
+                if(rr_cnfg->drb_to_add_mod_list[i].rlc_cnfg_present)
+                {
+                    liblte_rrc_unpack_rlc_config_ie(ie_ptr, &rr_cnfg->drb_to_add_mod_list[i].rlc_cnfg);
+                }
+
+                // Logical Channel Identity
+                if(rr_cnfg->drb_to_add_mod_list[i].lc_id_present)
+                {
+                    rr_cnfg->drb_to_add_mod_list[i].lc_id = rrc_bits_2_value(ie_ptr, 3) + 3;
+                }
+
+                // Logical Channel Configuration
+                if(rr_cnfg->drb_to_add_mod_list[i].lc_cnfg_present)
+                {
+                    liblte_rrc_unpack_logical_channel_config_ie(ie_ptr, &rr_cnfg->drb_to_add_mod_list[i].lc_cnfg);
+                }
+            }
+        }
+
+        // DRB To Release List
+        if(drb_to_release_list_present)
+        {
+            rr_cnfg->drb_to_release_list_size = rrc_bits_2_value(ie_ptr, 4) + 1;
+            for(i=0; i<rr_cnfg->drb_to_release_list_size; i++)
+            {
+                liblte_rrc_unpack_drb_identity_ie(ie_ptr, &rr_cnfg->drb_to_release_list[i]);
+            }
+        }
+
+        // MAC Main Config
+        if(rr_cnfg->mac_main_cnfg_present)
+        {
+            rr_cnfg->mac_main_cnfg.default_value = rrc_bits_2_value(ie_ptr, 1);
+            if(!rr_cnfg->mac_main_cnfg.default_value)
+            {
+                liblte_rrc_unpack_mac_main_config_ie(ie_ptr, &rr_cnfg->mac_main_cnfg.explicit_value);
+            }
+        }
+
+        // SPS Config
+        if(rr_cnfg->sps_cnfg_present)
+        {
+            liblte_rrc_unpack_sps_config_ie(ie_ptr, &rr_cnfg->sps_cnfg);
+        }
+
+        // Physical Config Dedicated
+        if(rr_cnfg->phy_cnfg_ded_present)
+        {
+            liblte_rrc_unpack_physical_config_dedicated_ie(ie_ptr, &rr_cnfg->phy_cnfg_ded);
+        }
+
+        // Extension
+        if(ext)
+        {
+            // Optional indicators
+            rr_cnfg->rlf_timers_and_constants_present = rrc_bits_2_value(ie_ptr, 1);
+
+            // RLF Timers and Constants
+            if(rr_cnfg->rlf_timers_and_constants_present)
+            {
+                liblte_rrc_unpack_rlf_timers_and_constants_ie(ie_ptr, &rr_cnfg->rlf_timers_and_constants);
+            }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: RLC Config
@@ -4097,7 +5385,158 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rr_config_common_sib_ie(uint8               
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rlc_config_ie(LIBLTE_RRC_RLC_CONFIG_STRUCT  *rlc_cnfg,
+                                                uint8                        **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(rlc_cnfg != NULL &&
+       ie_ptr   != NULL)
+    {
+        // Extension indicator
+        rrc_value_2_bits(0, ie_ptr, 1);
+
+        // AM
+        {
+            // UL AM RLC
+            {
+                // T Poll Retransmit
+                rrc_value_2_bits(rlc_cnfg->ul_am_rlc.t_poll_retx, ie_ptr, 6);
+
+                // Poll PDU
+                rrc_value_2_bits(rlc_cnfg->ul_am_rlc.poll_pdu, ie_ptr, 3);
+
+                // Poll Byte
+                rrc_value_2_bits(rlc_cnfg->ul_am_rlc.poll_byte, ie_ptr, 4);
+
+                // Max Retransmission Threshold
+                rrc_value_2_bits(rlc_cnfg->ul_am_rlc.max_retx_thresh, ie_ptr, 3);
+            }
+
+            // DL AM RLC
+            {
+                // T Reordering
+                rrc_value_2_bits(rlc_cnfg->dl_am_rlc.t_reordering, ie_ptr, 5);
+
+                // T Status Prohibit
+                rrc_value_2_bits(rlc_cnfg->dl_am_rlc.t_status_prohibit, ie_ptr, 6);
+            }
+        }
+
+        // UM Bi Directional
+        {
+            // UL UM RLC
+            {
+                // SN Field Length
+                rrc_value_2_bits(rlc_cnfg->ul_um_bi_rlc.sn_field_len, ie_ptr, 1);
+            }
+
+            // DL UM RLC
+            {
+                // SN Field Length
+                rrc_value_2_bits(rlc_cnfg->dl_um_bi_rlc.sn_field_len, ie_ptr, 1);
+
+                // T Reordering
+                rrc_value_2_bits(rlc_cnfg->dl_um_bi_rlc.t_reordering, ie_ptr, 5);
+            }
+        }
+
+        // UM Uni Directional UL
+        {
+            // SN Field Length
+            rrc_value_2_bits(rlc_cnfg->ul_um_uni_rlc.sn_field_len, ie_ptr, 1);
+        }
+
+        // UM Uni Directional DL
+        {
+            // SN Field Length
+            rrc_value_2_bits(rlc_cnfg->dl_um_uni_rlc.sn_field_len, ie_ptr, 1);
+
+            // T Reordering
+            rrc_value_2_bits(rlc_cnfg->dl_um_uni_rlc.t_reordering, ie_ptr, 5);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rlc_config_ie(uint8                        **ie_ptr,
+                                                  LIBLTE_RRC_RLC_CONFIG_STRUCT  *rlc_cnfg)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ie_ptr   != NULL &&
+       rlc_cnfg != NULL)
+    {
+        // Extension indicator
+        rrc_bits_2_value(ie_ptr, 1);
+
+        // AM
+        {
+            // UL AM RLC
+            {
+                // T Poll Retransmit
+                rlc_cnfg->ul_am_rlc.t_poll_retx = (LIBLTE_RRC_T_POLL_RETRANSMIT_ENUM)rrc_bits_2_value(ie_ptr, 6);
+
+                // Poll PDU
+                rlc_cnfg->ul_am_rlc.poll_pdu = (LIBLTE_RRC_POLL_PDU_ENUM)rrc_bits_2_value(ie_ptr, 3);
+
+                // Poll Byte
+                rlc_cnfg->ul_am_rlc.poll_byte = (LIBLTE_RRC_POLL_BYTE_ENUM)rrc_bits_2_value(ie_ptr, 4);
+
+                // Max Retransmission Threshold
+                rlc_cnfg->ul_am_rlc.max_retx_thresh = (LIBLTE_RRC_MAX_RETX_THRESHOLD_ENUM)rrc_bits_2_value(ie_ptr, 3);
+            }
+
+            // DL AM RLC
+            {
+                // T Reordering
+                rlc_cnfg->dl_am_rlc.t_reordering = (LIBLTE_RRC_T_REORDERING_ENUM)rrc_bits_2_value(ie_ptr, 5);
+
+                // T Status Prohibit
+                rlc_cnfg->dl_am_rlc.t_status_prohibit = (LIBLTE_RRC_T_STATUS_PROHIBIT_ENUM)rrc_bits_2_value(ie_ptr, 6);
+            }
+        }
+
+        // UM Bi Directional
+        {
+            // UL UM RLC
+            {
+                // SN Field Length
+                rlc_cnfg->ul_um_bi_rlc.sn_field_len = (LIBLTE_RRC_SN_FIELD_LENGTH_ENUM)rrc_bits_2_value(ie_ptr, 1);
+            }
+
+            // DL UM RLC
+            {
+                // SN Field Length
+                rlc_cnfg->dl_um_bi_rlc.sn_field_len = (LIBLTE_RRC_SN_FIELD_LENGTH_ENUM)rrc_bits_2_value(ie_ptr, 1);
+
+                // T Reordering
+                rlc_cnfg->dl_um_bi_rlc.t_reordering = (LIBLTE_RRC_T_REORDERING_ENUM)rrc_bits_2_value(ie_ptr, 5);
+            }
+        }
+
+        // UM Uni Directional UL
+        {
+            // SN Field Length
+            rlc_cnfg->ul_um_uni_rlc.sn_field_len = (LIBLTE_RRC_SN_FIELD_LENGTH_ENUM)rrc_bits_2_value(ie_ptr, 1);
+        }
+
+        // UM Uni Directional DL
+        {
+            // SN Field Length
+            rlc_cnfg->dl_um_uni_rlc.sn_field_len = (LIBLTE_RRC_SN_FIELD_LENGTH_ENUM)rrc_bits_2_value(ie_ptr, 1);
+
+            // T Reordering
+            rlc_cnfg->dl_um_uni_rlc.t_reordering = (LIBLTE_RRC_T_REORDERING_ENUM)rrc_bits_2_value(ie_ptr, 5);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: RLF Timers and Constants
@@ -4107,7 +5546,56 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rr_config_common_sib_ie(uint8               
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rlf_timers_and_constants_ie(LIBLTE_RRC_RLF_TIMERS_AND_CONSTANTS_STRUCT  *rlf_timers_and_constants,
+                                                              uint8                                      **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(rlf_timers_and_constants != NULL &&
+       ie_ptr                   != NULL)
+    {
+        // Release choice
+        rrc_value_2_bits(1, ie_ptr, 1);
+
+        // Extension
+        rrc_value_2_bits(0, ie_ptr, 1);
+
+        rrc_value_2_bits(rlf_timers_and_constants->t301, ie_ptr, 3);
+        rrc_value_2_bits(rlf_timers_and_constants->t310, ie_ptr, 3);
+        rrc_value_2_bits(rlf_timers_and_constants->n310, ie_ptr, 3);
+        rrc_value_2_bits(rlf_timers_and_constants->t311, ie_ptr, 3);
+        rrc_value_2_bits(rlf_timers_and_constants->n311, ie_ptr, 3);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rlf_timers_and_constants_ie(uint8                                      **ie_ptr,
+                                                                LIBLTE_RRC_RLF_TIMERS_AND_CONSTANTS_STRUCT  *rlf_timers_and_constants)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ie_ptr                   != NULL &&
+       rlf_timers_and_constants != NULL)
+    {
+        // Release choice
+        rrc_bits_2_value(ie_ptr, 1);
+
+        // Extension
+        rrc_bits_2_value(ie_ptr, 1);
+
+        rlf_timers_and_constants->t301 = (LIBLTE_RRC_T301_ENUM)rrc_bits_2_value(ie_ptr, 3);
+        rlf_timers_and_constants->t310 = (LIBLTE_RRC_T310_ENUM)rrc_bits_2_value(ie_ptr, 3);
+        rlf_timers_and_constants->n310 = (LIBLTE_RRC_N310_ENUM)rrc_bits_2_value(ie_ptr, 3);
+        rlf_timers_and_constants->t311 = (LIBLTE_RRC_T311_ENUM)rrc_bits_2_value(ie_ptr, 3);
+        rlf_timers_and_constants->n311 = (LIBLTE_RRC_N311_ENUM)rrc_bits_2_value(ie_ptr, 3);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: RN Subframe Config
@@ -4125,7 +5613,60 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rr_config_common_sib_ie(uint8               
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_scheduling_request_config_ie(LIBLTE_RRC_SCHEDULING_REQUEST_CONFIG_STRUCT  *sched_request_cnfg,
+                                                               uint8                                       **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(sched_request_cnfg != NULL &&
+       ie_ptr             != NULL)
+    {
+        // Setup
+        rrc_value_2_bits(sched_request_cnfg->setup_present, ie_ptr, 1);
+        if(sched_request_cnfg->setup_present)
+        {
+            // SR PUCCH Resource Index
+            rrc_value_2_bits(sched_request_cnfg->sr_pucch_resource_idx, ie_ptr, 11);
+
+            // SR Config Index
+            rrc_value_2_bits(sched_request_cnfg->sr_cnfg_idx, ie_ptr, 8);
+
+            // DRS Trans Max
+            rrc_value_2_bits(sched_request_cnfg->dsr_trans_max, ie_ptr, 3);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_scheduling_request_config_ie(uint8                                       **ie_ptr,
+                                                                 LIBLTE_RRC_SCHEDULING_REQUEST_CONFIG_STRUCT  *sched_request_cnfg)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ie_ptr             != NULL &&
+       sched_request_cnfg != NULL)
+    {
+        // Setup
+        sched_request_cnfg->setup_present = rrc_bits_2_value(ie_ptr, 1);
+        if(sched_request_cnfg->setup_present)
+        {
+            // SR PUCCH Resource Index
+            sched_request_cnfg->sr_pucch_resource_idx = rrc_bits_2_value(ie_ptr, 11);
+
+            // SR Config Index
+            sched_request_cnfg->sr_cnfg_idx = rrc_bits_2_value(ie_ptr, 8);
+
+            // DRS Trans Max
+            sched_request_cnfg->dsr_trans_max = (LIBLTE_RRC_DSR_TRANS_MAX_ENUM)rrc_bits_2_value(ie_ptr, 3);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: Sounding RS UL Config
@@ -4193,7 +5734,84 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_srs_ul_config_common_ie(uint8               
 
     return(err);
 }
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_srs_ul_config_dedicated_ie(LIBLTE_RRC_SRS_UL_CONFIG_DEDICATED_STRUCT  *srs_ul_cnfg,
+                                                             uint8                                     **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(srs_ul_cnfg != NULL &&
+       ie_ptr      != NULL)
+    {
+        // Setup
+        rrc_value_2_bits(srs_ul_cnfg->setup_present, ie_ptr, 1);
+        if(srs_ul_cnfg->setup_present)
+        {
+            // SRS Bandwidth
+            rrc_value_2_bits(srs_ul_cnfg->srs_bandwidth, ie_ptr, 2);
+
+            // SRS Hopping Bandwidth
+            rrc_value_2_bits(srs_ul_cnfg->srs_hopping_bandwidth, ie_ptr, 2);
+
+            // Frequency Domain Position
+            rrc_value_2_bits(srs_ul_cnfg->freq_domain_pos, ie_ptr, 5);
+
+            // Duration
+            rrc_value_2_bits(srs_ul_cnfg->duration, ie_ptr, 1);
+
+            // SRS Config Index
+            rrc_value_2_bits(srs_ul_cnfg->srs_cnfg_idx, ie_ptr, 10);
+
+            // Transmission Comb
+            rrc_value_2_bits(srs_ul_cnfg->tx_comb, ie_ptr, 1);
+
+            // Cyclic Shift
+            rrc_value_2_bits(srs_ul_cnfg->cyclic_shift, ie_ptr, 3);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_srs_ul_config_dedicated_ie(uint8                                     **ie_ptr,
+                                                               LIBLTE_RRC_SRS_UL_CONFIG_DEDICATED_STRUCT  *srs_ul_cnfg)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ie_ptr      != NULL &&
+       srs_ul_cnfg != NULL)
+    {
+        // Setup
+        srs_ul_cnfg->setup_present = rrc_bits_2_value(ie_ptr, 1);
+        if(srs_ul_cnfg->setup_present)
+        {
+            // SRS Bandwidth
+            srs_ul_cnfg->srs_bandwidth = (LIBLTE_RRC_SRS_BANDWIDTH_ENUM)rrc_bits_2_value(ie_ptr, 2);
+
+            // SRS Hopping Bandwidth
+            srs_ul_cnfg->srs_hopping_bandwidth = (LIBLTE_RRC_SRS_HOPPING_BANDWIDTH_ENUM)rrc_bits_2_value(ie_ptr, 2);
+
+            // Frequency Domain Position
+            srs_ul_cnfg->freq_domain_pos = rrc_bits_2_value(ie_ptr, 5);
+
+            // Duration
+            srs_ul_cnfg->duration = rrc_bits_2_value(ie_ptr, 1);
+
+            // SRS Config Index
+            srs_ul_cnfg->srs_cnfg_idx = rrc_bits_2_value(ie_ptr, 10);
+
+            // Transmission Comb
+            srs_ul_cnfg->tx_comb = rrc_bits_2_value(ie_ptr, 1);
+
+            // Cyclic Shift
+            srs_ul_cnfg->cyclic_shift = (LIBLTE_RRC_CYCLIC_SHIFT_ENUM)rrc_bits_2_value(ie_ptr, 3);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: SPS Config
@@ -4203,7 +5821,178 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_srs_ul_config_common_ie(uint8               
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_sps_config_ie(LIBLTE_RRC_SPS_CONFIG_STRUCT  *sps_cnfg,
+                                                uint8                        **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+
+    if(sps_cnfg != NULL &&
+       ie_ptr   != NULL)
+    {
+        // Optional indicators
+        rrc_value_2_bits(sps_cnfg->sps_c_rnti_present,  ie_ptr, 1);
+        rrc_value_2_bits(sps_cnfg->sps_cnfg_dl_present, ie_ptr, 1);
+        rrc_value_2_bits(sps_cnfg->sps_cnfg_ul_present, ie_ptr, 1);
+
+        // SPS C-RNTI
+        if(sps_cnfg->sps_c_rnti_present)
+        {
+            liblte_rrc_pack_c_rnti_ie(sps_cnfg->sps_c_rnti, ie_ptr);
+        }
+
+        // SPS Config DL
+        if(sps_cnfg->sps_cnfg_dl_present)
+        {
+            rrc_value_2_bits(sps_cnfg->sps_cnfg_dl.setup_present, ie_ptr, 1);
+            if(sps_cnfg->sps_cnfg_dl.setup_present)
+            {
+                // Extension indicator
+                rrc_value_2_bits(0, ie_ptr, 1);
+
+                // SPS Interval DL
+                rrc_value_2_bits(sps_cnfg->sps_cnfg_dl.sps_interval_dl, ie_ptr, 4);
+
+                // Number of Configured SPS Processes
+                rrc_value_2_bits(sps_cnfg->sps_cnfg_dl.N_sps_processes - 1, ie_ptr, 3);
+
+                // N1 PUCCH AN Persistent List
+                rrc_value_2_bits(sps_cnfg->sps_cnfg_dl.n1_pucch_an_persistent_list_size - 1, ie_ptr, 2);
+                for(i=0; i<sps_cnfg->sps_cnfg_dl.n1_pucch_an_persistent_list_size; i++)
+                {
+                    rrc_value_2_bits(sps_cnfg->sps_cnfg_dl.n1_pucch_an_persistent_list[i], ie_ptr, 11);
+                }
+            }
+        }
+
+        // SPS Config UL
+        if(sps_cnfg->sps_cnfg_ul_present)
+        {
+            rrc_value_2_bits(sps_cnfg->sps_cnfg_ul.setup_present, ie_ptr, 1);
+            if(sps_cnfg->sps_cnfg_ul.setup_present)
+            {
+                // Extension indicator
+                rrc_value_2_bits(0, ie_ptr, 1);
+
+                // Optional indicators
+                rrc_value_2_bits(sps_cnfg->sps_cnfg_ul.p0_persistent_present,      ie_ptr, 1);
+                rrc_value_2_bits(sps_cnfg->sps_cnfg_ul.two_intervals_cnfg_present, ie_ptr, 1);
+
+                // SPS Interval UL
+                rrc_value_2_bits(sps_cnfg->sps_cnfg_ul.sps_interval_ul, ie_ptr, 4);
+
+                // Implicit Release After
+                rrc_value_2_bits(sps_cnfg->sps_cnfg_ul.implicit_release_after, ie_ptr, 2);
+
+                // P0 Persistent
+                if(sps_cnfg->sps_cnfg_ul.p0_persistent_present)
+                {
+                    // P0 Nominal PUSCH Persistent
+                    rrc_value_2_bits(sps_cnfg->sps_cnfg_ul.p0_nominal_pusch + 126, ie_ptr, 8);
+
+                    // P0 UE PUSCH Persistent
+                    rrc_value_2_bits(sps_cnfg->sps_cnfg_ul.p0_ue_pusch + 8, ie_ptr, 4);
+                }
+
+                // Two Intervals Config
+                if(sps_cnfg->sps_cnfg_ul.two_intervals_cnfg_present)
+                {
+                    rrc_value_2_bits(sps_cnfg->sps_cnfg_ul.two_intervals_cnfg, ie_ptr, 1);
+                }
+            }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_sps_config_ie(uint8                        **ie_ptr,
+                                                  LIBLTE_RRC_SPS_CONFIG_STRUCT  *sps_cnfg)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+
+    if(ie_ptr   != NULL &&
+       sps_cnfg != NULL)
+    {
+        // Optional indicators
+        sps_cnfg->sps_c_rnti_present  = rrc_bits_2_value(ie_ptr, 1);
+        sps_cnfg->sps_cnfg_dl_present = rrc_bits_2_value(ie_ptr, 1);
+        sps_cnfg->sps_cnfg_ul_present = rrc_bits_2_value(ie_ptr, 1);
+
+        // SPS C-RNTI
+        if(sps_cnfg->sps_c_rnti_present)
+        {
+            liblte_rrc_unpack_c_rnti_ie(ie_ptr, &sps_cnfg->sps_c_rnti);
+        }
+
+        // SPS Config DL
+        if(sps_cnfg->sps_cnfg_dl_present)
+        {
+            sps_cnfg->sps_cnfg_dl.setup_present = rrc_bits_2_value(ie_ptr, 1);
+            if(sps_cnfg->sps_cnfg_dl.setup_present)
+            {
+                // Extension indicator
+                rrc_bits_2_value(ie_ptr, 1);
+
+                // SPS Interval DL
+                sps_cnfg->sps_cnfg_dl.sps_interval_dl = (LIBLTE_RRC_SPS_INTERVAL_DL_ENUM)rrc_bits_2_value(ie_ptr, 4);
+
+                // Number of Configured SPS Processes
+                sps_cnfg->sps_cnfg_dl.N_sps_processes = rrc_bits_2_value(ie_ptr, 3) + 1;
+
+                // N1 PUCCH AN Persistent List
+                sps_cnfg->sps_cnfg_dl.n1_pucch_an_persistent_list_size = rrc_bits_2_value(ie_ptr, 2) + 1;
+                for(i=0; i<sps_cnfg->sps_cnfg_dl.n1_pucch_an_persistent_list_size; i++)
+                {
+                    sps_cnfg->sps_cnfg_dl.n1_pucch_an_persistent_list[i] = rrc_bits_2_value(ie_ptr, 11);
+                }
+            }
+        }
+
+        // SPS Config UL
+        if(sps_cnfg->sps_cnfg_ul_present)
+        {
+            sps_cnfg->sps_cnfg_ul.setup_present = rrc_bits_2_value(ie_ptr, 1);
+            if(sps_cnfg->sps_cnfg_ul.setup_present)
+            {
+                // Extension indicator
+                rrc_bits_2_value(ie_ptr, 1);
+
+                // Optional indicators
+                sps_cnfg->sps_cnfg_ul.p0_persistent_present      = rrc_bits_2_value(ie_ptr, 1);
+                sps_cnfg->sps_cnfg_ul.two_intervals_cnfg_present = rrc_bits_2_value(ie_ptr, 1);
+
+                // SPS Interval UL
+                sps_cnfg->sps_cnfg_ul.sps_interval_ul = (LIBLTE_RRC_SPS_INTERVAL_UL_ENUM)rrc_bits_2_value(ie_ptr, 4);
+
+                // Implicit Release After
+                sps_cnfg->sps_cnfg_ul.implicit_release_after = (LIBLTE_RRC_IMPLICIT_RELEASE_AFTER_ENUM)rrc_bits_2_value(ie_ptr, 2);
+
+                // P0 Persistent
+                if(sps_cnfg->sps_cnfg_ul.p0_persistent_present)
+                {
+                    // P0 Nominal PUSCH Persistent
+                    sps_cnfg->sps_cnfg_ul.p0_nominal_pusch = rrc_bits_2_value(ie_ptr, 8) - 126;
+
+                    // P0 UE PUSCH Persistent
+                    sps_cnfg->sps_cnfg_ul.p0_ue_pusch = rrc_bits_2_value(ie_ptr, 4) - 8;
+                }
+
+                // Two Intervals Config
+                if(sps_cnfg->sps_cnfg_ul.two_intervals_cnfg_present)
+                {
+                    sps_cnfg->sps_cnfg_ul.two_intervals_cnfg = (LIBLTE_RRC_TWO_INTERVALS_CONFIG_ENUM)rrc_bits_2_value(ie_ptr, 1);
+                }
+            }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: TDD Config
@@ -4294,7 +6083,66 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_time_alignment_timer_ie(uint8               
 
     Document Reference: 36.331 v10.0.0 Section 6.3.2
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_tpc_pdcch_config_ie(LIBLTE_RRC_TPC_PDCCH_CONFIG_STRUCT  *tpc_pdcch_cnfg,
+                                                      uint8                              **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(tpc_pdcch_cnfg != NULL &&
+       ie_ptr         != NULL)
+    {
+        // Setup
+        rrc_value_2_bits(tpc_pdcch_cnfg->setup_present, ie_ptr, 1);
+        if(tpc_pdcch_cnfg->setup_present)
+        {
+            // TPC RNTI
+            rrc_value_2_bits(tpc_pdcch_cnfg->tpc_rnti, ie_ptr, 16);
+
+            // TPC Index
+            rrc_value_2_bits(tpc_pdcch_cnfg->tpc_idx_choice, ie_ptr, 1);
+            if(LIBLTE_RRC_TPC_INDEX_FORMAT_3 == tpc_pdcch_cnfg->tpc_idx_choice)
+            {
+                rrc_value_2_bits(tpc_pdcch_cnfg->tpc_idx - 1, ie_ptr, 4);
+            }else{
+                rrc_value_2_bits(tpc_pdcch_cnfg->tpc_idx - 1, ie_ptr, 5);
+            }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_tpc_pdcch_config_ie(uint8                              **ie_ptr,
+                                                        LIBLTE_RRC_TPC_PDCCH_CONFIG_STRUCT  *tpc_pdcch_cnfg)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ie_ptr         != NULL &&
+       tpc_pdcch_cnfg != NULL)
+    {
+        // Setup
+        tpc_pdcch_cnfg->setup_present = rrc_bits_2_value(ie_ptr, 1);
+        if(tpc_pdcch_cnfg->setup_present)
+        {
+            // TPC RNTI
+            tpc_pdcch_cnfg->tpc_rnti = rrc_bits_2_value(ie_ptr, 16);
+
+            // TPC Index
+            tpc_pdcch_cnfg->tpc_idx_choice = (LIBLTE_RRC_TPC_INDEX_ENUM)rrc_bits_2_value(ie_ptr, 1);
+            if(LIBLTE_RRC_TPC_INDEX_FORMAT_3 == tpc_pdcch_cnfg->tpc_idx_choice)
+            {
+                tpc_pdcch_cnfg->tpc_idx = rrc_bits_2_value(ie_ptr, 4) + 1;
+            }else{
+                tpc_pdcch_cnfg->tpc_idx = rrc_bits_2_value(ie_ptr, 5) + 1;
+            }
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: UL Antenna Info
@@ -4403,7 +6251,68 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_ul_power_control_common_ie(uint8            
 
     return(err);
 }
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_ul_power_control_dedicated_ie(LIBLTE_RRC_UL_POWER_CONTROL_DEDICATED_STRUCT  *ul_pwr_ctrl,
+                                                                uint8                                        **ie_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ul_pwr_ctrl != NULL &&
+       ie_ptr      != NULL)
+    {
+        // P0 UE PUSCH
+        rrc_value_2_bits(ul_pwr_ctrl->p0_ue_pusch + 8, ie_ptr, 4);
+
+        // Delta MCS Enabled
+        rrc_value_2_bits(ul_pwr_ctrl->delta_mcs_en, ie_ptr, 1);
+
+        // Accumulation Enabled
+        rrc_value_2_bits(ul_pwr_ctrl->accumulation_en, ie_ptr, 1);
+
+        // P0 UE PUCCH
+        rrc_value_2_bits(ul_pwr_ctrl->p0_ue_pucch + 8, ie_ptr, 4);
+
+        // P SRS Offset
+        rrc_value_2_bits(ul_pwr_ctrl->p_srs_offset, ie_ptr, 4);
+
+        // Filter Coefficient
+        liblte_rrc_pack_filter_coefficient_ie(ul_pwr_ctrl->filter_coeff, ie_ptr);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_ul_power_control_dedicated_ie(uint8                                        **ie_ptr,
+                                                                  LIBLTE_RRC_UL_POWER_CONTROL_DEDICATED_STRUCT  *ul_pwr_ctrl)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ie_ptr      != NULL &&
+       ul_pwr_ctrl != NULL)
+    {
+        // P0 UE PUSCH
+        ul_pwr_ctrl->p0_ue_pusch = rrc_bits_2_value(ie_ptr, 4) - 8;
+
+        // Delta MCS Enabled
+        ul_pwr_ctrl->delta_mcs_en = (LIBLTE_RRC_DELTA_MCS_ENABLED_ENUM)rrc_bits_2_value(ie_ptr, 1);
+
+        // Accumulation Enabled
+        ul_pwr_ctrl->accumulation_en = rrc_bits_2_value(ie_ptr, 1);
+
+        // P0 UE PUCCH
+        ul_pwr_ctrl->p0_ue_pucch = rrc_bits_2_value(ie_ptr, 4) - 8;
+
+        // P SRS Offset
+        ul_pwr_ctrl->p_srs_offset = rrc_bits_2_value(ie_ptr, 4);
+
+        // Filter Coefficient
+        liblte_rrc_unpack_filter_coefficient_ie(ie_ptr, &ul_pwr_ctrl->filter_coeff);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     IE Name: System Information Block Type 2
@@ -5809,170 +7718,64 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_8_ie(uint8              
 *******************************************************************************/
 
 /*********************************************************************
-    Message Name: RRC Connection Reestablishment Request
+    Message Name: UL Information Transfer
 
-    Description: Used to request the reestablishment of an RRC
-                 connection
+    Description: Used for the uplink transfer dedicated NAS
+                 information
 
-    Document Reference: 36.331 v10.0.0 Section 6.2.2
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
 *********************************************************************/
-LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_con_reest_req_msg(LIBLTE_RRC_CON_REEST_REQ_STRUCT *con_reest_req,
-                                                        LIBLTE_MSG_STRUCT               *msg)
-{
-    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
-    uint8             *msg_ptr = msg->msg;
-    uint8              ext     = false;
-
-    if(con_reest_req != NULL &&
-       msg           != NULL)
-    {
-        // Extension choice
-        rrc_value_2_bits(ext, &msg_ptr, 1);
-
-        if(!ext)
-        {
-            // UE Identity Type
-            rrc_value_2_bits(con_reest_req->ue_id_type, &msg_ptr, 2);
-
-            // UE Identity
-            if(LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_C_RNTI == con_reest_req->ue_id_type)
-            {
-                liblte_rrc_pack_c_rnti_ie((uint16)con_reest_req->ue_id.c_rnti, &msg_ptr);
-            }else if(LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_PHYS_CELL_ID == con_reest_req->ue_id_type){
-                liblte_rrc_pack_phys_cell_id_ie((uint16)con_reest_req->ue_id.phys_cell_id, &msg_ptr);
-            }else{ // LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_SHORT_MAC_I == con_reest_req->ue_id_type
-                liblte_rrc_pack_short_mac_i_ie((uint16)con_reest_req->ue_id.short_mac_i, &msg_ptr);
-            }
-
-            // Reestablishment Cause
-            rrc_value_2_bits(con_reest_req->cause, &msg_ptr, 2);
-
-            // Spare
-            rrc_value_2_bits(0, &msg_ptr, 2);
-
-            err = LIBLTE_SUCCESS;
-        }
-    }
-
-    return(err);
-}
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_con_reest_req_msg(LIBLTE_MSG_STRUCT               *msg,
-                                                          LIBLTE_RRC_CON_REEST_REQ_STRUCT *con_reest_req)
-{
-    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
-    uint8             *msg_ptr = msg->msg;
-
-    if(msg           != NULL &&
-       con_reest_req != NULL)
-    {
-        // Extension Choice
-        if(!rrc_bits_2_value(&msg_ptr, 1))
-        {
-            // UE Identity Type
-            con_reest_req->ue_id_type = (LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_ENUM)rrc_bits_2_value(&msg_ptr, 2);
-
-            // UE Identity
-            if(LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_C_RNTI == con_reest_req->ue_id_type)
-            {
-                liblte_rrc_unpack_c_rnti_ie(&msg_ptr, (uint16 *)&con_reest_req->ue_id);
-            }else if(LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_PHYS_CELL_ID == con_reest_req->ue_id_type){
-                liblte_rrc_unpack_phys_cell_id_ie(&msg_ptr, (uint16 *)&con_reest_req->ue_id);
-            }else{ // LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_SHORT_MAC_I == con_reest_req->ue_id_type
-                liblte_rrc_unpack_short_mac_i_ie(&msg_ptr, (uint16 *)&con_reest_req->ue_id);
-            }
-
-            // Reestablishment Cause
-            con_reest_req->cause = (LIBLTE_RRC_CON_REEST_REQ_CAUSE_ENUM)rrc_bits_2_value(&msg_ptr, 2);
-
-            err = LIBLTE_SUCCESS;
-        }
-    }
-
-    return(err);
-}
+// FIXME
 
 /*********************************************************************
-    Message Name: RRC Connection Request
+    Message Name: UL Handover Preparation Transfer (CDMA2000)
 
-    Description: Used to request the establishment of an RRC
-                 connection
+    Description: Used for the uplink transfer of handover related
+                 CDMA2000 information when requested by the higher
+                 layers
 
-    Document Reference: 36.331 v10.0.0 Section 6.2.2
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
 *********************************************************************/
-LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_con_req_msg(LIBLTE_RRC_CON_REQ_STRUCT *con_req,
-                                                  LIBLTE_MSG_STRUCT         *msg)
-{
-    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
-    uint8             *msg_ptr = msg->msg;
-    uint8              ext     = false;
+// FIXME
 
-    if(con_req != NULL &&
-       msg     != NULL)
-    {
-        // Extension choice
-        rrc_value_2_bits(ext, &msg_ptr, 1);
+/*********************************************************************
+    Message Name: UE Information Response
 
-        if(!ext)
-        {
-            // UE Identity Type
-            rrc_value_2_bits(con_req->ue_id_type, &msg_ptr, 1);
+    Description: Used by the UE to transfer the information requested
+                 by the E-UTRAN
 
-            // UE Identity
-            if(LIBLTE_RRC_CON_REQ_UE_ID_TYPE_S_TMSI == con_req->ue_id_type)
-            {
-                liblte_rrc_pack_s_tmsi_ie((LIBLTE_RRC_S_TMSI_STRUCT *)&con_req->ue_id,
-                                          &msg_ptr);
-            }else{ // LIBLTE_RRC_CON_REQ_UE_ID_TYPE_RANDOM_VALUE == con_req->ue_id_type
-                rrc_value_2_bits((uint32)(con_req->ue_id.random >> 32), &msg_ptr, 8);
-                rrc_value_2_bits((uint32)(con_req->ue_id.random), &msg_ptr, 32);
-            }
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
 
-            // Establishment Cause
-            rrc_value_2_bits(con_req->cause, &msg_ptr, 3);
+/*********************************************************************
+    Message Name: UE Information Request
 
-            // Spare
-            rrc_value_2_bits(0, &msg_ptr, 1);
+    Description: Used by E-UTRAN to retrieve information from the UE
 
-            err = LIBLTE_SUCCESS;
-        }
-    }
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
 
-    return(err);
-}
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_con_req_msg(LIBLTE_MSG_STRUCT         *msg,
-                                                    LIBLTE_RRC_CON_REQ_STRUCT *con_req)
-{
-    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
-    uint8             *msg_ptr = msg->msg;
+/*********************************************************************
+    Message Name: UE Capability Information
 
-    if(msg     != NULL &&
-       con_req != NULL)
-    {
-        // Extension Choice
-        if(!rrc_bits_2_value(&msg_ptr, 1))
-        {
-            // UE Identity Type
-            con_req->ue_id_type = (LIBLTE_RRC_CON_REQ_UE_ID_TYPE_ENUM)rrc_bits_2_value(&msg_ptr, 1);
+    Description: Used to transfer UE radio access capabilities
+                 requested by the E-UTRAN
 
-            // UE Identity
-            if(LIBLTE_RRC_CON_REQ_UE_ID_TYPE_S_TMSI == con_req->ue_id_type)
-            {
-                liblte_rrc_unpack_s_tmsi_ie(&msg_ptr,
-                                            (LIBLTE_RRC_S_TMSI_STRUCT *)&con_req->ue_id);
-            }else{ // LIBLTE_RRC_CON_REQ_UE_ID_TYPE_RANDOM_VALUE == con_req->ue_id_type
-                con_req->ue_id.random  = (uint64)rrc_bits_2_value(&msg_ptr, 8) << 32;
-                con_req->ue_id.random |= rrc_bits_2_value(&msg_ptr, 32);
-            }
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
 
-            // Establishment Cause
-            con_req->cause = (LIBLTE_RRC_CON_REQ_EST_CAUSE_ENUM)rrc_bits_2_value(&msg_ptr, 3);
+/*********************************************************************
+    Message Name: UE Capability Enquiry
 
-            err = LIBLTE_SUCCESS;
-        }
-    }
+    Description: Used to request the transfer of UE radio access
+                 capabilities for E-UTRA as well as for other RATs
 
-    return(err);
-}
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
 
 /*********************************************************************
     Message Name: System Information Block Type 1
@@ -6341,6 +8144,527 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_msg(LIBLTE_MSG_STRUCT              
 }
 
 /*********************************************************************
+    Message Name: Security Mode Failure
+
+    Description: Used to indicate an unsuccessful completion of a
+                 security mode command
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: Security Mode Complete
+
+    Description: Used to confirm the successful completion of a
+                 security mode command
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: Security Mode Command
+
+    Description: Used to command the activation of AS security
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: RRC Connection Setup Complete
+
+    Description: Used to confirm the successful completion of an RRC
+                 connection
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: RRC Connection Setup
+
+    Description: Used to establish SRB1
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_setup_msg(LIBLTE_RRC_CONNECTION_SETUP_STRUCT *con_setup,
+                                                           LIBLTE_MSG_STRUCT                  *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(con_setup != NULL &&
+       msg       != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_pack_rrc_transaction_identifier_ie(con_setup->transaction_id, &msg_ptr);
+
+        // Extension choice
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // C1 choice
+        rrc_value_2_bits(0, &msg_ptr, 3);
+
+        // Optional indicators
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // Radio Resource Config Dedicated
+        liblte_rrc_pack_rr_config_dedicated_ie(&con_setup->rr_cnfg, &msg_ptr);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_setup_msg(LIBLTE_MSG_STRUCT                  *msg,
+                                                             LIBLTE_RRC_CONNECTION_SETUP_STRUCT *con_setup)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg       != NULL &&
+       con_setup != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_unpack_rrc_transaction_identifier_ie(&msg_ptr, &con_setup->transaction_id);
+
+        // Extension choice
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // C1 choice
+        rrc_bits_2_value(&msg_ptr, 3);
+
+        // Optional indicators
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // Radio Resource Config Dedicated
+        liblte_rrc_unpack_rr_config_dedicated_ie(&msg_ptr, &con_setup->rr_cnfg);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    Message Name: RRC Connection Request
+
+    Description: Used to request the establishment of an RRC
+                 connection
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_request_msg(LIBLTE_RRC_CONNECTION_REQUEST_STRUCT *con_req,
+                                                             LIBLTE_MSG_STRUCT                    *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint8              ext     = false;
+
+    if(con_req != NULL &&
+       msg     != NULL)
+    {
+        // Extension choice
+        rrc_value_2_bits(ext, &msg_ptr, 1);
+
+        if(!ext)
+        {
+            // UE Identity Type
+            rrc_value_2_bits(con_req->ue_id_type, &msg_ptr, 1);
+
+            // UE Identity
+            if(LIBLTE_RRC_CON_REQ_UE_ID_TYPE_S_TMSI == con_req->ue_id_type)
+            {
+                liblte_rrc_pack_s_tmsi_ie((LIBLTE_RRC_S_TMSI_STRUCT *)&con_req->ue_id,
+                                          &msg_ptr);
+            }else{ // LIBLTE_RRC_CON_REQ_UE_ID_TYPE_RANDOM_VALUE == con_req->ue_id_type
+                rrc_value_2_bits((uint32)(con_req->ue_id.random >> 32), &msg_ptr, 8);
+                rrc_value_2_bits((uint32)(con_req->ue_id.random), &msg_ptr, 32);
+            }
+
+            // Establishment Cause
+            rrc_value_2_bits(con_req->cause, &msg_ptr, 3);
+
+            // Spare
+            rrc_value_2_bits(0, &msg_ptr, 1);
+
+            err = LIBLTE_SUCCESS;
+        }
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_request_msg(LIBLTE_MSG_STRUCT                    *msg,
+                                                               LIBLTE_RRC_CONNECTION_REQUEST_STRUCT *con_req)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg     != NULL &&
+       con_req != NULL)
+    {
+        // Extension Choice
+        if(!rrc_bits_2_value(&msg_ptr, 1))
+        {
+            // UE Identity Type
+            con_req->ue_id_type = (LIBLTE_RRC_CON_REQ_UE_ID_TYPE_ENUM)rrc_bits_2_value(&msg_ptr, 1);
+
+            // UE Identity
+            if(LIBLTE_RRC_CON_REQ_UE_ID_TYPE_S_TMSI == con_req->ue_id_type)
+            {
+                liblte_rrc_unpack_s_tmsi_ie(&msg_ptr,
+                                            (LIBLTE_RRC_S_TMSI_STRUCT *)&con_req->ue_id);
+            }else{ // LIBLTE_RRC_CON_REQ_UE_ID_TYPE_RANDOM_VALUE == con_req->ue_id_type
+                con_req->ue_id.random  = (uint64)rrc_bits_2_value(&msg_ptr, 8) << 32;
+                con_req->ue_id.random |= rrc_bits_2_value(&msg_ptr, 32);
+            }
+
+            // Establishment Cause
+            con_req->cause = (LIBLTE_RRC_CON_REQ_EST_CAUSE_ENUM)rrc_bits_2_value(&msg_ptr, 3);
+
+            err = LIBLTE_SUCCESS;
+        }
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    Message Name: RRC Connection Release
+
+    Description: Used to command the release of an RRC connection
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: RRC Connection Reject
+
+    Description: Used to reject the RRC connection establishment
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_reject_msg(LIBLTE_RRC_CONNECTION_REJECT_STRUCT *con_rej,
+                                                            LIBLTE_MSG_STRUCT                   *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(con_rej != NULL &&
+       msg     != NULL)
+    {
+        // Extension choice
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // C1 choice
+        rrc_value_2_bits(0, &msg_ptr, 2);
+
+        // Optional indicator
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // Wait Time
+        rrc_value_2_bits(con_rej->wait_time, &msg_ptr, 4);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reject_msg(LIBLTE_MSG_STRUCT                   *msg,
+                                                              LIBLTE_RRC_CONNECTION_REJECT_STRUCT *con_rej)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg     != NULL &&
+       con_rej != NULL)
+    {
+        // Extension choice
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // C1 choice
+        rrc_bits_2_value(&msg_ptr, 2);
+
+        // Optional indicator
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // Wait Time
+        con_rej->wait_time = rrc_bits_2_value(&msg_ptr, 4);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    Message Name: RRC Connection Reestablishment Request
+
+    Description: Used to request the reestablishment of an RRC
+                 connection
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_reestablishment_request_msg(LIBLTE_RRC_CONNECTION_REESTABLISHMENT_REQUEST_STRUCT *con_reest_req,
+                                                                             LIBLTE_MSG_STRUCT                                    *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint8              ext     = false;
+
+    if(con_reest_req != NULL &&
+       msg           != NULL)
+    {
+        // Extension choice
+        rrc_value_2_bits(ext, &msg_ptr, 1);
+
+        if(!ext)
+        {
+            // UE Identity Type
+            rrc_value_2_bits(con_reest_req->ue_id_type, &msg_ptr, 2);
+
+            // UE Identity
+            if(LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_C_RNTI == con_reest_req->ue_id_type)
+            {
+                liblte_rrc_pack_c_rnti_ie((uint16)con_reest_req->ue_id.c_rnti, &msg_ptr);
+            }else if(LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_PHYS_CELL_ID == con_reest_req->ue_id_type){
+                liblte_rrc_pack_phys_cell_id_ie((uint16)con_reest_req->ue_id.phys_cell_id, &msg_ptr);
+            }else{ // LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_SHORT_MAC_I == con_reest_req->ue_id_type
+                liblte_rrc_pack_short_mac_i_ie((uint16)con_reest_req->ue_id.short_mac_i, &msg_ptr);
+            }
+
+            // Reestablishment Cause
+            rrc_value_2_bits(con_reest_req->cause, &msg_ptr, 2);
+
+            // Spare
+            rrc_value_2_bits(0, &msg_ptr, 2);
+
+            err = LIBLTE_SUCCESS;
+        }
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_request_msg(LIBLTE_MSG_STRUCT                                    *msg,
+                                                                               LIBLTE_RRC_CONNECTION_REESTABLISHMENT_REQUEST_STRUCT *con_reest_req)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg           != NULL &&
+       con_reest_req != NULL)
+    {
+        // Extension Choice
+        if(!rrc_bits_2_value(&msg_ptr, 1))
+        {
+            // UE Identity Type
+            con_reest_req->ue_id_type = (LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_ENUM)rrc_bits_2_value(&msg_ptr, 2);
+
+            // UE Identity
+            if(LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_C_RNTI == con_reest_req->ue_id_type)
+            {
+                liblte_rrc_unpack_c_rnti_ie(&msg_ptr, (uint16 *)&con_reest_req->ue_id);
+            }else if(LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_PHYS_CELL_ID == con_reest_req->ue_id_type){
+                liblte_rrc_unpack_phys_cell_id_ie(&msg_ptr, (uint16 *)&con_reest_req->ue_id);
+            }else{ // LIBLTE_RRC_CON_REEST_REQ_UE_ID_TYPE_SHORT_MAC_I == con_reest_req->ue_id_type
+                liblte_rrc_unpack_short_mac_i_ie(&msg_ptr, (uint16 *)&con_reest_req->ue_id);
+            }
+
+            // Reestablishment Cause
+            con_reest_req->cause = (LIBLTE_RRC_CON_REEST_REQ_CAUSE_ENUM)rrc_bits_2_value(&msg_ptr, 2);
+
+            err = LIBLTE_SUCCESS;
+        }
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    Message Name: RRC Connection Reestablishment Reject
+
+    Description: Used to indicate the rejection of an RRC connection
+                 reestablishment request
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_reestablishment_reject_msg(LIBLTE_RRC_CONNECTION_REESTABLISHMENT_REJECT_STRUCT *con_reest_rej,
+                                                                            LIBLTE_MSG_STRUCT                                   *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(con_reest_rej != NULL &&
+       msg           != NULL)
+    {
+        // Extension choice
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // Optional indicator
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_reject_msg(LIBLTE_MSG_STRUCT                                   *msg,
+                                                                              LIBLTE_RRC_CONNECTION_REESTABLISHMENT_REJECT_STRUCT *con_reest_rej)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg           != NULL &&
+       con_reest_rej != NULL)
+    {
+        // Extension choice
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // Optional indicator
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    Message Name: RRC Connection Reestablishment Complete
+
+    Description: Used to confirm the successful completion of an RRC
+                 connection reestablishment
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: RRC Connection Reestablishment
+
+    Description: Used to resolve contention and to re-establish SRB1
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_reestablishment_msg(LIBLTE_RRC_CONNECTION_REESTABLISHMENT_STRUCT *con_reest,
+                                                                     LIBLTE_MSG_STRUCT                            *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(con_reest != NULL &&
+       msg       != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_pack_rrc_transaction_identifier_ie(con_reest->transaction_id, &msg_ptr);
+
+        // Extension choice
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // C1 choice
+        rrc_value_2_bits(0, &msg_ptr, 3);
+
+        // Optional indicator
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // Radio Resource Config Dedicated
+        liblte_rrc_pack_rr_config_dedicated_ie(&con_reest->rr_cnfg, &msg_ptr);
+
+        // Next Hop Chaining Count
+        liblte_rrc_pack_next_hop_chaining_count_ie(con_reest->next_hop_chaining_count, &msg_ptr);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_msg(LIBLTE_MSG_STRUCT                            *msg,
+                                                                       LIBLTE_RRC_CONNECTION_REESTABLISHMENT_STRUCT *con_reest)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg       != NULL &&
+       con_reest != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_unpack_rrc_transaction_identifier_ie(&msg_ptr, &con_reest->transaction_id);
+
+        // Extension choice
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // C1 choice
+        rrc_bits_2_value(&msg_ptr, 3);
+
+        // Optional indicator
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // Radio Resource Config Dedicated
+        liblte_rrc_unpack_rr_config_dedicated_ie(&msg_ptr, &con_reest->rr_cnfg);
+
+        // Next Hop Chaining Count
+        liblte_rrc_unpack_next_hop_chaining_count_ie(&msg_ptr, &con_reest->next_hop_chaining_count);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    Message Name: RRC Connection Reconfiguration Complete
+
+    Description: Used to confirm the successful completion of an RRC
+                 connection reconfiguration
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: RRC Connection Reconfiguration
+
+    Description: Modifies an RRC connection
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: RN Reconfiguration Complete
+
+    Description: Used to confirm the successful completion of an RN
+                 reconfiguration
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: RN Reconfiguration
+
+    Description: Modifies the RRC connection between the RN and the
+                 E-UTRAN
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: Proximity Indication
+
+    Description: Used to indicate that the UE is entering or leaving
+                 the proximity of one or more cells whose CSG IDs are
+                 in the UEs CSG whitelist
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
     Message Name: Paging
 
     Description: Used for the notification of one or more UEs
@@ -6538,6 +8862,117 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_paging_msg(LIBLTE_MSG_STRUCT        *msg,
 
     return(err);
 }
+
+/*********************************************************************
+    Message Name: Mobility From EUTRA Command
+
+    Description: Used to command handover or a cell change from E-UTRA
+                 to another RAT, or enhanced CS fallback to CDMA2000
+                 1xRTT
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: Measurement Report
+
+    Description: Used for the indication of measurement results
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: MBSFN Area Configuration
+
+    Description: Contains the MBMS control information applicable for
+                 an MBSFN area
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: Master Information Block
+
+    Description: Includes the system information transmitted on BCH
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// Inlined with BCCH BCH Message
+
+/*********************************************************************
+    Message Name: Logged Measurements Configuration
+
+    Description: Used by E-UTRAN to configure the UE to perform
+                 logging of measurement results while in RRC_IDLE
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: Handover From EUTRA Preparation Request (CDMA2000)
+
+    Description: Used to trigger the handover preparation procedure
+                 with a CDMA2000 RAT
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: DL Information Transfer
+
+    Description: Used for the downlink transfer of dedicated NAS
+                 information
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: CSFB Parameters Response CDMA2000
+
+    Description: Used to provide the CDMA2000 1xRTT parameters to the
+                 UE so the UE can register with the CDMA2000 1xRTT
+                 network to support CSFB to CDMA2000 1xRTT
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: CSFB Parameters Request CDMA2000
+
+    Description: Used by the UE to obtain the CDMA2000 1xRTT
+                 parameters from the network
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: Counter Check Response
+
+    Description: Used by the UE to respond to a Counter Check message
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
+    Message Name: Counter Check
+
+    Description: Used by the E-UTRAN to indicate the current COUNT MSB
+                 values associated to each DRB and to request the UE
+                 to compare these to its COUNT MSB values and to
+                 report the comparison results to E-UTRAN
+
+    Document Reference: 36.331 v10.0.0 Section 6.2.2 
+*********************************************************************/
+// FIXME
 
 /*********************************************************************
     Message Name: BCCH BCH Message
@@ -6767,7 +9202,86 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_pcch_msg(LIBLTE_MSG_STRUCT          *msg,
 
     Document Reference: 36.331 v10.0.0 Section 6.2.1
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_dl_ccch_msg(LIBLTE_RRC_DL_CCCH_MSG_STRUCT *dl_ccch_msg,
+                                              LIBLTE_MSG_STRUCT             *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint8              ext     = false;
+
+    if(dl_ccch_msg != NULL &&
+       msg         != NULL)
+    {
+        // Extension indicator
+        rrc_value_2_bits(ext, &msg_ptr, 1);
+
+        // Message type choice
+        rrc_value_2_bits(dl_ccch_msg->msg_type, &msg_ptr, 2);
+
+        if(LIBLTE_RRC_DL_CCCH_MSG_TYPE_RRC_CON_REEST == dl_ccch_msg->msg_type)
+        {
+            err = liblte_rrc_pack_rrc_connection_reestablishment_msg((LIBLTE_RRC_CONNECTION_REESTABLISHMENT_STRUCT *)&dl_ccch_msg->msg,
+                                                                     &global_msg);
+        }else if(LIBLTE_RRC_DL_CCCH_MSG_TYPE_RRC_CON_REEST_REJ == dl_ccch_msg->msg_type){
+            err = liblte_rrc_pack_rrc_connection_reestablishment_reject_msg((LIBLTE_RRC_CONNECTION_REESTABLISHMENT_REJECT_STRUCT *)&dl_ccch_msg->msg,
+                                                                            &global_msg);
+        }else if(LIBLTE_RRC_DL_CCCH_MSG_TYPE_RRC_CON_REJ == dl_ccch_msg->msg_type){
+            err = liblte_rrc_pack_rrc_connection_reject_msg((LIBLTE_RRC_CONNECTION_REJECT_STRUCT *)&dl_ccch_msg->msg,
+                                                            &global_msg);
+        }else{ // LIBLTE_RRC_DL_CCCH_MSG_TYPE_RRC_CON_SETUP == dl_ccch_msg->msg_type
+            err = liblte_rrc_pack_rrc_connection_setup_msg((LIBLTE_RRC_CONNECTION_SETUP_STRUCT *)&dl_ccch_msg->msg,
+                                                           &global_msg);
+        }
+
+        if(global_msg.N_bits <= (LIBLTE_MAX_MSG_SIZE - 3))
+        {
+            memcpy(msg_ptr, global_msg.msg, global_msg.N_bits);
+            msg->N_bits = global_msg.N_bits + 3;
+        }else{
+            msg->N_bits = 0;
+            err         = LIBLTE_ERROR_INVALID_INPUTS;
+        }
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_dl_ccch_msg(LIBLTE_MSG_STRUCT             *msg,
+                                                LIBLTE_RRC_DL_CCCH_MSG_STRUCT *dl_ccch_msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint8              ext;
+
+    if(msg         != NULL &&
+       dl_ccch_msg != NULL)
+    {
+        // Extension indicator
+        ext = rrc_bits_2_value(&msg_ptr, 1);
+
+        // Message type choice
+        dl_ccch_msg->msg_type = (LIBLTE_RRC_DL_CCCH_MSG_TYPE_ENUM)rrc_bits_2_value(&msg_ptr, 2);
+
+        // Message
+        memcpy(global_msg.msg, msg_ptr, msg->N_bits-(msg_ptr-msg->msg));
+        global_msg.N_bits = msg->N_bits-(msg_ptr-msg->msg);
+        if(LIBLTE_RRC_DL_CCCH_MSG_TYPE_RRC_CON_REEST == dl_ccch_msg->msg_type)
+        {
+            err = liblte_rrc_unpack_rrc_connection_reestablishment_msg(&global_msg,
+                                                                       (LIBLTE_RRC_CONNECTION_REESTABLISHMENT_STRUCT *)&dl_ccch_msg->msg);
+        }else if(LIBLTE_RRC_DL_CCCH_MSG_TYPE_RRC_CON_REEST_REJ == dl_ccch_msg->msg_type){
+            err = liblte_rrc_unpack_rrc_connection_reestablishment_reject_msg(&global_msg,
+                                                                              (LIBLTE_RRC_CONNECTION_REESTABLISHMENT_REJECT_STRUCT *)&dl_ccch_msg->msg);
+        }else if(LIBLTE_RRC_DL_CCCH_MSG_TYPE_RRC_CON_REJ == dl_ccch_msg->msg_type){
+            err = liblte_rrc_unpack_rrc_connection_reject_msg(&global_msg,
+                                                              (LIBLTE_RRC_CONNECTION_REJECT_STRUCT *)&dl_ccch_msg->msg);
+        }else{ // LIBLTE_RRC_DL_CCCH_MSG_TYPE_RRC_CON_SETUP == dl_ccch_msg->msg_type
+            err = liblte_rrc_unpack_rrc_connection_setup_msg(&global_msg,
+                                                             (LIBLTE_RRC_CONNECTION_SETUP_STRUCT *)&dl_ccch_msg->msg);
+        }
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     Message Name: DL DCCH Message
@@ -6807,11 +9321,11 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_ul_ccch_msg(LIBLTE_RRC_UL_CCCH_MSG_STRUCT *ul_
 
         if(LIBLTE_RRC_UL_CCCH_MSG_TYPE_RRC_CON_REEST_REQ == ul_ccch_msg->msg_type)
         {
-            err = liblte_rrc_pack_rrc_con_reest_req_msg((LIBLTE_RRC_CON_REEST_REQ_STRUCT *)&ul_ccch_msg->msg,
-                                                        &global_msg);
+            err = liblte_rrc_pack_rrc_connection_reestablishment_request_msg((LIBLTE_RRC_CONNECTION_REESTABLISHMENT_REQUEST_STRUCT *)&ul_ccch_msg->msg,
+                                                                             &global_msg);
         }else{ // LIBLTE_RRC_UL_CCCH_MSG_TYPE_RRC_CON_REQ == ul_ccch_msg->msg_type
-            err = liblte_rrc_pack_rrc_con_req_msg((LIBLTE_RRC_CON_REQ_STRUCT *)&ul_ccch_msg->msg,
-                                                  &global_msg);
+            err = liblte_rrc_pack_rrc_connection_request_msg((LIBLTE_RRC_CONNECTION_REQUEST_STRUCT *)&ul_ccch_msg->msg,
+                                                             &global_msg);
         }
 
         if(global_msg.N_bits <= (LIBLTE_MAX_MSG_SIZE - 2))
@@ -6847,11 +9361,11 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_ul_ccch_msg(LIBLTE_MSG_STRUCT             *m
         global_msg.N_bits = msg->N_bits-(msg_ptr-msg->msg);
         if(LIBLTE_RRC_UL_CCCH_MSG_TYPE_RRC_CON_REEST_REQ == ul_ccch_msg->msg_type)
         {
-            err = liblte_rrc_unpack_rrc_con_reest_req_msg(&global_msg,
-                                                          (LIBLTE_RRC_CON_REEST_REQ_STRUCT *)&ul_ccch_msg->msg);
+            err = liblte_rrc_unpack_rrc_connection_reestablishment_request_msg(&global_msg,
+                                                                               (LIBLTE_RRC_CONNECTION_REESTABLISHMENT_REQUEST_STRUCT *)&ul_ccch_msg->msg);
         }else{ // LIBLTE_RRC_UL_CCCH_MSG_TYPE_RRC_CON_REQ == ul_ccch_msg->msg_type
-            err = liblte_rrc_unpack_rrc_con_req_msg(&global_msg,
-                                                    (LIBLTE_RRC_CON_REQ_STRUCT *)&ul_ccch_msg->msg);
+            err = liblte_rrc_unpack_rrc_connection_request_msg(&global_msg,
+                                                               (LIBLTE_RRC_CONNECTION_REQUEST_STRUCT *)&ul_ccch_msg->msg);
         }
     }
 

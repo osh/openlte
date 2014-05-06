@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/09/2013    Ben Wojtowicz    Created file
+    05/04/2014    Ben Wojtowicz    Added radio bearer support.
 
 *******************************************************************************/
 
@@ -35,6 +36,9 @@
                               INCLUDES
 *******************************************************************************/
 
+#include "LTE_fdd_enb_interface.h"
+#include "LTE_fdd_enb_rb.h"
+#include "liblte_mac.h"
 #include "typedefs.h"
 #include <string>
 
@@ -62,13 +66,36 @@ class LTE_fdd_enb_user
 public:
     // Constructor/Destructor
     LTE_fdd_enb_user(std::string _imsi);
-    LTE_fdd_enb_user(uint32 _c_rnti);
     ~LTE_fdd_enb_user();
+
+    // Identity
+    std::string get_imsi(void);
+    void set_c_rnti(uint16 _c_rnti);
+    uint16 get_c_rnti(void);
+
+    // Radio Bearers
+    void get_srb0(LTE_fdd_enb_rb **rb);
+    LTE_FDD_ENB_ERROR_ENUM setup_srb1(void);
+    LTE_FDD_ENB_ERROR_ENUM teardown_srb1(void);
+    LTE_FDD_ENB_ERROR_ENUM get_srb1(LTE_fdd_enb_rb **rb);
+    LTE_FDD_ENB_ERROR_ENUM setup_srb2(void);
+    LTE_FDD_ENB_ERROR_ENUM teardown_srb2(void);
+    LTE_FDD_ENB_ERROR_ENUM get_srb2(LTE_fdd_enb_rb **rb);
+
+    // MAC
+    LIBLTE_MAC_PDU_STRUCT pusch_mac_pdu;
+    LIBLTE_MAC_PDU_STRUCT pdsch_mac_pdu;
 
 private:
     // Identity
     std::string imsi;
     uint32      c_rnti;
+
+    // Radio Bearers
+    LTE_fdd_enb_rb *srb0;
+    LTE_fdd_enb_rb *srb1;
+    LTE_fdd_enb_rb *srb2;
+    LTE_fdd_enb_rb *drb[8];
 };
 
 #endif /* __LTE_FDD_ENB_USER_H__ */

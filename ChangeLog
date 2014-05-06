@@ -99,3 +99,7 @@ v00.12.01     Pulled in patches from Astrasel to initialize the frequency offset
               from Andrew Murphy to add DCI 1C unpacking to the LTE library, also
               added support for PRB allocation differences in each slot and fixed
               a bug in lte_fdd_dl_transmit relating to PDCCH REG mapping.
+v00.13.00     Added MAC control element handling, PHICH support, TPC support, and
+              RRC DL CCCH message support to the LTE library, added PCAP support,
+              UL and DL CCCH MAC support, communication up to RRC, UL CCCH RRC
+              support, radio bearer, timer, and timer manager support to the eNodeB.

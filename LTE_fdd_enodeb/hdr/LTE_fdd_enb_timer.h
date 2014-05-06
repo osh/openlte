@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013-2014 Ben Wojtowicz
+    Copyright 2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -17,29 +17,25 @@
 
 *******************************************************************************
 
-    File: LTE_fdd_enb_rlc.h
+    File: LTE_fdd_enb_timer.h
 
     Description: Contains all the definitions for the LTE FDD eNodeB
-                 radio link control layer.
+                 timer class.
 
     Revision History
     ----------    -------------    --------------------------------------------
-    11/09/2013    Ben Wojtowicz    Created file
-    05/04/2014    Ben Wojtowicz    Added communication to MAC and PDCP.
+    05/04/2014    Ben Wojtowicz    Created file
 
 *******************************************************************************/
 
-#ifndef __LTE_FDD_ENB_RLC_H__
-#define __LTE_FDD_ENB_RLC_H__
+#ifndef __LTE_FDD_ENB_TIMER_H__
+#define __LTE_FDD_ENB_TIMER_H__
 
 /*******************************************************************************
                               INCLUDES
 *******************************************************************************/
 
-#include "LTE_fdd_enb_cnfg_db.h"
-#include "LTE_fdd_enb_msgq.h"
-#include <boost/thread/mutex.hpp>
-#include <boost/interprocess/ipc/message_queue.hpp>
+#include "LTE_fdd_enb_interface.h"
 
 /*******************************************************************************
                               DEFINES
@@ -60,53 +56,41 @@
                               CLASS DECLARATIONS
 *******************************************************************************/
 
-class LTE_fdd_enb_rlc
+// Timer callback
+class timer_cb
 {
 public:
-    // Singleton
-    static LTE_fdd_enb_rlc* get_instance(void);
-    static void cleanup(void);
+    typedef void (*FuncType)(void*, uint32);
+    timer_cb();
+    timer_cb(FuncType f, void* o);
+    void operator()(uint32 id);
+private:
+    FuncType  func;
+    void     *obj;
+};
+template<class class_type, void (class_type::*Func)(uint32)>
+    void timer_cb_wrapper(void *o, uint32 id)
+{
+    return (static_cast<class_type*>(o)->*Func)(id);
+}
 
-    // Start/Stop
-    void start(void);
-    void stop(void);
+class LTE_fdd_enb_timer
+{
+public:
+    // Constructor/Destructor
+    LTE_fdd_enb_timer(uint32 seconds, uint32 _id, timer_cb _cb);
+    ~LTE_fdd_enb_timer();
 
     // External interface
-    void update_sys_info(void);
+    void increment(void);
+    bool expired(void);
 
 private:
-    // Singleton
-    static LTE_fdd_enb_rlc *instance;
-    LTE_fdd_enb_rlc();
-    ~LTE_fdd_enb_rlc();
-
-    // Start/Stop
-    boost::mutex start_mutex;
-    bool         started;
-
-    // Communication
-    void handle_mac_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg);
-    void handle_pdcp_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg);
-    LTE_fdd_enb_msgq                   *mac_comm_msgq;
-    LTE_fdd_enb_msgq                   *pdcp_comm_msgq;
-    boost::interprocess::message_queue *rlc_mac_mq;
-    boost::interprocess::message_queue *rlc_pdcp_mq;
-
-    // MAC Message Handlers
-    void handle_pdu_ready(LTE_FDD_ENB_RLC_PDU_READY_MSG_STRUCT *pdu_ready);
-    void handle_tm_pdu(LIBLTE_MSG_STRUCT *pdu, LTE_fdd_enb_user *user, LTE_fdd_enb_rb *rb);
-    void handle_um_pdu(LIBLTE_MSG_STRUCT *pdu, LTE_fdd_enb_user *user, LTE_fdd_enb_rb *rb);
-    void handle_am_pdu(LIBLTE_MSG_STRUCT *pdu, LTE_fdd_enb_user *user, LTE_fdd_enb_rb *rb);
-
-    // PDCP Message Handlers
-    void handle_sdu_ready(LTE_FDD_ENB_RLC_SDU_READY_MSG_STRUCT *sdu_ready);
-    void handle_tm_sdu(LIBLTE_MSG_STRUCT *sdu, LTE_fdd_enb_user *user, LTE_fdd_enb_rb *rb);
-    void handle_um_sdu(LIBLTE_MSG_STRUCT *sdu, LTE_fdd_enb_user *user, LTE_fdd_enb_rb *rb);
-    void handle_am_sdu(LIBLTE_MSG_STRUCT *sdu, LTE_fdd_enb_user *user, LTE_fdd_enb_rb *rb);
-
-    // Parameters
-    boost::mutex                sys_info_mutex;
-    LTE_FDD_ENB_SYS_INFO_STRUCT sys_info;
+    // Identity
+    timer_cb cb;
+    uint32   id;
+    uint32   expiry_seconds;
+    uint32   current_seconds;
 };
 
-#endif /* __LTE_FDD_ENB_RLC_H__ */
+#endif /* __LTE_FDD_ENB_TIMER_H__ */

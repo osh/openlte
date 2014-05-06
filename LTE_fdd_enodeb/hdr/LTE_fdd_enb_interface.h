@@ -29,6 +29,7 @@
     03/26/2014    Ben Wojtowicz    Using the latest LTE library.
     04/12/2014    Ben Wojtowicz    Pulled in a patch from Max Suraev for more
                                    descriptive start failures.
+    05/04/2014    Ben Wojtowicz    Added PCAP support and more error types.
 
 *******************************************************************************/
 
@@ -77,6 +78,10 @@ typedef enum{
     LTE_FDD_ENB_ERROR_CANT_SCHEDULE,
     LTE_FDD_ENB_ERROR_VARIABLE_NOT_DYNAMIC,
     LTE_FDD_ENB_ERROR_MASTER_CLOCK_FAIL,
+    LTE_FDD_ENB_ERROR_NO_MSG_IN_QUEUE,
+    LTE_FDD_ENB_ERROR_RB_NOT_SETUP,
+    LTE_FDD_ENB_ERROR_RB_ALREADY_SETUP,
+    LTE_FDD_ENB_ERROR_TIMER_NOT_FOUND,
     LTE_FDD_ENB_ERROR_N_ITEMS,
 }LTE_FDD_ENB_ERROR_ENUM;
 static const char LTE_fdd_enb_error_text[LTE_FDD_ENB_ERROR_N_ITEMS][100] = {"none",
@@ -94,7 +99,11 @@ static const char LTE_fdd_enb_error_text[LTE_FDD_ENB_ERROR_N_ITEMS][100] = {"non
                                                                             "C-RNTI not found",
                                                                             "cant schedule",
                                                                             "variable not dynamic",
-                                                                            "unable to set master clock rate"};
+                                                                            "unable to set master clock rate",
+                                                                            "RB not setup",
+                                                                            "RB already setup",
+                                                                            "no message in queue",
+                                                                            "timer not found"};
 
 typedef enum{
     LTE_FDD_ENB_DEBUG_TYPE_ERROR = 0,
@@ -103,10 +112,10 @@ typedef enum{
     LTE_FDD_ENB_DEBUG_TYPE_DEBUG,
     LTE_FDD_ENB_DEBUG_TYPE_N_ITEMS,
 }LTE_FDD_ENB_DEBUG_TYPE_ENUM;
-static const char LTE_fdd_enb_debug_type_text[LTE_FDD_ENB_DEBUG_TYPE_N_ITEMS][100] = {"error",
+static const char LTE_fdd_enb_debug_type_text[LTE_FDD_ENB_DEBUG_TYPE_N_ITEMS][100] = {"error  ",
                                                                                       "warning",
-                                                                                      "info",
-                                                                                      "debug"};
+                                                                                      "info   ",
+                                                                                      "debug  "};
 
 typedef enum{
     LTE_FDD_ENB_DEBUG_LEVEL_RADIO = 0,
@@ -117,18 +126,30 @@ typedef enum{
     LTE_FDD_ENB_DEBUG_LEVEL_RRC,
     LTE_FDD_ENB_DEBUG_LEVEL_MME,
     LTE_FDD_ENB_DEBUG_LEVEL_USER,
+    LTE_FDD_ENB_DEBUG_LEVEL_RB,
+    LTE_FDD_ENB_DEBUG_LEVEL_TIMER,
     LTE_FDD_ENB_DEBUG_LEVEL_IFACE,
     LTE_FDD_ENB_DEBUG_LEVEL_N_ITEMS,
 }LTE_FDD_ENB_DEBUG_LEVEL_ENUM;
 static const char LTE_fdd_enb_debug_level_text[LTE_FDD_ENB_DEBUG_LEVEL_N_ITEMS][100] = {"radio",
-                                                                                        "phy",
-                                                                                        "mac",
-                                                                                        "rlc",
-                                                                                        "pdcp",
-                                                                                        "rrc",
-                                                                                        "mme",
-                                                                                        "user",
+                                                                                        "phy  ",
+                                                                                        "mac  ",
+                                                                                        "rlc  ",
+                                                                                        "pdcp ",
+                                                                                        "rrc  ",
+                                                                                        "mme  ",
+                                                                                        "user ",
+                                                                                        "rb   ",
+                                                                                        "timer",
                                                                                         "iface"};
+
+typedef enum{
+    LTE_FDD_ENB_PCAP_DIRECTION_UL = 0,
+    LTE_FDD_ENB_PCAP_DIRECTION_DL,
+    LTE_FDD_ENB_PCAP_DIRECTION_N_ITEMS,
+}LTE_FDD_ENB_PCAP_DIRECTION_ENUM;
+static const char LTE_fdd_enb_pcap_direction_text[LTE_FDD_ENB_PCAP_DIRECTION_N_ITEMS][20] = {"UL",
+                                                                                             "DL"};
 
 typedef enum{
     LTE_FDD_ENB_VAR_TYPE_DOUBLE = 0,
@@ -174,6 +195,7 @@ typedef enum{
     LTE_FDD_ENB_PARAM_SYSTEM_INFO_PERIODICITY,
     LTE_FDD_ENB_PARAM_DEBUG_TYPE,
     LTE_FDD_ENB_PARAM_DEBUG_LEVEL,
+    LTE_FDD_ENB_PARAM_ENABLE_PCAP,
 
     // Radio parameters managed by LTE_fdd_enb_radio
     LTE_FDD_ENB_PARAM_AVAILABLE_RADIOS,
@@ -219,6 +241,7 @@ static const char lte_fdd_enb_param_text[LTE_FDD_ENB_PARAM_N_ITEMS][100] = {"ban
                                                                             "system_info_periodicity",
                                                                             "debug_type",
                                                                             "debug_level",
+                                                                            "enable_pcap",
                                                                             "available_radios",
                                                                             "selected_radio_name",
                                                                             "selected_radio_idx",
@@ -256,6 +279,8 @@ public:
     void send_ctrl_error_msg(LTE_FDD_ENB_ERROR_ENUM error, std::string msg);
     void send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ENUM type, LTE_FDD_ENB_DEBUG_LEVEL_ENUM level, std::string file_name, int32 line, std::string msg, ...);
     void send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ENUM type, LTE_FDD_ENB_DEBUG_LEVEL_ENUM level, std::string file_name, int32 line, LIBLTE_MSG_STRUCT *lte_msg, std::string msg, ...);
+    void open_pcap_fd(void);
+    void send_pcap_msg(LTE_FDD_ENB_PCAP_DIRECTION_ENUM dir, uint32 rnti, uint32 fn_combo, LIBLTE_MSG_STRUCT *msg);
     static void handle_ctrl_msg(std::string msg);
     static void handle_ctrl_connect(void);
     static void handle_ctrl_disconnect(void);
@@ -266,6 +291,7 @@ public:
     static void handle_debug_error(LIBTOOLS_SOCKET_WRAP_ERROR_ENUM err);
     boost::mutex          ctrl_mutex;
     boost::mutex          debug_mutex;
+    FILE                 *pcap_fd;
     libtools_socket_wrap *ctrl_socket;
     libtools_socket_wrap *debug_socket;
     int16                 ctrl_port;

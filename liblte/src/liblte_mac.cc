@@ -26,6 +26,7 @@
     ----------    -------------    --------------------------------------------
     07/21/2013    Ben Wojtowicz    Created file.
     03/26/2014    Ben Wojtowicz    Added DL-SCH/UL-SCH PDU handling.
+    05/04/2014    Ben Wojtowicz    Added control element handling.
 
 *******************************************************************************/
 
@@ -72,6 +73,408 @@ uint32 mac_bits_2_value(uint8  **bits,
                         uint32   N_bits);
 
 /*******************************************************************************
+                              CONTROL ELEMENT FUNCTIONS
+*******************************************************************************/
+
+/*********************************************************************
+    MAC CE Name: Truncated Buffer Status Report
+
+    Description: CE containing one LCG ID field and one corresponding
+                 Buffer Size field
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.1
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_mac_pack_truncated_bsr_ce(LIBLTE_MAC_TRUNCATED_BSR_CE_STRUCT  *truncated_bsr,
+                                                   uint8                              **ce_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(truncated_bsr != NULL &&
+       ce_ptr        != NULL)
+    {
+        mac_value_2_bits(truncated_bsr->lcg_id,      ce_ptr, 2);
+        mac_value_2_bits(truncated_bsr->buffer_size, ce_ptr, 6);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_mac_unpack_truncated_bsr_ce(uint8                              **ce_ptr,
+                                                     LIBLTE_MAC_TRUNCATED_BSR_CE_STRUCT  *truncated_bsr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ce_ptr        != NULL &&
+       truncated_bsr != NULL)
+    {
+        truncated_bsr->lcg_id      = mac_bits_2_value(ce_ptr, 2);
+        truncated_bsr->buffer_size = mac_bits_2_value(ce_ptr, 6);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    MAC CE Name: Short Buffer Status Report
+
+    Description: CE containing one LCG ID field and one corresponding
+                 Buffer Size field
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.1
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_mac_pack_short_bsr_ce(LIBLTE_MAC_TRUNCATED_BSR_CE_STRUCT  *short_bsr,
+                                               uint8                              **ce_ptr)
+{
+    return(liblte_mac_pack_truncated_bsr_ce(short_bsr, ce_ptr));
+}
+LIBLTE_ERROR_ENUM liblte_mac_unpack_short_bsr_ce(uint8                          **ce_ptr,
+                                                 LIBLTE_MAC_SHORT_BSR_CE_STRUCT  *short_bsr)
+{
+    return(liblte_mac_unpack_truncated_bsr_ce(ce_ptr, short_bsr));
+}
+
+/*********************************************************************
+    MAC CE Name: Long Buffer Status Report
+
+    Description: CE containing four Buffer Size fields, corresponding
+                 to LCG IDs #0 through #3
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.1
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_mac_pack_long_bsr_ce(LIBLTE_MAC_LONG_BSR_CE_STRUCT  *long_bsr,
+                                              uint8                         **ce_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(long_bsr != NULL &&
+       ce_ptr   != NULL)
+    {
+        mac_value_2_bits(long_bsr->buffer_size_0, ce_ptr, 6);
+        mac_value_2_bits(long_bsr->buffer_size_1, ce_ptr, 6);
+        mac_value_2_bits(long_bsr->buffer_size_2, ce_ptr, 6);
+        mac_value_2_bits(long_bsr->buffer_size_3, ce_ptr, 6);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_mac_unpack_long_bsr_ce(uint8                         **ce_ptr,
+                                                LIBLTE_MAC_LONG_BSR_CE_STRUCT  *long_bsr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ce_ptr   != NULL &&
+       long_bsr != NULL)
+    {
+        long_bsr->buffer_size_0 = mac_bits_2_value(ce_ptr, 6);
+        long_bsr->buffer_size_1 = mac_bits_2_value(ce_ptr, 6);
+        long_bsr->buffer_size_2 = mac_bits_2_value(ce_ptr, 6);
+        long_bsr->buffer_size_3 = mac_bits_2_value(ce_ptr, 6);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    MAC CE Name: C-RNTI
+
+    Description: CE containing a C-RNTI
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.2
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_mac_pack_c_rnti_ce(LIBLTE_MAC_C_RNTI_CE_STRUCT  *c_rnti,
+                                            uint8                       **ce_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(c_rnti != NULL &&
+       ce_ptr != NULL)
+    {
+        mac_value_2_bits(c_rnti->c_rnti, ce_ptr, 16);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_mac_unpack_c_rnti_ce(uint8                       **ce_ptr,
+                                              LIBLTE_MAC_C_RNTI_CE_STRUCT  *c_rnti)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ce_ptr != NULL &&
+       c_rnti != NULL)
+    {
+        c_rnti->c_rnti = mac_bits_2_value(ce_ptr, 16);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    MAC CE Name: DRX Command
+
+    Description: CE containing nothing
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.3
+*********************************************************************/
+
+/*********************************************************************
+    MAC CE Name: UE Contention Resolution Identity
+
+    Description: CE containing the contention resolution identity for
+                 a UE
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.4
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_mac_pack_ue_contention_resolution_id_ce(LIBLTE_MAC_UE_CONTENTION_RESOLUTION_ID_CE_STRUCT  *ue_con_res_id,
+                                                                 uint8                                            **ce_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ue_con_res_id != NULL &&
+       ce_ptr        != NULL)
+    {
+        mac_value_2_bits((uint32)(ue_con_res_id->id >> 32), ce_ptr, 16);
+        mac_value_2_bits((uint32)(ue_con_res_id->id),       ce_ptr, 32);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_mac_unpack_ue_contention_resolution_id_ce(uint8                                            **ce_ptr,
+                                                                   LIBLTE_MAC_UE_CONTENTION_RESOLUTION_ID_CE_STRUCT  *ue_con_res_id)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ce_ptr        != NULL &&
+       ue_con_res_id != NULL)
+    {
+        ue_con_res_id->id  = (uint64)mac_bits_2_value(ce_ptr, 16) << 32;
+        ue_con_res_id->id |= (uint64)mac_bits_2_value(ce_ptr, 32);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    MAC CE Name: Timing Advance Command
+
+    Description: CE containing a timing advance command for a UE
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.5
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_mac_pack_ta_command_ce(LIBLTE_MAC_TA_COMMAND_CE_STRUCT  *ta_command,
+                                                uint8                           **ce_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ta_command != NULL &&
+       ce_ptr     != NULL)
+    {
+        mac_value_2_bits(0,              ce_ptr, 1); // R
+        mac_value_2_bits(0,              ce_ptr, 1); // R
+        mac_value_2_bits(ta_command->ta, ce_ptr, 6);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_mac_unpack_ta_command_ce(uint8                           **ce_ptr,
+                                                  LIBLTE_MAC_TA_COMMAND_CE_STRUCT  *ta_command)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ce_ptr     != NULL &&
+       ta_command != NULL)
+    {
+        mac_bits_2_value(ce_ptr, 1); // R
+        mac_bits_2_value(ce_ptr, 1); // R
+        ta_command->ta = mac_bits_2_value(ce_ptr, 6);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    MAC CE Name: Power Headroom
+
+    Description: CE containing the power headroom of the UE
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.6
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_mac_pack_power_headroom_ce(LIBLTE_MAC_POWER_HEADROOM_CE_STRUCT  *power_headroom,
+                                                    uint8                               **ce_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(power_headroom != NULL &&
+       ce_ptr         != NULL)
+    {
+        mac_value_2_bits(0,                  ce_ptr, 1); // R
+        mac_value_2_bits(0,                  ce_ptr, 1); // R
+        mac_value_2_bits(power_headroom->ph, ce_ptr, 6);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_mac_unpack_power_headroom_ce(uint8                               **ce_ptr,
+                                                      LIBLTE_MAC_POWER_HEADROOM_CE_STRUCT  *power_headroom)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ce_ptr         != NULL &&
+       power_headroom != NULL)
+    {
+        mac_bits_2_value(ce_ptr, 1); // R
+        mac_bits_2_value(ce_ptr, 1); // R
+        power_headroom->ph = mac_bits_2_value(ce_ptr, 6);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    MAC CE Name: Extended Power Headroom
+
+    Description: CE containing the power headroom of the UE
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.6a
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_mac_pack_ext_power_headroom_ce(LIBLTE_MAC_EXT_POWER_HEADROOM_CE_STRUCT  *ext_power_headroom,
+                                                        uint8                                   **ce_ptr)
+{
+    // FIXME
+    return(LIBLTE_ERROR_INVALID_INPUTS);
+}
+LIBLTE_ERROR_ENUM liblte_mac_unpack_ext_power_headroom_ce(uint8                                   **ce_ptr,
+                                                          LIBLTE_MAC_EXT_POWER_HEADROOM_CE_STRUCT  *ext_power_headroom)
+{
+    // FIXME
+    return(LIBLTE_ERROR_INVALID_INPUTS);
+}
+
+/*********************************************************************
+    MAC CE Name: MCH Scheduling Information
+
+    Description: CE containing MTCH stops
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.7
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_mac_pack_mch_scheduling_information_ce(LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_CE_STRUCT  *mch_sched_info,
+                                                                uint8                                           **ce_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+
+    if(mch_sched_info          != NULL &&
+       ce_ptr                  != NULL &&
+       mch_sched_info->N_items <= LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_MAX_N_ITEMS)
+    {
+        for(i=0; i<mch_sched_info->N_items; i++)
+        {
+            mac_value_2_bits(mch_sched_info->lcid[i],     ce_ptr,  5);
+            mac_value_2_bits(mch_sched_info->stop_mch[i], ce_ptr, 11);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_mac_unpack_mch_scheduling_information_ce(uint8                                           **ce_ptr,
+                                                                  LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_CE_STRUCT  *mch_sched_info)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
+
+    if(ce_ptr                  != NULL &&
+       mch_sched_info          != NULL &&
+       mch_sched_info->N_items <= LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_MAX_N_ITEMS)
+    {
+        for(i=0; i<mch_sched_info->N_items; i++)
+        {
+            mch_sched_info->lcid[i]     = mac_bits_2_value(ce_ptr,  5);
+            mch_sched_info->stop_mch[i] = mac_bits_2_value(ce_ptr, 11);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*********************************************************************
+    MAC CE Name: Activation Deactivation
+
+    Description: CE containing activation/deactivation of SCells
+
+    Document Reference: 36.321 v10.2.0 Section 6.1.3.8
+*********************************************************************/
+LIBLTE_ERROR_ENUM liblte_mac_pack_activation_deactivation_ce(LIBLTE_MAC_ACTIVATION_DEACTIVATION_CE_STRUCT  *act_deact,
+                                                             uint8                                        **ce_ptr)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(act_deact != NULL &&
+       ce_ptr    != NULL)
+    {
+        mac_value_2_bits(act_deact->c7, ce_ptr, 1);
+        mac_value_2_bits(act_deact->c6, ce_ptr, 1);
+        mac_value_2_bits(act_deact->c5, ce_ptr, 1);
+        mac_value_2_bits(act_deact->c4, ce_ptr, 1);
+        mac_value_2_bits(act_deact->c3, ce_ptr, 1);
+        mac_value_2_bits(act_deact->c2, ce_ptr, 1);
+        mac_value_2_bits(act_deact->c1, ce_ptr, 1);
+        mac_value_2_bits(0,             ce_ptr, 1); // R
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_mac_unpack_activation_deactivation_ce(uint8                                        **ce_ptr,
+                                                               LIBLTE_MAC_ACTIVATION_DEACTIVATION_CE_STRUCT  *act_deact)
+{
+    LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+
+    if(ce_ptr    != NULL &&
+       act_deact != NULL)
+    {
+        act_deact->c7 = mac_bits_2_value(ce_ptr, 1);
+        act_deact->c6 = mac_bits_2_value(ce_ptr, 1);
+        act_deact->c5 = mac_bits_2_value(ce_ptr, 1);
+        act_deact->c4 = mac_bits_2_value(ce_ptr, 1);
+        act_deact->c3 = mac_bits_2_value(ce_ptr, 1);
+        act_deact->c2 = mac_bits_2_value(ce_ptr, 1);
+        act_deact->c1 = mac_bits_2_value(ce_ptr, 1);
+        mac_bits_2_value(ce_ptr, 1); // R
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+
+/*******************************************************************************
                               PDU FUNCTIONS
 *******************************************************************************/
 
@@ -96,31 +499,130 @@ LIBLTE_ERROR_ENUM liblte_mac_pack_mac_pdu(LIBLTE_MAC_PDU_STRUCT *pdu,
         // Pack the subheaders
         for(i=0; i<pdu->N_subheaders; i++)
         {
-            mac_value_2_bits(0,                      &msg_ptr, 1); // R
-            mac_value_2_bits(0,                      &msg_ptr, 1); // R
-            mac_value_2_bits(0,                      &msg_ptr, 1); // E
-            mac_value_2_bits(pdu->subheader[i].lcid, &msg_ptr, 5);
-            if(i != (pdu->N_subheaders-1))
+            mac_value_2_bits(0, &msg_ptr, 1); // R
+            mac_value_2_bits(0, &msg_ptr, 1); // R
+            if(i != pdu->N_subheaders-1)
             {
-                if((pdu->subheader[i].sdu.N_bits/8) < 128)
+                mac_value_2_bits(1, &msg_ptr, 1); // E
+            }else{
+                mac_value_2_bits(0, &msg_ptr, 1); // E
+            }
+            mac_value_2_bits(pdu->subheader[i].lcid, &msg_ptr, 5);
+            if(LIBLTE_MAC_CHAN_TYPE_DLSCH == pdu->chan_type)
+            {
+                if(!(LIBLTE_MAC_DLSCH_ACTIVATION_DEACTIVATION_LCID     == pdu->subheader[i].lcid ||
+                     LIBLTE_MAC_DLSCH_UE_CONTENTION_RESOLUTION_ID_LCID == pdu->subheader[i].lcid ||
+                     LIBLTE_MAC_DLSCH_TA_COMMAND_LCID                  == pdu->subheader[i].lcid ||
+                     LIBLTE_MAC_DLSCH_DRX_COMMAND_LCID                 == pdu->subheader[i].lcid))
                 {
-                    mac_value_2_bits(0,                              &msg_ptr, 1); // F
-                    mac_value_2_bits(pdu->subheader[i].sdu.N_bits/8, &msg_ptr, 7);
+                    if(i != (pdu->N_subheaders-1))
+                    {
+                        if((pdu->subheader[i].payload.sdu.N_bits/8) < 128)
+                        {
+                            mac_value_2_bits(0,                                      &msg_ptr, 1); // F
+                            mac_value_2_bits(pdu->subheader[i].payload.sdu.N_bits/8, &msg_ptr, 7);
+                        }else{
+                            mac_value_2_bits(1,                                      &msg_ptr,  1); // F
+                            mac_value_2_bits(pdu->subheader[i].payload.sdu.N_bits/8, &msg_ptr, 15);
+                        }
+                    }
+                }
+            }else if(LIBLTE_MAC_CHAN_TYPE_ULSCH == pdu->chan_type){
+                if(LIBLTE_MAC_ULSCH_EXT_POWER_HEADROOM_REPORT_LCID == pdu->subheader[i].lcid)
+                {
+                    // FIXME
+                }else if(!(LIBLTE_MAC_ULSCH_POWER_HEADROOM_REPORT_LCID == pdu->subheader[i].lcid ||
+                           LIBLTE_MAC_ULSCH_C_RNTI_LCID                == pdu->subheader[i].lcid ||
+                           LIBLTE_MAC_ULSCH_TRUNCATED_BSR_LCID         == pdu->subheader[i].lcid ||
+                           LIBLTE_MAC_ULSCH_SHORT_BSR_LCID             == pdu->subheader[i].lcid ||
+                           LIBLTE_MAC_ULSCH_LONG_BSR_LCID              == pdu->subheader[i].lcid)){
+                    if(i != (pdu->N_subheaders-1))
+                    {
+                        if((pdu->subheader[i].payload.sdu.N_bits/8) < 128)
+                        {
+                            mac_value_2_bits(0,                                      &msg_ptr, 1); // F
+                            mac_value_2_bits(pdu->subheader[i].payload.sdu.N_bits/8, &msg_ptr, 7);
+                        }else{
+                            mac_value_2_bits(1,                                      &msg_ptr,  1); // F
+                            mac_value_2_bits(pdu->subheader[i].payload.sdu.N_bits/8, &msg_ptr, 15);
+                        }
+                    }
+                }
+            }else{ // LIBLTE_MAC_CHAN_TYPE_MCH == mac_pdu->chan_type
+                if(LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_LCID == pdu->subheader[i].lcid)
+                {
+                    if(i != (pdu->N_subheaders-1))
+                    {
+                        if((pdu->subheader[i].payload.mch_sched_info.N_items*2) < 128)
+                        {
+                            mac_value_2_bits(0,                                                  &msg_ptr, 1); // F
+                            mac_value_2_bits(pdu->subheader[i].payload.mch_sched_info.N_items*2, &msg_ptr, 7);
+                        }else{
+                            mac_value_2_bits(1,                                                  &msg_ptr,  1); // F
+                            mac_value_2_bits(pdu->subheader[i].payload.mch_sched_info.N_items*2, &msg_ptr, 15);
+                        }
+                    }
                 }else{
-                    mac_value_2_bits(1,                              &msg_ptr,  1); // F
-                    mac_value_2_bits(pdu->subheader[i].sdu.N_bits/8, &msg_ptr, 15);
+                    if(i != (pdu->N_subheaders-1))
+                    {
+                        if((pdu->subheader[i].payload.sdu.N_bits/8) < 128)
+                        {
+                            mac_value_2_bits(0,                                      &msg_ptr, 1); // F
+                            mac_value_2_bits(pdu->subheader[i].payload.sdu.N_bits/8, &msg_ptr, 7);
+                        }else{
+                            mac_value_2_bits(1,                                      &msg_ptr,  1); // F
+                            mac_value_2_bits(pdu->subheader[i].payload.sdu.N_bits/8, &msg_ptr, 15);
+                        }
+                    }
                 }
             }
         }
 
-        // Pack the control elements
-        // FIXME
-
-        // Pack the SDUs
+        // Pack the control elements and SDUs
         for(i=0; i<pdu->N_subheaders; i++)
         {
-            memcpy(msg_ptr, pdu->subheader[i].sdu.msg, pdu->subheader[i].sdu.N_bits);
-            msg_ptr += pdu->subheader[i].sdu.N_bits;
+            if(LIBLTE_MAC_CHAN_TYPE_DLSCH == pdu->chan_type)
+            {
+                if(LIBLTE_MAC_DLSCH_ACTIVATION_DEACTIVATION_LCID == pdu->subheader[i].lcid)
+                {
+                    liblte_mac_pack_activation_deactivation_ce(&pdu->subheader[i].payload.act_deact, &msg_ptr);
+                }else if(LIBLTE_MAC_DLSCH_UE_CONTENTION_RESOLUTION_ID_LCID == pdu->subheader[i].lcid){
+                    liblte_mac_pack_ue_contention_resolution_id_ce(&pdu->subheader[i].payload.ue_con_res_id, &msg_ptr);
+                }else if(LIBLTE_MAC_DLSCH_TA_COMMAND_LCID == pdu->subheader[i].lcid){
+                    liblte_mac_pack_ta_command_ce(&pdu->subheader[i].payload.ta_command, &msg_ptr);
+                }else if(LIBLTE_MAC_DLSCH_DRX_COMMAND_LCID == pdu->subheader[i].lcid){
+                    // No content for DRX Command CE
+                }else{ // SDU
+                    memcpy(msg_ptr, pdu->subheader[i].payload.sdu.msg, pdu->subheader[i].payload.sdu.N_bits);
+                    msg_ptr += pdu->subheader[i].payload.sdu.N_bits;
+                }
+            }else if(LIBLTE_MAC_CHAN_TYPE_ULSCH == pdu->chan_type){
+                if(LIBLTE_MAC_ULSCH_EXT_POWER_HEADROOM_REPORT_LCID == pdu->subheader[i].lcid)
+                {
+                    liblte_mac_pack_ext_power_headroom_ce(&pdu->subheader[i].payload.ext_power_headroom, &msg_ptr);
+                }else if(LIBLTE_MAC_ULSCH_POWER_HEADROOM_REPORT_LCID == pdu->subheader[i].lcid){
+                    liblte_mac_pack_power_headroom_ce(&pdu->subheader[i].payload.power_headroom, &msg_ptr);
+                }else if(LIBLTE_MAC_ULSCH_C_RNTI_LCID == pdu->subheader[i].lcid){
+                    liblte_mac_pack_c_rnti_ce(&pdu->subheader[i].payload.c_rnti, &msg_ptr);
+                }else if(LIBLTE_MAC_ULSCH_TRUNCATED_BSR_LCID == pdu->subheader[i].lcid){
+                    liblte_mac_pack_truncated_bsr_ce(&pdu->subheader[i].payload.truncated_bsr, &msg_ptr);
+                }else if(LIBLTE_MAC_ULSCH_SHORT_BSR_LCID == pdu->subheader[i].lcid){
+                    liblte_mac_pack_short_bsr_ce(&pdu->subheader[i].payload.short_bsr, &msg_ptr);
+                }else if(LIBLTE_MAC_ULSCH_LONG_BSR_LCID == pdu->subheader[i].lcid){
+                    liblte_mac_pack_long_bsr_ce(&pdu->subheader[i].payload.long_bsr, &msg_ptr);
+                }else{ // SDU
+                    memcpy(msg_ptr, pdu->subheader[i].payload.sdu.msg, pdu->subheader[i].payload.sdu.N_bits);
+                    msg_ptr += pdu->subheader[i].payload.sdu.N_bits;
+                }
+            }else{ // LIBLTE_MAC_CHAN_TYPE_MCH == mac_pdu->chan_type
+                if(LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_LCID == pdu->subheader[i].lcid)
+                {
+                    liblte_mac_pack_mch_scheduling_information_ce(&pdu->subheader[i].payload.mch_sched_info, &msg_ptr);
+                }else{ // SDU
+                    memcpy(msg_ptr, pdu->subheader[i].payload.sdu.msg, pdu->subheader[i].payload.sdu.N_bits);
+                    msg_ptr += pdu->subheader[i].payload.sdu.N_bits;
+                }
+            }
         }
 
         msg->N_bits = msg_ptr - msg->msg;
@@ -148,32 +650,138 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_MSG_STRUCT     *msg,
             e_bit = mac_bits_2_value(&msg_ptr, 1);
             pdu->subheader[pdu->N_subheaders].lcid = mac_bits_2_value(&msg_ptr, 5);
 
-            if(e_bit)
+            if(LIBLTE_MAC_CHAN_TYPE_DLSCH == pdu->chan_type)
             {
-                if(mac_bits_2_value(&msg_ptr, 1)) // F
+                if(!(LIBLTE_MAC_DLSCH_ACTIVATION_DEACTIVATION_LCID     == pdu->subheader[i].lcid ||
+                     LIBLTE_MAC_DLSCH_UE_CONTENTION_RESOLUTION_ID_LCID == pdu->subheader[i].lcid ||
+                     LIBLTE_MAC_DLSCH_TA_COMMAND_LCID                  == pdu->subheader[i].lcid ||
+                     LIBLTE_MAC_DLSCH_DRX_COMMAND_LCID                 == pdu->subheader[i].lcid))
                 {
-                    pdu->subheader[pdu->N_subheaders].sdu.N_bits = mac_bits_2_value(&msg_ptr, 15) * 8;
-                }else{
-                    pdu->subheader[pdu->N_subheaders].sdu.N_bits = mac_bits_2_value(&msg_ptr, 7) * 8;
+                    if(e_bit)
+                    {
+                        if(mac_bits_2_value(&msg_ptr, 1)) // F
+                        {
+                            pdu->subheader[pdu->N_subheaders].payload.sdu.N_bits = mac_bits_2_value(&msg_ptr, 15) * 8;
+                        }else{
+                            pdu->subheader[pdu->N_subheaders].payload.sdu.N_bits = mac_bits_2_value(&msg_ptr, 7) * 8;
+                        }
+                    }else{
+                        pdu->subheader[pdu->N_subheaders].payload.sdu.N_bits = 0;
+                    }
                 }
-            }else{
-                pdu->subheader[pdu->N_subheaders].sdu.N_bits = 0;
+            }else if(LIBLTE_MAC_CHAN_TYPE_ULSCH == pdu->chan_type){
+                if(LIBLTE_MAC_ULSCH_EXT_POWER_HEADROOM_REPORT_LCID == pdu->subheader[i].lcid)
+                {
+                    // FIXME
+                }else if(!(LIBLTE_MAC_ULSCH_POWER_HEADROOM_REPORT_LCID == pdu->subheader[i].lcid ||
+                           LIBLTE_MAC_ULSCH_C_RNTI_LCID                == pdu->subheader[i].lcid ||
+                           LIBLTE_MAC_ULSCH_TRUNCATED_BSR_LCID         == pdu->subheader[i].lcid ||
+                           LIBLTE_MAC_ULSCH_SHORT_BSR_LCID             == pdu->subheader[i].lcid ||
+                           LIBLTE_MAC_ULSCH_LONG_BSR_LCID              == pdu->subheader[i].lcid)){
+                    if(e_bit)
+                    {
+                        if(mac_bits_2_value(&msg_ptr, 1)) // F
+                        {
+                            pdu->subheader[pdu->N_subheaders].payload.sdu.N_bits = mac_bits_2_value(&msg_ptr, 15) * 8;
+                        }else{
+                            pdu->subheader[pdu->N_subheaders].payload.sdu.N_bits = mac_bits_2_value(&msg_ptr, 7) * 8;
+                        }
+                    }else{
+                        pdu->subheader[pdu->N_subheaders].payload.sdu.N_bits = 0;
+                    }
+                }
+            }else{ // LIBLTE_MAC_CHAN_TYPE_MCH == mac_pdu->subheader[i].lcid
+                if(LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_LCID == pdu->subheader[i].lcid)
+                {
+                    if(e_bit)
+                    {
+                        if(mac_bits_2_value(&msg_ptr, 1)) // F
+                        {
+                            pdu->subheader[pdu->N_subheaders].payload.mch_sched_info.N_items = mac_bits_2_value(&msg_ptr, 15) / 2;
+                        }else{
+                            pdu->subheader[pdu->N_subheaders].payload.mch_sched_info.N_items = mac_bits_2_value(&msg_ptr, 7) / 2;
+                        }
+                    }else{
+                        pdu->subheader[pdu->N_subheaders].payload.mch_sched_info.N_items = 0;
+                    }
+                }else{
+                    if(e_bit)
+                    {
+                        if(mac_bits_2_value(&msg_ptr, 1)) // F
+                        {
+                            pdu->subheader[pdu->N_subheaders].payload.sdu.N_bits = mac_bits_2_value(&msg_ptr, 15) * 8;
+                        }else{
+                            pdu->subheader[pdu->N_subheaders].payload.sdu.N_bits = mac_bits_2_value(&msg_ptr, 7) * 8;
+                        }
+                    }else{
+                        pdu->subheader[pdu->N_subheaders].payload.sdu.N_bits = 0;
+                    }
+                }
             }
             pdu->N_subheaders++;
         }
 
-        // Unpack the control elements
-        // FIXME
-
-        // Unpack the SDUs
+        // Unpack the control elements and SDUs
         for(i=0; i<pdu->N_subheaders; i++)
         {
-            if(pdu->subheader[i].sdu.N_bits == 0)
+            if(LIBLTE_MAC_CHAN_TYPE_DLSCH == pdu->chan_type)
             {
-                pdu->subheader[i].sdu.N_bits = msg->N_bits - (msg_ptr - msg->msg);
+                if(LIBLTE_MAC_DLSCH_ACTIVATION_DEACTIVATION_LCID == pdu->subheader[i].lcid)
+                {
+                    liblte_mac_unpack_activation_deactivation_ce(&msg_ptr, &pdu->subheader[i].payload.act_deact);
+                }else if(LIBLTE_MAC_DLSCH_UE_CONTENTION_RESOLUTION_ID_LCID == pdu->subheader[i].lcid){
+                    liblte_mac_unpack_ue_contention_resolution_id_ce(&msg_ptr, &pdu->subheader[i].payload.ue_con_res_id);
+                }else if(LIBLTE_MAC_DLSCH_TA_COMMAND_LCID == pdu->subheader[i].lcid){
+                    liblte_mac_unpack_ta_command_ce(&msg_ptr, &pdu->subheader[i].payload.ta_command);
+                }else if(LIBLTE_MAC_DLSCH_DRX_COMMAND_LCID == pdu->subheader[i].lcid){
+                    // No content for DRX Command CE
+                }else{ // SDU
+                    if(pdu->subheader[i].payload.sdu.N_bits == 0)
+                    {
+                        pdu->subheader[i].payload.sdu.N_bits = msg->N_bits - (msg_ptr - msg->msg);
+                    }
+                    memcpy(pdu->subheader[i].payload.sdu.msg, msg_ptr, pdu->subheader[i].payload.sdu.N_bits);
+                    msg_ptr += pdu->subheader[i].payload.sdu.N_bits;
+                }
+            }else if(LIBLTE_MAC_CHAN_TYPE_ULSCH == pdu->chan_type){
+                if(LIBLTE_MAC_ULSCH_EXT_POWER_HEADROOM_REPORT_LCID == pdu->subheader[i].lcid)
+                {
+                    liblte_mac_unpack_ext_power_headroom_ce(&msg_ptr, &pdu->subheader[i].payload.ext_power_headroom);
+                }else if(LIBLTE_MAC_ULSCH_POWER_HEADROOM_REPORT_LCID == pdu->subheader[i].lcid){
+                    liblte_mac_unpack_power_headroom_ce(&msg_ptr, &pdu->subheader[i].payload.power_headroom);
+                }else if(LIBLTE_MAC_ULSCH_C_RNTI_LCID == pdu->subheader[i].lcid){
+                    liblte_mac_unpack_c_rnti_ce(&msg_ptr, &pdu->subheader[i].payload.c_rnti);
+                }else if(LIBLTE_MAC_ULSCH_TRUNCATED_BSR_LCID == pdu->subheader[i].lcid){
+                    liblte_mac_unpack_truncated_bsr_ce(&msg_ptr, &pdu->subheader[i].payload.truncated_bsr);
+                }else if(LIBLTE_MAC_ULSCH_SHORT_BSR_LCID == pdu->subheader[i].lcid){
+                    liblte_mac_unpack_short_bsr_ce(&msg_ptr, &pdu->subheader[i].payload.short_bsr);
+                }else if(LIBLTE_MAC_ULSCH_LONG_BSR_LCID == pdu->subheader[i].lcid){
+                    liblte_mac_unpack_long_bsr_ce(&msg_ptr, &pdu->subheader[i].payload.long_bsr);
+                }else{ // SDU
+                    if(pdu->subheader[i].payload.sdu.N_bits == 0)
+                    {
+                        pdu->subheader[i].payload.sdu.N_bits = msg->N_bits - (msg_ptr - msg->msg);
+                    }
+                    memcpy(pdu->subheader[i].payload.sdu.msg, msg_ptr, pdu->subheader[i].payload.sdu.N_bits);
+                    msg_ptr += pdu->subheader[i].payload.sdu.N_bits;
+                }
+            }else{ // LIBLTE_MAC_CHAN_TYPE_MCH == mac_pdu->chan_type
+                if(LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_LCID == pdu->subheader[i].lcid)
+                {
+                    if(pdu->subheader[i].payload.mch_sched_info.N_items == 0)
+                    {
+                        pdu->subheader[i].payload.mch_sched_info.N_items = ((msg->N_bits - (msg_ptr - msg->msg)) / 8) / 2;
+                    }
+                    liblte_mac_unpack_mch_scheduling_information_ce(&msg_ptr, &pdu->subheader[i].payload.mch_sched_info);
+                }else{ // SDU
+                    if(pdu->subheader[i].payload.sdu.N_bits == 0)
+                    {
+                        pdu->subheader[i].payload.sdu.N_bits = msg->N_bits - (msg_ptr - msg->msg);
+                    }
+                    memcpy(pdu->subheader[i].payload.sdu.msg, msg_ptr, pdu->subheader[i].payload.sdu.N_bits);
+                    msg_ptr += pdu->subheader[i].payload.sdu.N_bits;
+                }
             }
-            memcpy(pdu->subheader[i].sdu.msg, msg_ptr, pdu->subheader[i].sdu.N_bits);
-            msg_ptr += pdu->subheader[i].sdu.N_bits;
         }
 
         err = LIBLTE_SUCCESS;
@@ -234,7 +842,7 @@ LIBLTE_ERROR_ENUM liblte_mac_pack_random_access_response_pdu(LIBLTE_MAC_RAR_STRU
             mac_value_2_bits(rar->tpc_command,    &pdu_ptr, 3);
             mac_value_2_bits(rar->ul_delay,       &pdu_ptr, 1);
             mac_value_2_bits(rar->csi_req,        &pdu_ptr, 1);
-            mac_value_2_bits(rar->temp_crnti,     &pdu_ptr, 16);
+            mac_value_2_bits(rar->temp_c_rnti,    &pdu_ptr, 16);
 
             err = LIBLTE_SUCCESS;
         }
@@ -274,7 +882,7 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_random_access_response_pdu(LIBLTE_MSG_STRUCT
             rar->tpc_command    = (LIBLTE_MAC_RAR_TPC_COMMAND_ENUM)mac_bits_2_value(&pdu_ptr, 3);
             rar->ul_delay       = (LIBLTE_MAC_RAR_UL_DELAY_ENUM)mac_bits_2_value(&pdu_ptr, 1);
             rar->csi_req        = (LIBLTE_MAC_RAR_CSI_REQ_ENUM)mac_bits_2_value(&pdu_ptr, 1);
-            rar->temp_crnti     = mac_bits_2_value(&pdu_ptr, 16);
+            rar->temp_c_rnti    = mac_bits_2_value(&pdu_ptr, 16);
 
             err = LIBLTE_SUCCESS;
         }

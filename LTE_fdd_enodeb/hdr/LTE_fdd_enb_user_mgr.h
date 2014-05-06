@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/09/2013    Ben Wojtowicz    Created file
+    05/04/2014    Ben Wojtowicz    Added C-RNTI timeout timers.
 
 *******************************************************************************/
 
@@ -67,7 +68,7 @@ public:
     static void cleanup(void);
 
     // External interface
-    LTE_FDD_ENB_ERROR_ENUM get_free_c_rnti(uint16 &c_rnti);
+    LTE_FDD_ENB_ERROR_ENUM get_free_c_rnti(uint16 *c_rnti);
     void assign_c_rnti(uint16 c_rnti, LTE_fdd_enb_user *user);
     LTE_FDD_ENB_ERROR_ENUM free_c_rnti(uint16 c_rnti);
     LTE_FDD_ENB_ERROR_ENUM add_user(std::string imsi);
@@ -83,11 +84,16 @@ private:
     LTE_fdd_enb_user_mgr();
     ~LTE_fdd_enb_user_mgr();
 
+    // C-RNTI Timer
+    void handle_c_rnti_timer_expiry(uint32 timer_id);
+
     // User storage
     std::map<std::string, LTE_fdd_enb_user*> user_map;
     std::map<uint16, LTE_fdd_enb_user*>      c_rnti_map;
+    std::map<uint32, uint16>                 timer_id_map;
     boost::mutex                             user_mutex;
     boost::mutex                             c_rnti_mutex;
+    boost::mutex                             timer_id_mutex;
     uint16                                   next_c_rnti;
 };
 

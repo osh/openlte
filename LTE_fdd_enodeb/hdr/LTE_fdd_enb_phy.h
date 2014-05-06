@@ -27,6 +27,7 @@
     11/09/2013    Ben Wojtowicz    Created file
     01/18/2014    Ben Wojtowicz    Cached a copy of the interface class and
                                    added the ability to handle late subframes.
+    05/04/2014    Ben Wojtowicz    Added PHICH support.
 
 *******************************************************************************/
 
@@ -112,12 +113,13 @@ private:
     LTE_FDD_ENB_PDSCH_SCHEDULE_MSG_STRUCT mac_pdsch_schedule[10];
     LTE_FDD_ENB_PUSCH_SCHEDULE_MSG_STRUCT mac_pusch_schedule[10];
     LIBLTE_PHY_PCFICH_STRUCT              pcfich;
-    LIBLTE_PHY_PHICH_STRUCT               phich;
+    LIBLTE_PHY_PHICH_STRUCT               phich[10];
     LIBLTE_PHY_PDCCH_STRUCT               pdcch;
     LIBLTE_PHY_SUBFRAME_STRUCT            dl_subframe;
     LIBLTE_MSG_STRUCT                     dl_rrc_msg;
     uint32                                dl_fn_combo;
     uint32                                last_rts_fn_combo;
+    uint32                                second_counter;
     bool                                  late_subfr;
 
     // Uplink

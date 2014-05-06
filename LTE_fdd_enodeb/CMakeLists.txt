@@ -11,6 +11,9 @@ add_executable(LTE_fdd_enodeb
   src/LTE_fdd_enb_msgq.cc
   src/LTE_fdd_enb_user.cc
   src/LTE_fdd_enb_user_mgr.cc
+  src/LTE_fdd_enb_rb.cc
+  src/LTE_fdd_enb_timer.cc
+  src/LTE_fdd_enb_timer_mgr.cc
   src/LTE_fdd_enb_radio.cc
   src/LTE_fdd_enb_phy.cc
   src/LTE_fdd_enb_mac.cc

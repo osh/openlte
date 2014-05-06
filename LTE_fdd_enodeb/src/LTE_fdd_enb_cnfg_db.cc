@@ -29,6 +29,7 @@
                                    EARFCNs in the radio, and added set/get for
                                    uint32 values.
     03/26/2014    Ben Wojtowicz    Using the latest LTE library.
+    05/04/2014    Ben Wojtowicz    Added PCAP support.
 
 *******************************************************************************/
 
@@ -136,6 +137,7 @@ LTE_fdd_enb_cnfg_db::LTE_fdd_enb_cnfg_db()
     var_map_int64[LTE_FDD_ENB_PARAM_SYSTEM_INFO_PERIODICITY]   = LIBLTE_RRC_SI_PERIODICITY_RF8;
     var_map_uint32[LTE_FDD_ENB_PARAM_DEBUG_TYPE]               = 0xFFFFFFFF;
     var_map_uint32[LTE_FDD_ENB_PARAM_DEBUG_LEVEL]              = 0xFFFFFFFF;
+    var_map_int64[LTE_FDD_ENB_PARAM_ENABLE_PCAP]               = 0;
 }
 LTE_fdd_enb_cnfg_db::~LTE_fdd_enb_cnfg_db()
 {

@@ -29,6 +29,7 @@
                                    to debug prints, fixed usec time in debug
                                    prints, and added uint32 variables.
     03/26/2014    Ben Wojtowicz    Added message printing.
+    05/04/2014    Ben Wojtowicz    Added PCAP support.
 
 *******************************************************************************/
 
@@ -49,6 +50,7 @@
 #include <boost/lexical_cast.hpp>
 #include <boost/interprocess/ipc/message_queue.hpp>
 #include <iomanip>
+#include <arpa/inet.h>
 
 /*******************************************************************************
                               DEFINES
@@ -138,6 +140,7 @@ LTE_fdd_enb_interface::LTE_fdd_enb_interface()
     var_map[lte_fdd_enb_param_text[LTE_FDD_ENB_PARAM_SEARCH_WIN_SIZE]]    = (LTE_FDD_ENB_VAR_STRUCT){LTE_FDD_ENB_VAR_TYPE_INT64, LTE_FDD_ENB_PARAM_SEARCH_WIN_SIZE, 0, 0, 0, 15, false, true};
     var_map[lte_fdd_enb_param_text[LTE_FDD_ENB_PARAM_DEBUG_TYPE]]         = (LTE_FDD_ENB_VAR_STRUCT){LTE_FDD_ENB_VAR_TYPE_UINT32, LTE_FDD_ENB_PARAM_DEBUG_TYPE, 0, 0, 0, 0, true, true};
     var_map[lte_fdd_enb_param_text[LTE_FDD_ENB_PARAM_DEBUG_LEVEL]]        = (LTE_FDD_ENB_VAR_STRUCT){LTE_FDD_ENB_VAR_TYPE_UINT32, LTE_FDD_ENB_PARAM_DEBUG_LEVEL, 0, 0, 0, 0, true, true};
+    var_map[lte_fdd_enb_param_text[LTE_FDD_ENB_PARAM_ENABLE_PCAP]]        = (LTE_FDD_ENB_VAR_STRUCT){LTE_FDD_ENB_VAR_TYPE_INT64, LTE_FDD_ENB_PARAM_ENABLE_PCAP, 0, 0, 0, 1, false, true};
 
     debug_type_mask = 0;
     for(i=0; i<LTE_FDD_ENB_DEBUG_TYPE_N_ITEMS; i++)
@@ -149,12 +152,15 @@ LTE_fdd_enb_interface::LTE_fdd_enb_interface()
     {
         debug_level_mask |= 1 << i;
     }
+    open_pcap_fd();
     shutdown = false;
     started  = false;
 }
 LTE_fdd_enb_interface::~LTE_fdd_enb_interface()
 {
     stop_ports();
+
+    fclose(pcap_fd);
 }
 
 /***********************/
@@ -389,6 +395,120 @@ void LTE_fdd_enb_interface::send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ENUM   type,
         free(args_msg);
 
         debug_socket->send(tmp_msg);
+    }
+}
+void LTE_fdd_enb_interface::open_pcap_fd(void)
+{
+    uint32 magic_number  = 0xa1b2c3d4;
+    uint32 timezone      = 0;
+    uint32 sigfigs       = 0;
+    uint32 snap_len      = (LIBLTE_MAX_MSG_SIZE/4);
+    uint32 dlt           = 147;
+    uint16 major_version = 2;
+    uint16 minor_version = 4;
+
+    pcap_fd = fopen("/tmp/LTE_fdd_enodeb.pcap", "w");
+
+    fwrite(&magic_number,  sizeof(magic_number),  1, pcap_fd);
+    fwrite(&major_version, sizeof(major_version), 1, pcap_fd);
+    fwrite(&minor_version, sizeof(minor_version), 1, pcap_fd);
+    fwrite(&timezone,      sizeof(timezone),      1, pcap_fd);
+    fwrite(&sigfigs,       sizeof(sigfigs),       1, pcap_fd);
+    fwrite(&snap_len,      sizeof(snap_len),      1, pcap_fd);
+    fwrite(&dlt,           sizeof(dlt),           1, pcap_fd);
+}
+void LTE_fdd_enb_interface::send_pcap_msg(LTE_FDD_ENB_PCAP_DIRECTION_ENUM  dir,
+                                          uint32                           rnti,
+                                          uint32                           fn_combo,
+                                          LIBLTE_MSG_STRUCT               *msg)
+{
+    LTE_fdd_enb_cnfg_db *cnfg_db = LTE_fdd_enb_cnfg_db::get_instance();
+    struct timeval       time;
+    struct timezone      time_zone;
+    int64                enable_pcap;
+    uint32               i;
+    uint32               idx;
+    uint32               length;
+    uint16               tmp;
+    uint8                pcap_c_hdr[15];
+    uint8                pcap_msg[LIBLTE_MAX_MSG_SIZE/8];
+
+    cnfg_db->get_param(LTE_FDD_ENB_PARAM_ENABLE_PCAP, enable_pcap);
+
+    if(enable_pcap)
+    {
+        // Get approximate time stamp
+        gettimeofday(&time, &time_zone);
+
+        // Radio Type
+        pcap_c_hdr[0] = 1;
+
+        // Direction
+        pcap_c_hdr[1] = dir;
+
+        // RNTI Type
+        if(0xFFFFFFFF == rnti)
+        {
+            pcap_c_hdr[2] = 0;
+        }else if(LIBLTE_MAC_P_RNTI == rnti){
+            pcap_c_hdr[2] = 1;
+        }else if(LIBLTE_MAC_RA_RNTI_START <= rnti &&
+                 LIBLTE_MAC_RA_RNTI_END   >= rnti){
+            pcap_c_hdr[2] = 2;
+        }else if(LIBLTE_MAC_SI_RNTI == rnti){
+            pcap_c_hdr[2] = 4;
+        }else if(LIBLTE_MAC_M_RNTI == rnti){
+            pcap_c_hdr[2] = 6;
+        }else{
+            pcap_c_hdr[2] = 3;
+        }
+
+        // RNTI Tag and RNTI
+        pcap_c_hdr[3] = 2;
+        tmp           = htons((uint16)rnti);
+        memcpy(&pcap_c_hdr[4], &tmp, sizeof(uint16));
+
+        // UEID Tag and UEID
+        pcap_c_hdr[6] = 3;
+        pcap_c_hdr[7] = 0;
+        pcap_c_hdr[8] = 0;
+
+        // SUBFN Tag and SUBFN
+        pcap_c_hdr[9] = 4;
+        tmp           = htons((uint16)(fn_combo%10));
+        memcpy(&pcap_c_hdr[10], &tmp, sizeof(uint16));
+
+        // CRC Status Tag and CRC Status
+        pcap_c_hdr[12] = 7;
+        pcap_c_hdr[13] = 1;
+
+        // Payload Tag
+        pcap_c_hdr[14] = 1;
+
+        // Payload
+        idx           = 0;
+        pcap_msg[idx] = 0;
+        for(i=0; i<msg->N_bits; i++)
+        {
+            pcap_msg[idx] <<= 1;
+            pcap_msg[idx]  |= msg->msg[i];
+            if((i % 8) == 7)
+            {
+                idx++;
+                pcap_msg[idx] = 0;
+            }
+        }
+
+        // Total Length
+        length = 15 + idx;
+
+        // Write Data
+        fwrite(&time.tv_sec,  sizeof(uint32), 1,   pcap_fd);
+        fwrite(&time.tv_usec, sizeof(uint32), 1,   pcap_fd);
+        fwrite(&length,       sizeof(uint32), 1,   pcap_fd);
+        fwrite(&length,       sizeof(uint32), 1,   pcap_fd);
+        fwrite(pcap_c_hdr,    sizeof(uint8),  15,  pcap_fd);
+        fwrite(pcap_msg,      sizeof(uint8),  idx, pcap_fd);
     }
 }
 void LTE_fdd_enb_interface::handle_ctrl_msg(std::string msg)

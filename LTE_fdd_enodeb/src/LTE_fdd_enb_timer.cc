@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013-2014 Ben Wojtowicz
+    Copyright 2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -17,37 +17,25 @@
 
 *******************************************************************************
 
-    File: LTE_fdd_enb_pdcp.h
+    File: LTE_fdd_enb_timer.cc
 
-    Description: Contains all the definitions for the LTE FDD eNodeB
-                 packet data convergence protocol layer.
+    Description: Contains all the implementations for the LTE FDD eNodeB
+                 timer class.
 
     Revision History
     ----------    -------------    --------------------------------------------
-    11/09/2013    Ben Wojtowicz    Created file
-    05/04/2014    Ben Wojtowicz    Added communication to RLC and RRC.
+    05/04/2014    Ben Wojtowicz    Created file
 
 *******************************************************************************/
-
-#ifndef __LTE_FDD_ENB_PDCP_H__
-#define __LTE_FDD_ENB_PDCP_H__
 
 /*******************************************************************************
                               INCLUDES
 *******************************************************************************/
 
-#include "LTE_fdd_enb_cnfg_db.h"
-#include "LTE_fdd_enb_msgq.h"
-#include <boost/thread/mutex.hpp>
-#include <boost/interprocess/ipc/message_queue.hpp>
+#include "LTE_fdd_enb_timer.h"
 
 /*******************************************************************************
                               DEFINES
-*******************************************************************************/
-
-
-/*******************************************************************************
-                              FORWARD DECLARATIONS
 *******************************************************************************/
 
 
@@ -57,50 +45,66 @@
 
 
 /*******************************************************************************
-                              CLASS DECLARATIONS
+                              GLOBAL VARIABLES
 *******************************************************************************/
 
-class LTE_fdd_enb_pdcp
+
+/*******************************************************************************
+                              CLASS IMPLEMENTATIONS
+*******************************************************************************/
+
+/******************/
+/*    Callback    */
+/******************/
+timer_cb::timer_cb()
 {
-public:
-    // Singleton
-    static LTE_fdd_enb_pdcp* get_instance(void);
-    static void cleanup(void);
+}
+timer_cb::timer_cb(FuncType f, void* o)
+{
+    func = f;
+    obj  = o;
+}
+void timer_cb::operator()(uint32 id)
+{
+    return (*func)(obj, id);
+}
 
-    // Start/Stop
-    void start(void);
-    void stop(void);
+/********************************/
+/*    Constructor/Destructor    */
+/********************************/
+LTE_fdd_enb_timer::LTE_fdd_enb_timer(uint32   seconds,
+                                     uint32   _id,
+                                     timer_cb _cb)
+{
+    cb              = _cb;
+    id              = _id;
+    expiry_seconds  = seconds;
+    current_seconds = 0;
+}
+LTE_fdd_enb_timer::~LTE_fdd_enb_timer()
+{
+}
 
-    // External interface
-    void update_sys_info(void);
+/****************************/
+/*    External Interface    */
+/****************************/
+void LTE_fdd_enb_timer::increment(void)
+{
+    current_seconds++;
 
-private:
-    // Singleton
-    static LTE_fdd_enb_pdcp *instance;
-    LTE_fdd_enb_pdcp();
-    ~LTE_fdd_enb_pdcp();
+    if(expired())
+    {
+        cb(id);
+    }
+}
+bool LTE_fdd_enb_timer::expired(void)
+{
+    bool exp = false;
 
-    // Start/Stop
-    boost::mutex start_mutex;
-    bool         started;
+    if(current_seconds > expiry_seconds)
+    {
+        exp = true;
+    }
 
-    // Communication
-    void handle_rlc_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg);
-    void handle_rrc_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg);
-    LTE_fdd_enb_msgq                   *rlc_comm_msgq;
-    LTE_fdd_enb_msgq                   *rrc_comm_msgq;
-    boost::interprocess::message_queue *pdcp_rlc_mq;
-    boost::interprocess::message_queue *pdcp_rrc_mq;
-
-    // RLC Message Handlers
-    void handle_pdu_ready(LTE_FDD_ENB_PDCP_PDU_READY_MSG_STRUCT *pdu_ready);
-
-    // RRC Message Handlers
-    void handle_sdu_ready(LTE_FDD_ENB_PDCP_SDU_READY_MSG_STRUCT *sdu_ready);
-
-    // Parameters
-    boost::mutex                sys_info_mutex;
-    LTE_FDD_ENB_SYS_INFO_STRUCT sys_info;
-};
-
-#endif /* __LTE_FDD_ENB_PDCP_H__ */
+    return(exp);
+}

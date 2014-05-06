@@ -33,6 +33,8 @@
     03/26/2014    Ben Wojtowicz    Using the latest LTE library and added PUSCH
                                    decode support.
     04/12/2014    Ben Wojtowicz    Using the latest LTE library.
+    05/04/2014    Ben Wojtowicz    Added PCAP support, PHICH support, and timer
+                                   support.
 
 *******************************************************************************/
 
@@ -42,6 +44,7 @@
 
 #include "LTE_fdd_enb_phy.h"
 #include "LTE_fdd_enb_radio.h"
+#include "LTE_fdd_enb_timer_mgr.h"
 
 /*******************************************************************************
                               DEFINES
@@ -111,6 +114,8 @@ void LTE_fdd_enb_phy::start(LTE_fdd_enb_interface *iface)
     msgq_cb                    cb(&msgq_cb_wrapper<LTE_fdd_enb_phy, &LTE_fdd_enb_phy::handle_mac_msg>, this);
     LIBLTE_PHY_FS_ENUM         fs;
     uint32                     i;
+    uint32                     j;
+    uint32                     k;
     uint32                     samp_rate;
     uint8                      prach_cnfg_idx;
 
@@ -168,12 +173,23 @@ void LTE_fdd_enb_phy::start(LTE_fdd_enb_interface *iface)
             mac_pusch_schedule[i].allocations.N_alloc = 0;
             mac_pusch_schedule[i].decodes.N_alloc     = 0;
         }
-        pcfich.cfi        = 2; // FIXME: Make this dynamic every subfr
+        pcfich.cfi = 2; // FIXME: Make this dynamic every subfr
+        for(i=0; i<10; i++)
+        {
+            for(j=0; j<25; j++)
+            {
+                for(k=0; k<8; k++)
+                {
+                    phich[i].present[j][k] = false;
+                }
+            }
+        }
         pdcch.N_alloc     = 0;
         pdcch.N_symbs     = 2; // FIXME: Make this dynamic every subfr
         dl_subframe.num   = 0;
         dl_fn_combo       = 0;
         last_rts_fn_combo = 0;
+        second_counter    = 0;
         late_subfr        = false;
 
         // Uplink
@@ -438,7 +454,8 @@ void LTE_fdd_enb_phy::handle_pusch_schedule(LTE_FDD_ENB_PUSCH_SCHEDULE_MSG_STRUC
 }
 void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
 {
-    LTE_fdd_enb_radio                    *radio = LTE_fdd_enb_radio::get_instance();
+    LTE_fdd_enb_radio                    *radio     = LTE_fdd_enb_radio::get_instance();
+    LTE_fdd_enb_timer_mgr                *timer_mgr = LTE_fdd_enb_timer_mgr::get_instance();
     boost::mutex::scoped_lock             lock(sys_info_mutex);
     LTE_FDD_ENB_READY_TO_SEND_MSG_STRUCT  rts;
     uint32                                p;
@@ -490,6 +507,10 @@ void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
         sys_info.mib.sfn_div_4 = sfn/4;
         liblte_rrc_pack_bcch_bch_msg(&sys_info.mib,
                                      &dl_rrc_msg);
+        interface->send_pcap_msg(LTE_FDD_ENB_PCAP_DIRECTION_DL,
+                                 0xFFFFFFFF,
+                                 dl_fn_combo,
+                                 &dl_rrc_msg);
         liblte_phy_bch_channel_encode(phy_struct,
                                       dl_rrc_msg.msg,
                                       dl_rrc_msg.N_bits,
@@ -505,6 +526,10 @@ void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
        0 == (sfn % 2))
     {
         // SIB1
+        interface->send_pcap_msg(LTE_FDD_ENB_PCAP_DIRECTION_DL,
+                                 LIBLTE_MAC_SI_RNTI,
+                                 dl_fn_combo,
+                                 &sys_info.sib1_alloc.msg);
         memcpy(&pdcch.alloc[pdcch.N_alloc], &sys_info.sib1_alloc, sizeof(LIBLTE_PHY_ALLOCATION_STRUCT));
         liblte_phy_get_tbs_mcs_and_n_prb_for_dl(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
                                                 dl_subframe.num,
@@ -521,6 +546,10 @@ void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
        ((0 * sys_info.si_win_len)/10) == (sfn % sys_info.si_periodicity_T))
     {
         // SIs in 1st scheduling info list entry
+        interface->send_pcap_msg(LTE_FDD_ENB_PCAP_DIRECTION_DL,
+                                 LIBLTE_MAC_SI_RNTI,
+                                 dl_fn_combo,
+                                 &sys_info.sib_alloc[0].msg);
         memcpy(&pdcch.alloc[pdcch.N_alloc], &sys_info.sib_alloc[0], sizeof(LIBLTE_PHY_ALLOCATION_STRUCT));
         // FIXME: This was a hack to allow SIB2 decoding with 1.4MHz BW due to overlap with MIB
         if(LIBLTE_SUCCESS == liblte_phy_get_tbs_mcs_and_n_prb_for_dl(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
@@ -540,6 +569,10 @@ void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
            (i * sys_info.si_win_len)%10   == dl_subframe.num                  &&
            ((i * sys_info.si_win_len)/10) == (sfn % sys_info.si_periodicity_T))
         {
+            interface->send_pcap_msg(LTE_FDD_ENB_PCAP_DIRECTION_DL,
+                                     LIBLTE_MAC_SI_RNTI,
+                                     dl_fn_combo,
+                                     &sys_info.sib_alloc[i].msg);
             memcpy(&pdcch.alloc[pdcch.N_alloc], &sys_info.sib_alloc[i], sizeof(LIBLTE_PHY_ALLOCATION_STRUCT));
             liblte_phy_get_tbs_mcs_and_n_prb_for_dl(pdcch.alloc[pdcch.N_alloc].msg.N_bits,
                                                     dl_subframe.num,
@@ -589,22 +622,30 @@ void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
                                   __LINE__,
                                   "More PRBs allocated than are available");
     }else{
+        liblte_phy_pdcch_channel_encode(phy_struct,
+                                        &pcfich,
+                                        &phich[subfn],
+                                        &pdcch,
+                                        sys_info.N_id_cell,
+                                        sys_info.N_ant,
+                                        liblte_rrc_phich_resource_num[sys_info.mib.phich_config.res],
+                                        sys_info.mib.phich_config.dur,
+                                        &dl_subframe);
         if(0 != pdcch.N_alloc)
         {
-            liblte_phy_pdcch_channel_encode(phy_struct,
-                                            &pcfich,
-                                            &phich,
-                                            &pdcch,
-                                            sys_info.N_id_cell,
-                                            sys_info.N_ant,
-                                            liblte_rrc_phich_resource_num[sys_info.mib.phich_config.res],
-                                            sys_info.mib.phich_config.dur,
-                                            &dl_subframe);
             liblte_phy_pdsch_channel_encode(phy_struct,
                                             &pdcch,
                                             sys_info.N_id_cell,
                                             sys_info.N_ant,
                                             &dl_subframe);
+        }
+        // Clear PHICH
+        for(i=0; i<25; i++)
+        {
+            for(j=0; j<8; j++)
+            {
+                phich[subfn].present[i][j] = false;
+            }
         }
     }
 
@@ -618,8 +659,16 @@ void LTE_fdd_enb_phy::process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf)
     }
     tx_buf->fn_combo = dl_fn_combo;
 
-    // Update counters
+    // Update FN combo
     dl_fn_combo = (dl_fn_combo + 1) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
+
+    // Update second counter
+    second_counter++;
+    if(second_counter > 1000)
+    {
+        second_counter = 0;
+        timer_mgr->handle_tick();
+    }
 
     // Send READY TO SEND message to MAC
     if(!late_subfr)
@@ -646,6 +695,9 @@ void LTE_fdd_enb_phy::process_ul(LTE_FDD_ENB_RADIO_RX_BUF_STRUCT *rx_buf)
     uint32 N_skipped_subfrs = 0;
     uint32 sfn;
     uint32 i;
+    uint32 I_prb_ra;
+    uint32 n_group_phich;
+    uint32 n_seq_phich;
 
     // Check the received fn_combo
     if(rx_buf->fn_combo != ul_fn_combo)
@@ -703,6 +755,12 @@ void LTE_fdd_enb_phy::process_ul(LTE_FDD_ENB_RADIO_RX_BUF_STRUCT *rx_buf)
         {
             for(i=0; i<mac_pusch_schedule[ul_subframe.num].decodes.N_alloc; i++)
             {
+                // Determine PHICH indecies
+                I_prb_ra      = mac_pusch_schedule[ul_subframe.num].decodes.alloc[i].prb[0][0];
+                n_group_phich = I_prb_ra % phy_struct->N_group_phich;
+                n_seq_phich   = (I_prb_ra/phy_struct->N_group_phich) % (2*phy_struct->N_sf_phich);
+
+                // Attempt decode
                 if(LIBLTE_SUCCESS == liblte_phy_pusch_channel_decode(phy_struct,
                                                                      &ul_subframe,
                                                                      &mac_pusch_schedule[ul_subframe.num].decodes.alloc[i],
@@ -719,6 +777,14 @@ void LTE_fdd_enb_phy::process_ul(LTE_FDD_ENB_RADIO_RX_BUF_STRUCT *rx_buf)
                                            LTE_FDD_ENB_DEST_LAYER_MAC,
                                            (LTE_FDD_ENB_MESSAGE_UNION *)&pusch_decode,
                                            sizeof(LTE_FDD_ENB_PUSCH_DECODE_MSG_STRUCT));
+
+                    // Add ACK to PHICH
+                    phich[(ul_subframe.num + 4) % 10].present[n_group_phich][n_seq_phich] = true;
+                    phich[(ul_subframe.num + 4) % 10].b[n_group_phich][n_seq_phich]       = 1;
+                }else{
+                    // Add NACK to PHICH
+                    phich[(ul_subframe.num + 4) % 10].present[n_group_phich][n_seq_phich] = true;
+                    phich[(ul_subframe.num + 4) % 10].present[n_group_phich][n_seq_phich] = 0;
                 }
             }
         }
