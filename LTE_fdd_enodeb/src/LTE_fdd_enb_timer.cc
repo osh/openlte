@@ -1,3 +1,4 @@
+#line 2 "LTE_fdd_enb_timer.cc" // Make __FILE__ omit the path
 /*******************************************************************************
 
     Copyright 2014 Ben Wojtowicz
@@ -25,6 +26,8 @@
     Revision History
     ----------    -------------    --------------------------------------------
     05/04/2014    Ben Wojtowicz    Created file
+    06/15/2014    Ben Wojtowicz    Added millisecond resolution and seperated
+                                   the callback calling functionality.
 
 *******************************************************************************/
 
@@ -56,15 +59,15 @@
 /******************/
 /*    Callback    */
 /******************/
-timer_cb::timer_cb()
+LTE_fdd_enb_timer_cb::LTE_fdd_enb_timer_cb()
 {
 }
-timer_cb::timer_cb(FuncType f, void* o)
+LTE_fdd_enb_timer_cb::LTE_fdd_enb_timer_cb(FuncType f, void* o)
 {
     func = f;
     obj  = o;
 }
-void timer_cb::operator()(uint32 id)
+void LTE_fdd_enb_timer_cb::operator()(uint32 id)
 {
     return (*func)(obj, id);
 }
@@ -72,14 +75,14 @@ void timer_cb::operator()(uint32 id)
 /********************************/
 /*    Constructor/Destructor    */
 /********************************/
-LTE_fdd_enb_timer::LTE_fdd_enb_timer(uint32   seconds,
-                                     uint32   _id,
-                                     timer_cb _cb)
+LTE_fdd_enb_timer::LTE_fdd_enb_timer(uint32               m_seconds,
+                                     uint32               _id,
+                                     LTE_fdd_enb_timer_cb _cb)
 {
-    cb              = _cb;
-    id              = _id;
-    expiry_seconds  = seconds;
-    current_seconds = 0;
+    cb                = _cb;
+    id                = _id;
+    expiry_m_seconds  = m_seconds;
+    current_m_seconds = 0;
 }
 LTE_fdd_enb_timer::~LTE_fdd_enb_timer()
 {
@@ -90,21 +93,23 @@ LTE_fdd_enb_timer::~LTE_fdd_enb_timer()
 /****************************/
 void LTE_fdd_enb_timer::increment(void)
 {
-    current_seconds++;
-
-    if(expired())
-    {
-        cb(id);
-    }
+    current_m_seconds++;
 }
 bool LTE_fdd_enb_timer::expired(void)
 {
     bool exp = false;
 
-    if(current_seconds > expiry_seconds)
+    if(current_m_seconds > expiry_m_seconds)
     {
         exp = true;
     }
 
     return(exp);
+}
+void LTE_fdd_enb_timer::call_callback(void)
+{
+    if(expired())
+    {
+        cb(id);
+    }
 }

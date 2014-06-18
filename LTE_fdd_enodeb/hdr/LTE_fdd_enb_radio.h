@@ -27,6 +27,7 @@
     11/09/2013    Ben Wojtowicz    Created file
     01/18/2014    Ben Wojtowicz    Handling EARFCN updates and multiple
                                    antennas.
+    06/15/2014    Ben Wojtowicz    Changed fn_combo to current_tti.
 
 *******************************************************************************/
 
@@ -69,13 +70,13 @@ typedef struct{
 typedef struct{
     float  i_buf[4][LIBLTE_PHY_N_SAMPS_PER_SUBFR_30_72MHZ];
     float  q_buf[4][LIBLTE_PHY_N_SAMPS_PER_SUBFR_30_72MHZ];
-    uint16 fn_combo;
+    uint16 current_tti;
 }LTE_FDD_ENB_RADIO_TX_BUF_STRUCT;
 
 typedef struct{
     float  i_buf[LIBLTE_PHY_N_SAMPS_PER_SUBFR_30_72MHZ];
     float  q_buf[LIBLTE_PHY_N_SAMPS_PER_SUBFR_30_72MHZ];
-    uint16 fn_combo;
+    uint16 current_tti;
 }LTE_FDD_ENB_RADIO_RX_BUF_STRUCT;
 
 /*******************************************************************************
@@ -137,7 +138,7 @@ private:
     uint32           fs;
     uint32           tx_gain;
     uint32           rx_gain;
-    uint16           next_tx_fn_combo;
+    uint16           next_tx_current_tti;
 };
 
 #endif /* __LTE_FDD_ENB_RADIO_H__ */

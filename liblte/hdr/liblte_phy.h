@@ -59,6 +59,7 @@
     04/12/2014    Ben Wojtowicz    Added support for PRB allocation differences
                                    in each slot.
     05/04/2014    Ben Wojtowicz    Added PHICH and TPC support.
+    06/15/2014    Ben Wojtowicz    Added TPC values for DCI 0, 3, and 4.
 
 *******************************************************************************/
 
@@ -367,6 +368,7 @@ typedef struct{
     uint8  pdcch_encode_bits[576];
     uint8  pdcch_scramb_bits[576];
     int8   pdcch_soft_bits[576];
+    bool   pdcch_cce_used[50];
 
     // PHICH
     uint32 N_group_phich;
@@ -601,6 +603,14 @@ LIBLTE_ERROR_ENUM liblte_phy_update_n_rb_dl(LIBLTE_PHY_STRUCT *phy_struct,
 // Defines
 // Enums
 typedef enum{
+    LIBLTE_PHY_TPC_COMMAND_DCI_0_3_4_DB_NEG_1 = 0,
+    LIBLTE_PHY_TPC_COMMAND_DCI_0_3_4_DB_ZERO,
+    LIBLTE_PHY_TPC_COMMAND_DCI_0_3_4_DB_1,
+    LIBLTE_PHY_TPC_COMMAND_DCI_0_3_4_DB_3,
+    LIBLTE_PHY_TPC_COMMAND_DCI_0_3_4_N_ITEMS,
+}LIBLTE_PHY_TPC_COMMAND_DCI_0_3_4_ENUM;
+static const char liblte_phy_tpc_command_dci_0_3_4_text[LIBLTE_PHY_TPC_COMMAND_DCI_0_3_4_N_ITEMS][20] = {"-1dB", "0dB", "1dB", "3dB"};
+typedef enum{
     LIBLTE_PHY_TPC_COMMAND_DCI_1_1A_1B_1D_2_3_DB_NEG_1 = 0,
     LIBLTE_PHY_TPC_COMMAND_DCI_1_1A_1B_1D_2_3_DB_ZERO,
     LIBLTE_PHY_TPC_COMMAND_DCI_1_1A_1B_1D_2_3_DB_1,
@@ -610,9 +620,10 @@ typedef enum{
 static const char liblte_phy_tpc_command_dci_1_1a_1b_1d_2_3_text[LIBLTE_PHY_TPC_COMMAND_DCI_1_1A_1B_1D_2_3_N_ITEMS][20] = {"-1dB", "0dB", "1dB", "3dB"};
 // Structs
 typedef struct{
-    LIBLTE_MSG_STRUCT               msg;
+    LIBLTE_BIT_MSG_STRUCT           msg;
     LIBLTE_PHY_PRE_CODER_TYPE_ENUM  pre_coder_type;
     LIBLTE_PHY_MODULATION_TYPE_ENUM mod_type;
+    LIBLTE_PHY_CHAN_TYPE_ENUM       chan_type;
     uint32                          tbs;
     uint32                          rv_idx;
     uint32                          N_prb;

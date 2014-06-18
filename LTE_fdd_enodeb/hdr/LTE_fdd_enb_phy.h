@@ -28,6 +28,7 @@
     01/18/2014    Ben Wojtowicz    Cached a copy of the interface class and
                                    added the ability to handle late subframes.
     05/04/2014    Ben Wojtowicz    Added PHICH support.
+    06/15/2014    Ben Wojtowicz    Changed fn_combo to current_tti.
 
 *******************************************************************************/
 
@@ -49,7 +50,7 @@
                               DEFINES
 *******************************************************************************/
 
-#define LTE_FDD_ENB_FN_COMBO_MAX (LIBLTE_PHY_SFN_MAX*10 + 9)
+#define LTE_FDD_ENB_CURRENT_TTI_MAX (LIBLTE_PHY_SFN_MAX*10 + 9)
 
 /*******************************************************************************
                               FORWARD DECLARATIONS
@@ -103,24 +104,23 @@ private:
     LIBLTE_PHY_STRUCT *phy_struct;
 
     // Downlink
-    void handle_pdsch_schedule(LTE_FDD_ENB_PDSCH_SCHEDULE_MSG_STRUCT *pdsch_schedule);
-    void handle_pusch_schedule(LTE_FDD_ENB_PUSCH_SCHEDULE_MSG_STRUCT *pusch_schedule);
+    void handle_dl_schedule(LTE_FDD_ENB_DL_SCHEDULE_MSG_STRUCT *dl_sched);
+    void handle_ul_schedule(LTE_FDD_ENB_UL_SCHEDULE_MSG_STRUCT *ul_sched);
     void process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf);
-    boost::mutex                          sys_info_mutex;
-    boost::mutex                          pdsch_mutex;
-    boost::mutex                          pusch_mutex;
-    LTE_FDD_ENB_SYS_INFO_STRUCT           sys_info;
-    LTE_FDD_ENB_PDSCH_SCHEDULE_MSG_STRUCT mac_pdsch_schedule[10];
-    LTE_FDD_ENB_PUSCH_SCHEDULE_MSG_STRUCT mac_pusch_schedule[10];
-    LIBLTE_PHY_PCFICH_STRUCT              pcfich;
-    LIBLTE_PHY_PHICH_STRUCT               phich[10];
-    LIBLTE_PHY_PDCCH_STRUCT               pdcch;
-    LIBLTE_PHY_SUBFRAME_STRUCT            dl_subframe;
-    LIBLTE_MSG_STRUCT                     dl_rrc_msg;
-    uint32                                dl_fn_combo;
-    uint32                                last_rts_fn_combo;
-    uint32                                second_counter;
-    bool                                  late_subfr;
+    boost::mutex                       sys_info_mutex;
+    boost::mutex                       dl_sched_mutex;
+    boost::mutex                       ul_sched_mutex;
+    LTE_FDD_ENB_SYS_INFO_STRUCT        sys_info;
+    LTE_FDD_ENB_DL_SCHEDULE_MSG_STRUCT dl_schedule[10];
+    LTE_FDD_ENB_UL_SCHEDULE_MSG_STRUCT ul_schedule[10];
+    LIBLTE_PHY_PCFICH_STRUCT           pcfich;
+    LIBLTE_PHY_PHICH_STRUCT            phich[10];
+    LIBLTE_PHY_PDCCH_STRUCT            pdcch;
+    LIBLTE_PHY_SUBFRAME_STRUCT         dl_subframe;
+    LIBLTE_BIT_MSG_STRUCT              dl_rrc_msg;
+    uint32                             dl_current_tti;
+    uint32                             last_rts_current_tti;
+    bool                               late_subfr;
 
     // Uplink
     void process_ul(LTE_FDD_ENB_RADIO_RX_BUF_STRUCT *rx_buf);
@@ -128,7 +128,7 @@ private:
     LTE_FDD_ENB_PUCCH_DECODE_MSG_STRUCT pucch_decode;
     LTE_FDD_ENB_PUSCH_DECODE_MSG_STRUCT pusch_decode;
     LIBLTE_PHY_SUBFRAME_STRUCT          ul_subframe;
-    uint32                              ul_fn_combo;
+    uint32                              ul_current_tti;
     uint32                              prach_sfn_mod;
     uint32                              prach_subfn_mod;
     uint32                              prach_subfn_check;

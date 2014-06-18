@@ -1,3 +1,4 @@
+#line 2 "LTE_fdd_enb_user.cc" // Make __FILE__ omit the path
 /*******************************************************************************
 
     Copyright 2013-2014 Ben Wojtowicz
@@ -26,6 +27,7 @@
     ----------    -------------    --------------------------------------------
     11/10/2013    Ben Wojtowicz    Created file
     05/04/2014    Ben Wojtowicz    Added radio bearer support.
+    06/15/2014    Ben Wojtowicz    Added initialize routine.
 
 *******************************************************************************/
 
@@ -66,7 +68,7 @@ LTE_fdd_enb_user::LTE_fdd_enb_user(std::string _imsi)
     c_rnti = LIBLTE_MAC_INVALID_RNTI;
 
     // Radio Bearers
-    srb0 = new LTE_fdd_enb_rb(LTE_FDD_ENB_RB_SRB0);
+    srb0 = new LTE_fdd_enb_rb(LTE_FDD_ENB_RB_SRB0, this);
     srb1 = NULL;
     srb2 = NULL;
     for(i=0; i<8; i++)
@@ -86,6 +88,24 @@ LTE_fdd_enb_user::~LTE_fdd_enb_user()
     delete srb2;
     delete srb1;
     delete srb0;
+}
+
+/********************/
+/*    Initialize    */
+/********************/
+void LTE_fdd_enb_user::init(void)
+{
+    uint32 i;
+
+    // Radio Bearers
+    for(i=0; i<8; i++)
+    {
+        delete drb[i];
+    }
+    delete srb2;
+    delete srb1;
+    srb0->set_rrc_procedure(LTE_FDD_ENB_RRC_PROC_IDLE);
+    srb0->set_rrc_state(LTE_FDD_ENB_RRC_STATE_IDLE);
 }
 
 /******************/
@@ -111,15 +131,16 @@ void LTE_fdd_enb_user::get_srb0(LTE_fdd_enb_rb **rb)
 {
     *rb = srb0;
 }
-LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_user::setup_srb1(void)
+LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_user::setup_srb1(LTE_fdd_enb_rb **rb)
 {
     LTE_FDD_ENB_ERROR_ENUM err = LTE_FDD_ENB_ERROR_RB_ALREADY_SETUP;
 
     if(NULL == srb1)
     {
-        srb1 = new LTE_fdd_enb_rb(LTE_FDD_ENB_RB_SRB1);
+        srb1 = new LTE_fdd_enb_rb(LTE_FDD_ENB_RB_SRB1, this);
         err  = LTE_FDD_ENB_ERROR_NONE;
     }
+    *rb = srb1;
 
     return(err);
 }
@@ -147,15 +168,16 @@ LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_user::get_srb1(LTE_fdd_enb_rb **rb)
 
     return(err);
 }
-LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_user::setup_srb2(void)
+LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_user::setup_srb2(LTE_fdd_enb_rb **rb)
 {
     LTE_FDD_ENB_ERROR_ENUM err = LTE_FDD_ENB_ERROR_RB_ALREADY_SETUP;
 
     if(NULL == srb2)
     {
-        srb2 = new LTE_fdd_enb_rb(LTE_FDD_ENB_RB_SRB2);
+        srb2 = new LTE_fdd_enb_rb(LTE_FDD_ENB_RB_SRB2, this);
         err  = LTE_FDD_ENB_ERROR_NONE;
     }
+    *rb = srb2;
 
     return(err);
 }

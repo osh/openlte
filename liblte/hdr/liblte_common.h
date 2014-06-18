@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2012-2013 Ben Wojtowicz
+    Copyright 2012-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,8 @@
     ----------    -------------    --------------------------------------------
     02/26/2012    Ben Wojtowicz    Created file.
     07/21/2013    Ben Wojtowicz    Added a common message structure.
+    06/15/2014    Ben Wojtowicz    Split LIBLTE_MSG_STRUCT into bit and byte
+                                   aligned messages.
 
 *******************************************************************************/
 
@@ -59,7 +61,12 @@ typedef enum{
 typedef struct{
     uint32 N_bits;
     uint8  msg[LIBLTE_MAX_MSG_SIZE];
-}LIBLTE_MSG_STRUCT;
+}LIBLTE_BIT_MSG_STRUCT;
+
+typedef struct{
+    uint32 N_bytes;
+    uint8  msg[LIBLTE_MAX_MSG_SIZE];
+}LIBLTE_BYTE_MSG_STRUCT;
 
 /*******************************************************************************
                               DECLARATIONS

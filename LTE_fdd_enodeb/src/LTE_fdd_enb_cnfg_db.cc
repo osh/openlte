@@ -1,3 +1,4 @@
+#line 2 "LTE_fdd_enb_cnfg_db.cc" // Make __FILE__ omit the path
 /*******************************************************************************
 
     Copyright 2013-2014 Ben Wojtowicz
@@ -30,6 +31,7 @@
                                    uint32 values.
     03/26/2014    Ben Wojtowicz    Using the latest LTE library.
     05/04/2014    Ben Wojtowicz    Added PCAP support.
+    06/15/2014    Ben Wojtowicz    Omitting path from __FILE__.
 
 *******************************************************************************/
 

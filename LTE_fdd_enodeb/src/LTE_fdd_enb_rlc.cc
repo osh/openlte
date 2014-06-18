@@ -1,3 +1,4 @@
+#line 2 "LTE_fdd_enb_rlc.cc" // Make __FILE__ omit the path
 /*******************************************************************************
 
     Copyright 2013-2014 Ben Wojtowicz
@@ -27,6 +28,7 @@
     11/10/2013    Ben Wojtowicz    Created file
     01/18/2014    Ben Wojtowicz    Added level to debug prints.
     05/04/2014    Ben Wojtowicz    Added communication to MAC and PDCP.
+    06/15/2014    Ben Wojtowicz    Added basic AM receive functionality.
 
 *******************************************************************************/
 
@@ -36,6 +38,7 @@
 
 #include "LTE_fdd_enb_rlc.h"
 #include "LTE_fdd_enb_interface.h"
+#include "liblte_rlc.h"
 
 /*******************************************************************************
                               DEFINES
@@ -101,8 +104,8 @@ LTE_fdd_enb_rlc::~LTE_fdd_enb_rlc()
 void LTE_fdd_enb_rlc::start(void)
 {
     boost::mutex::scoped_lock lock(start_mutex);
-    msgq_cb                   mac_cb(&msgq_cb_wrapper<LTE_fdd_enb_rlc, &LTE_fdd_enb_rlc::handle_mac_msg>, this);
-    msgq_cb                   pdcp_cb(&msgq_cb_wrapper<LTE_fdd_enb_rlc, &LTE_fdd_enb_rlc::handle_pdcp_msg>, this);
+    LTE_fdd_enb_msgq_cb       mac_cb(&LTE_fdd_enb_msgq_cb_wrapper<LTE_fdd_enb_rlc, &LTE_fdd_enb_rlc::handle_mac_msg>, this);
+    LTE_fdd_enb_msgq_cb       pdcp_cb(&LTE_fdd_enb_msgq_cb_wrapper<LTE_fdd_enb_rlc, &LTE_fdd_enb_rlc::handle_pdcp_msg>, this);
 
     if(!started)
     {
@@ -207,7 +210,7 @@ void LTE_fdd_enb_rlc::update_sys_info(void)
 void LTE_fdd_enb_rlc::handle_pdu_ready(LTE_FDD_ENB_RLC_PDU_READY_MSG_STRUCT *pdu_ready)
 {
     LTE_fdd_enb_interface *interface = LTE_fdd_enb_interface::get_instance();
-    LIBLTE_MSG_STRUCT     *pdu;
+    LIBLTE_BIT_MSG_STRUCT *pdu;
 
     if(LTE_FDD_ENB_ERROR_NONE == pdu_ready->rb->get_next_rlc_pdu(&pdu))
     {
@@ -254,9 +257,9 @@ void LTE_fdd_enb_rlc::handle_pdu_ready(LTE_FDD_ENB_RLC_PDU_READY_MSG_STRUCT *pdu
                                   "Received pdu_ready message with no PDU queued");
     }
 }
-void LTE_fdd_enb_rlc::handle_tm_pdu(LIBLTE_MSG_STRUCT *pdu,
-                                    LTE_fdd_enb_user  *user,
-                                    LTE_fdd_enb_rb    *rb)
+void LTE_fdd_enb_rlc::handle_tm_pdu(LIBLTE_BIT_MSG_STRUCT *pdu,
+                                    LTE_fdd_enb_user      *user,
+                                    LTE_fdd_enb_rb        *rb)
 {
     LTE_FDD_ENB_PDCP_PDU_READY_MSG_STRUCT pdcp_pdu_ready;
 
@@ -272,9 +275,9 @@ void LTE_fdd_enb_rlc::handle_tm_pdu(LIBLTE_MSG_STRUCT *pdu,
                            (LTE_FDD_ENB_MESSAGE_UNION *)&pdcp_pdu_ready,
                            sizeof(LTE_FDD_ENB_PDCP_PDU_READY_MSG_STRUCT));
 }
-void LTE_fdd_enb_rlc::handle_um_pdu(LIBLTE_MSG_STRUCT *pdu,
-                                    LTE_fdd_enb_user  *user,
-                                    LTE_fdd_enb_rb    *rb)
+void LTE_fdd_enb_rlc::handle_um_pdu(LIBLTE_BIT_MSG_STRUCT *pdu,
+                                    LTE_fdd_enb_user      *user,
+                                    LTE_fdd_enb_rb        *rb)
 {
     LTE_fdd_enb_interface *interface = LTE_fdd_enb_interface::get_instance();
 
@@ -284,17 +287,104 @@ void LTE_fdd_enb_rlc::handle_um_pdu(LIBLTE_MSG_STRUCT *pdu,
                               __LINE__,
                               "Not handling PDUs for RLC UM config");
 }
-void LTE_fdd_enb_rlc::handle_am_pdu(LIBLTE_MSG_STRUCT *pdu,
-                                    LTE_fdd_enb_user  *user,
-                                    LTE_fdd_enb_rb    *rb)
+void LTE_fdd_enb_rlc::handle_am_pdu(LIBLTE_BIT_MSG_STRUCT *pdu,
+                                    LTE_fdd_enb_user      *user,
+                                    LTE_fdd_enb_rb        *rb)
 {
-    LTE_fdd_enb_interface *interface = LTE_fdd_enb_interface::get_instance();
+    LTE_fdd_enb_interface                 *interface = LTE_fdd_enb_interface::get_instance();
+    LTE_FDD_ENB_PDCP_PDU_READY_MSG_STRUCT  pdcp_pdu_ready;
+    LTE_FDD_ENB_MAC_SDU_READY_MSG_STRUCT   mac_sdu_ready;
+    LIBLTE_BIT_MSG_STRUCT                  pdcp_pdu;
+    LIBLTE_BIT_MSG_STRUCT                  mac_sdu;
+    LIBLTE_RLC_AMD_PDU_STRUCT              amd;
+    LIBLTE_RLC_STATUS_PDU_STRUCT           status;
+    uint16                                 vrr  = rb->get_rlc_vrr();
+    uint16                                 vrmr = rb->get_rlc_vrmr();
+    uint16                                 vrh  = rb->get_rlc_vrh();
 
-    interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
-                              LTE_FDD_ENB_DEBUG_LEVEL_RLC,
-                              __FILE__,
-                              __LINE__,
-                              "Not handling PDUs for RLC AM config");
+    liblte_rlc_unpack_amd_pdu(pdu, &amd);
+
+    if(vrr        <= amd.hdr.sn &&
+       amd.hdr.sn <  vrmr)
+    {
+        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_RLC,
+                                  __FILE__,
+                                  __LINE__,
+                                  &amd.data,
+                                  "Received AMD PDU for RNTI=%u, RB=%s, VR(R)=%u, SN=%u, VR(MR)=%u, VR(H)=%u, RF=%s, P=%s, FI=%s",
+                                  user->get_c_rnti(),
+                                  LTE_fdd_enb_rb_text[rb->get_rb_id()],
+                                  vrr,
+                                  amd.hdr.sn,
+                                  vrmr,
+                                  vrh,
+                                  liblte_rlc_rf_field_text[amd.hdr.rf],
+                                  liblte_rlc_p_field_text[amd.hdr.p],
+                                  liblte_rlc_fi_field_text[amd.hdr.fi]);
+
+        // Place RLC data PDU in reception buffer
+        rb->rlc_add_to_reception_buffer(&amd);
+
+        // Update VR(H)
+        if(amd.hdr.sn >= vrh)
+        {
+            rb->set_rlc_vrh(amd.hdr.sn + 1);
+        }
+
+        // Update VR(MS)
+        // FIXME
+
+        // Update VR(R)/VR(MR) and reassemble
+        if(amd.hdr.sn == vrr)
+        {
+            // FIXME: Handle AMD PDU Segments
+            rb->set_rlc_vrr(amd.hdr.sn + 1);
+
+            if(LTE_FDD_ENB_ERROR_NONE == rb->rlc_reassemble(&pdcp_pdu))
+            {
+                // Queue the SDU for PDCP
+                rb->queue_pdcp_pdu(&pdcp_pdu);
+
+                // Signal PDCP
+                pdcp_pdu_ready.user = user;
+                pdcp_pdu_ready.rb   = rb;
+                LTE_fdd_enb_msgq::send(rlc_pdcp_mq,
+                                       LTE_FDD_ENB_MESSAGE_TYPE_PDCP_PDU_READY,
+                                       LTE_FDD_ENB_DEST_LAYER_PDCP,
+                                       (LTE_FDD_ENB_MESSAGE_UNION *)&pdcp_pdu_ready,
+                                       sizeof(LTE_FDD_ENB_PDCP_PDU_READY_MSG_STRUCT));
+            }
+        }
+
+        // Send a STATUS PDU to acknowledge the PDU
+        status.ack_sn = amd.hdr.sn + 1;
+        liblte_rlc_pack_status_pdu(&status, &mac_sdu);
+
+        // Queue the PDU for MAC
+        rb->queue_mac_sdu(&mac_sdu);
+
+        // Signal MAC
+        mac_sdu_ready.user = user;
+        mac_sdu_ready.rb   = rb;
+        LTE_fdd_enb_msgq::send(rlc_mac_mq,
+                               LTE_FDD_ENB_MESSAGE_TYPE_MAC_SDU_READY,
+                               LTE_FDD_ENB_DEST_LAYER_MAC,
+                               (LTE_FDD_ENB_MESSAGE_UNION *)&mac_sdu_ready,
+                               sizeof(LTE_FDD_ENB_MAC_SDU_READY_MSG_STRUCT));
+    }else{
+        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_RLC,
+                                  __FILE__,
+                                  __LINE__,
+                                  &amd.data,
+                                  "Received AMD PDU for RNTI=%u, RB=%s, that is outside of the receiving window (%u <= %u < %u)",
+                                  user->get_c_rnti(),
+                                  LTE_fdd_enb_rb_text[rb->get_rb_id()],
+                                  vrr,
+                                  amd.hdr.sn,
+                                  vrmr);
+    }
 }
 
 /*******************************/
@@ -303,7 +393,7 @@ void LTE_fdd_enb_rlc::handle_am_pdu(LIBLTE_MSG_STRUCT *pdu,
 void LTE_fdd_enb_rlc::handle_sdu_ready(LTE_FDD_ENB_RLC_SDU_READY_MSG_STRUCT *sdu_ready)
 {
     LTE_fdd_enb_interface *interface = LTE_fdd_enb_interface::get_instance();
-    LIBLTE_MSG_STRUCT     *sdu;
+    LIBLTE_BIT_MSG_STRUCT *sdu;
 
     if(LTE_FDD_ENB_ERROR_NONE == sdu_ready->rb->get_next_rlc_sdu(&sdu))
     {
@@ -349,9 +439,9 @@ void LTE_fdd_enb_rlc::handle_sdu_ready(LTE_FDD_ENB_RLC_SDU_READY_MSG_STRUCT *sdu
                                   "Received sdu_ready message with no SDU queued");
     }
 }
-void LTE_fdd_enb_rlc::handle_tm_sdu(LIBLTE_MSG_STRUCT *sdu,
-                                    LTE_fdd_enb_user  *user,
-                                    LTE_fdd_enb_rb    *rb)
+void LTE_fdd_enb_rlc::handle_tm_sdu(LIBLTE_BIT_MSG_STRUCT *sdu,
+                                    LTE_fdd_enb_user      *user,
+                                    LTE_fdd_enb_rb        *rb)
 {
     LTE_FDD_ENB_MAC_SDU_READY_MSG_STRUCT mac_sdu_ready;
 
@@ -367,9 +457,9 @@ void LTE_fdd_enb_rlc::handle_tm_sdu(LIBLTE_MSG_STRUCT *sdu,
                            (LTE_FDD_ENB_MESSAGE_UNION *)&mac_sdu_ready,
                            sizeof(LTE_FDD_ENB_MAC_SDU_READY_MSG_STRUCT));
 }
-void LTE_fdd_enb_rlc::handle_um_sdu(LIBLTE_MSG_STRUCT *sdu,
-                                    LTE_fdd_enb_user  *user,
-                                    LTE_fdd_enb_rb    *rb)
+void LTE_fdd_enb_rlc::handle_um_sdu(LIBLTE_BIT_MSG_STRUCT *sdu,
+                                    LTE_fdd_enb_user      *user,
+                                    LTE_fdd_enb_rb        *rb)
 {
     LTE_fdd_enb_interface *interface = LTE_fdd_enb_interface::get_instance();
 
@@ -379,9 +469,9 @@ void LTE_fdd_enb_rlc::handle_um_sdu(LIBLTE_MSG_STRUCT *sdu,
                               __LINE__,
                               "Not handling SDUs for RLC UM config");
 }
-void LTE_fdd_enb_rlc::handle_am_sdu(LIBLTE_MSG_STRUCT *sdu,
-                                    LTE_fdd_enb_user  *user,
-                                    LTE_fdd_enb_rb    *rb)
+void LTE_fdd_enb_rlc::handle_am_sdu(LIBLTE_BIT_MSG_STRUCT *sdu,
+                                    LTE_fdd_enb_user      *user,
+                                    LTE_fdd_enb_rb        *rb)
 {
     LTE_fdd_enb_interface *interface = LTE_fdd_enb_interface::get_instance();
 

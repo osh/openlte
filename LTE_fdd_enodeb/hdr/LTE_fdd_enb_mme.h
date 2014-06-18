@@ -26,6 +26,7 @@
     ----------    -------------    --------------------------------------------
     11/09/2013    Ben Wojtowicz    Created file
     01/18/2014    Ben Wojtowicz    Added an explicit include for boost mutexes.
+    06/15/2014    Ben Wojtowicz    Added RRC NAS message handler.
 
 *******************************************************************************/
 
@@ -88,6 +89,9 @@ private:
     void handle_rrc_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg);
     LTE_fdd_enb_msgq                   *rrc_comm_msgq;
     boost::interprocess::message_queue *mme_rrc_mq;
+
+    // RRC Message Handlers
+    void handle_nas_msg(LTE_FDD_ENB_MME_NAS_MSG_READY_MSG_STRUCT *nas_msg);
 
     // Parameters
     boost::mutex                sys_info_mutex;

@@ -1,3 +1,4 @@
+#line 2 "LTE_fdd_enb_timer_mgr.cc" // Make __FILE__ omit the path
 /*******************************************************************************
 
     Copyright 2014 Ben Wojtowicz
@@ -25,6 +26,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     05/04/2014    Ben Wojtowicz    Created file
+    06/15/2014    Ben Wojtowicz    Added millisecond resolution.
 
 *******************************************************************************/
 
@@ -95,9 +97,9 @@ LTE_fdd_enb_timer_mgr::~LTE_fdd_enb_timer_mgr()
 /****************************/
 /*    External Interface    */
 /****************************/
-LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_timer_mgr::start_timer(uint32    seconds,
-                                                          timer_cb  cb,
-                                                          uint32   *timer_id)
+LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_timer_mgr::start_timer(uint32                m_seconds,
+                                                          LTE_fdd_enb_timer_cb  cb,
+                                                          uint32               *timer_id)
 {
     boost::mutex::scoped_lock                        lock(timer_mutex);
     std::map<uint32, LTE_fdd_enb_timer *>::iterator  iter      = timer_map.find(next_timer_id);
@@ -109,7 +111,7 @@ LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_timer_mgr::start_timer(uint32    seconds,
         next_timer_id++;
         iter = timer_map.find(next_timer_id);
     }
-    new_timer = new LTE_fdd_enb_timer(seconds, next_timer_id, cb);
+    new_timer = new LTE_fdd_enb_timer(m_seconds, next_timer_id, cb);
 
     if(NULL != new_timer)
     {
@@ -137,10 +139,10 @@ LTE_FDD_ENB_ERROR_ENUM LTE_fdd_enb_timer_mgr::stop_timer(uint32 timer_id)
 }
 void LTE_fdd_enb_timer_mgr::handle_tick(void)
 {
-    boost::mutex::scoped_lock                       lock(timer_mutex);
     std::map<uint32, LTE_fdd_enb_timer *>::iterator iter;
     std::list<uint32>                               expired_list;
 
+    timer_mutex.lock();
     for(iter=timer_map.begin(); iter!=timer_map.end(); iter++)
     {
         (*iter).second->increment();
@@ -150,6 +152,7 @@ void LTE_fdd_enb_timer_mgr::handle_tick(void)
             expired_list.push_back((*iter).first);
         }
     }
+    timer_mutex.unlock();
 
     // Delete expired timers
     while(0 != expired_list.size())
@@ -157,6 +160,7 @@ void LTE_fdd_enb_timer_mgr::handle_tick(void)
         iter = timer_map.find(expired_list.front());
         if(timer_map.end() != iter)
         {
+            (*iter).second->call_callback();
             delete (*iter).second;
             timer_map.erase(iter);
         }

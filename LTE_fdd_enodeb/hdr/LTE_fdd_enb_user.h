@@ -26,6 +26,7 @@
     ----------    -------------    --------------------------------------------
     11/09/2013    Ben Wojtowicz    Created file
     05/04/2014    Ben Wojtowicz    Added radio bearer support.
+    06/15/2014    Ben Wojtowicz    Added initialize routine.
 
 *******************************************************************************/
 
@@ -68,6 +69,9 @@ public:
     LTE_fdd_enb_user(std::string _imsi);
     ~LTE_fdd_enb_user();
 
+    // Initialize
+    void init(void);
+
     // Identity
     std::string get_imsi(void);
     void set_c_rnti(uint16 _c_rnti);
@@ -75,16 +79,15 @@ public:
 
     // Radio Bearers
     void get_srb0(LTE_fdd_enb_rb **rb);
-    LTE_FDD_ENB_ERROR_ENUM setup_srb1(void);
+    LTE_FDD_ENB_ERROR_ENUM setup_srb1(LTE_fdd_enb_rb **rb);
     LTE_FDD_ENB_ERROR_ENUM teardown_srb1(void);
     LTE_FDD_ENB_ERROR_ENUM get_srb1(LTE_fdd_enb_rb **rb);
-    LTE_FDD_ENB_ERROR_ENUM setup_srb2(void);
+    LTE_FDD_ENB_ERROR_ENUM setup_srb2(LTE_fdd_enb_rb **rb);
     LTE_FDD_ENB_ERROR_ENUM teardown_srb2(void);
     LTE_FDD_ENB_ERROR_ENUM get_srb2(LTE_fdd_enb_rb **rb);
 
     // MAC
     LIBLTE_MAC_PDU_STRUCT pusch_mac_pdu;
-    LIBLTE_MAC_PDU_STRUCT pdsch_mac_pdu;
 
 private:
     // Identity

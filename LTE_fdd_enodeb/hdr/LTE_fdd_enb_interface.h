@@ -30,6 +30,8 @@
     04/12/2014    Ben Wojtowicz    Pulled in a patch from Max Suraev for more
                                    descriptive start failures.
     05/04/2014    Ben Wojtowicz    Added PCAP support and more error types.
+    06/15/2014    Ben Wojtowicz    Added new error causes, ... support for info
+                                   messages, and using the latest LTE library.
 
 *******************************************************************************/
 
@@ -82,6 +84,7 @@ typedef enum{
     LTE_FDD_ENB_ERROR_RB_NOT_SETUP,
     LTE_FDD_ENB_ERROR_RB_ALREADY_SETUP,
     LTE_FDD_ENB_ERROR_TIMER_NOT_FOUND,
+    LTE_FDD_ENB_ERROR_CANT_REASSEMBLE_SDU,
     LTE_FDD_ENB_ERROR_N_ITEMS,
 }LTE_FDD_ENB_ERROR_ENUM;
 static const char LTE_fdd_enb_error_text[LTE_FDD_ENB_ERROR_N_ITEMS][100] = {"none",
@@ -100,10 +103,11 @@ static const char LTE_fdd_enb_error_text[LTE_FDD_ENB_ERROR_N_ITEMS][100] = {"non
                                                                             "cant schedule",
                                                                             "variable not dynamic",
                                                                             "unable to set master clock rate",
+                                                                            "no message in queue",
                                                                             "RB not setup",
                                                                             "RB already setup",
-                                                                            "no message in queue",
-                                                                            "timer not found"};
+                                                                            "timer not found",
+                                                                            "cant reassemble SDU"};
 
 typedef enum{
     LTE_FDD_ENB_DEBUG_TYPE_ERROR = 0,
@@ -275,12 +279,13 @@ public:
     void start_ports(void);
     void stop_ports(void);
     void send_ctrl_msg(std::string msg);
-    void send_ctrl_info_msg(std::string msg);
+    void send_ctrl_info_msg(std::string msg, ...);
     void send_ctrl_error_msg(LTE_FDD_ENB_ERROR_ENUM error, std::string msg);
     void send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ENUM type, LTE_FDD_ENB_DEBUG_LEVEL_ENUM level, std::string file_name, int32 line, std::string msg, ...);
-    void send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ENUM type, LTE_FDD_ENB_DEBUG_LEVEL_ENUM level, std::string file_name, int32 line, LIBLTE_MSG_STRUCT *lte_msg, std::string msg, ...);
+    void send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ENUM type, LTE_FDD_ENB_DEBUG_LEVEL_ENUM level, std::string file_name, int32 line, LIBLTE_BIT_MSG_STRUCT *lte_msg, std::string msg, ...);
+    void send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ENUM type, LTE_FDD_ENB_DEBUG_LEVEL_ENUM level, std::string file_name, int32 line, LIBLTE_BYTE_MSG_STRUCT *lte_msg, std::string msg, ...);
     void open_pcap_fd(void);
-    void send_pcap_msg(LTE_FDD_ENB_PCAP_DIRECTION_ENUM dir, uint32 rnti, uint32 fn_combo, LIBLTE_MSG_STRUCT *msg);
+    void send_pcap_msg(LTE_FDD_ENB_PCAP_DIRECTION_ENUM dir, uint32 rnti, uint32 current_tti, uint8 *msg, uint32 N_bits);
     static void handle_ctrl_msg(std::string msg);
     static void handle_ctrl_connect(void);
     static void handle_ctrl_disconnect(void);

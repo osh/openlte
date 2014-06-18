@@ -30,6 +30,7 @@
     08/26/2013    Ben Wojtowicz    Updates to support GnuRadio 3.7 and the
                                    latest LTE library.
     03/26/2014    Ben Wojtowicz    Using the latest LTE library.
+    06/15/2014    Ben Wojtowicz    Added PCAP support.
 
 *******************************************************************************/
 
@@ -384,6 +385,9 @@ int32 LTE_fdd_dl_scan_state_machine::work(int32                      ninput_item
                     sfn       = (mib.sfn_div_4 << 2) + sfn_offset;
                     phich_res = liblte_rrc_phich_resource_num[mib.phich_config.res];
 
+                    // Send a PCAP message
+                    interface->send_pcap_msg(0xFFFFFFFF, sfn*10 + subframe.num, &rrc_msg);
+
                     // Send channel found start and mib decoded messages
                     chan_data.freq_offset = timing_struct.freq_offset[corr_peak_idx];
                     interface->send_ctrl_channel_found_begin_msg(&chan_data, &mib, sfn, N_ant);
@@ -460,6 +464,9 @@ int32 LTE_fdd_dl_scan_state_machine::work(int32                      ninput_item
                    LIBLTE_SUCCESS == liblte_rrc_unpack_bcch_dlsch_msg(&rrc_msg,
                                                                       &bcch_dlsch_msg))
                 {
+                    // Send a PCAP message
+                    interface->send_pcap_msg(pdcch.alloc[0].rnti, sfn*10 + subframe.num, &rrc_msg);
+
                     if(1                                == bcch_dlsch_msg.N_sibs &&
                        LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1 == bcch_dlsch_msg.sibs[0].sib_type)
                     {
@@ -515,6 +522,9 @@ int32 LTE_fdd_dl_scan_state_machine::work(int32                      ninput_item
                                                                      rrc_msg.msg,
                                                                      &rrc_msg.N_bits))
                 {
+                    // Send a PCAP message
+                    interface->send_pcap_msg(pdcch.alloc[0].rnti, sfn*10 + subframe.num, &rrc_msg);
+
                     if(LIBLTE_MAC_SI_RNTI == pdcch.alloc[0].rnti &&
                        LIBLTE_SUCCESS     == liblte_rrc_unpack_bcch_dlsch_msg(&rrc_msg,
                                                                               &bcch_dlsch_msg))

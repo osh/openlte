@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2012-2013 Ben Wojtowicz
+    Copyright 2012-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -37,6 +37,7 @@
     09/16/2013    Ben Wojtowicz    Added support for changing the sample rate.
     09/28/2013    Ben Wojtowicz    Added support for setting the sample rate
                                    and output data type.
+    06/15/2014    Ben Wojtowicz    Using the latest LTE library.
 
 *******************************************************************************/
 
@@ -128,7 +129,7 @@ private:
 
     // LTE parameters
     void recreate_sched_info(void);
-    LIBLTE_MSG_STRUCT                        rrc_msg;
+    LIBLTE_BIT_MSG_STRUCT                    rrc_msg;
     LIBLTE_RRC_MIB_STRUCT                    mib;
     LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT         bcch_dlsch_msg;
     LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT  sib1;

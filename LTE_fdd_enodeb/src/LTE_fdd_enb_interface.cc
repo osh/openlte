@@ -1,3 +1,4 @@
+#line 2 "LTE_fdd_enb_interface.cc" // Make __FILE__ omit the path
 /*******************************************************************************
 
     Copyright 2013-2014 Ben Wojtowicz
@@ -30,6 +31,8 @@
                                    prints, and added uint32 variables.
     03/26/2014    Ben Wojtowicz    Added message printing.
     05/04/2014    Ben Wojtowicz    Added PCAP support.
+    06/15/2014    Ben Wojtowicz    Added  ... support for info messages and
+                                   using the latest LTE library.
 
 *******************************************************************************/
 
@@ -39,6 +42,7 @@
 
 #include "LTE_fdd_enb_interface.h"
 #include "LTE_fdd_enb_cnfg_db.h"
+#include "LTE_fdd_enb_hss.h"
 #include "LTE_fdd_enb_mme.h"
 #include "LTE_fdd_enb_rrc.h"
 #include "LTE_fdd_enb_pdcp.h"
@@ -252,16 +256,27 @@ void LTE_fdd_enb_interface::send_ctrl_msg(std::string msg)
         ctrl_socket->send(tmp_msg);
     }
 }
-void LTE_fdd_enb_interface::send_ctrl_info_msg(std::string msg)
+void LTE_fdd_enb_interface::send_ctrl_info_msg(std::string msg,
+                                               ...)
 {
-    boost::mutex::scoped_lock lock(ctrl_connect_mutex);
-    std::string               tmp_msg;
+    boost::mutex::scoped_lock  lock(ctrl_connect_mutex);
+    std::string                tmp_msg;
+    va_list                    args;
+    char                      *args_msg;
 
     if(ctrl_connected)
     {
-        tmp_msg  = "info ";
-        tmp_msg += msg;
+        tmp_msg = "info ";
+        va_start(args, msg);
+        if(-1 != vasprintf(&args_msg, msg.c_str(), args))
+        {
+            tmp_msg += args_msg;
+        }
         tmp_msg += "\n";
+
+        // Cleanup the variable argument string
+        free(args_msg);
+
         ctrl_socket->send(tmp_msg);
     }
 }
@@ -336,7 +351,7 @@ void LTE_fdd_enb_interface::send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ENUM   type,
                                            LTE_FDD_ENB_DEBUG_LEVEL_ENUM  level,
                                            std::string                   file_name,
                                            int32                         line,
-                                           LIBLTE_MSG_STRUCT            *lte_msg,
+                                           LIBLTE_BIT_MSG_STRUCT        *lte_msg,
                                            std::string                   msg,
                                            ...)
 {
@@ -389,6 +404,85 @@ void LTE_fdd_enb_interface::send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ENUM   type,
                 hex_val = 0;
             }
         }
+        if((lte_msg->N_bits % 4) != 0)
+        {
+            for(i=0; i<4-(lte_msg->N_bits % 4); i++)
+            {
+                hex_val <<= 1;
+            }
+            if(hex_val < 0xA)
+            {
+                tmp_msg += (char)(hex_val + '0');
+            }else{
+                tmp_msg += (char)((hex_val-0xA) + 'A');
+            }
+        }
+        tmp_msg += "\n";
+
+        // Cleanup the variable argument string
+        free(args_msg);
+
+        debug_socket->send(tmp_msg);
+    }
+}
+void LTE_fdd_enb_interface::send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ENUM   type,
+                                           LTE_FDD_ENB_DEBUG_LEVEL_ENUM  level,
+                                           std::string                   file_name,
+                                           int32                         line,
+                                           LIBLTE_BYTE_MSG_STRUCT       *lte_msg,
+                                           std::string                   msg,
+                                           ...)
+{
+    boost::mutex::scoped_lock  lock(debug_connect_mutex);
+    std::string                tmp_msg;
+    std::stringstream          tmp_ss;
+    va_list                    args;
+    struct timeval             time;
+    struct timezone            time_zone;
+    uint32                     i;
+    uint32                     hex_val;
+    char                      *args_msg;
+
+    if(debug_connected                 &&
+       (debug_type_mask & (1 << type)) &&
+       (debug_level_mask & (1 << level)))
+    {
+        // Format the output string
+        gettimeofday(&time, &time_zone);
+        tmp_msg  = boost::lexical_cast<std::string>(time.tv_sec) + ".";
+        tmp_ss  << std::setw(6) << std::setfill('0') << time.tv_usec;
+        tmp_msg += tmp_ss.str() + " ";
+        tmp_msg += LTE_fdd_enb_debug_type_text[type];
+        tmp_msg += " ";
+        tmp_msg += LTE_fdd_enb_debug_level_text[level];
+        tmp_msg += " ";
+        tmp_msg += file_name.c_str();
+        tmp_msg += " ";
+        tmp_msg += boost::lexical_cast<std::string>(line);
+        tmp_msg += " ";
+        va_start(args, msg);
+        if(-1 != vasprintf(&args_msg, msg.c_str(), args))
+        {
+            tmp_msg += args_msg;
+        }
+        tmp_msg += " ";
+        for(i=0; i<lte_msg->N_bytes; i++)
+        {
+            hex_val = (lte_msg->msg[i] >> 4) & 0xF;
+            if(hex_val < 0xA)
+            {
+                tmp_msg += (char)(hex_val + '0');
+            }else{
+                tmp_msg += (char)((hex_val-0xA) + 'A');
+            }
+            hex_val = lte_msg->msg[i] & 0xF;
+            if(hex_val < 0xA)
+            {
+                tmp_msg += (char)(hex_val + '0');
+            }else{
+                tmp_msg += (char)((hex_val-0xA) + 'A');
+            }
+        }
         tmp_msg += "\n";
 
         // Cleanup the variable argument string
@@ -419,8 +513,9 @@ void LTE_fdd_enb_interface::open_pcap_fd(void)
 }
 void LTE_fdd_enb_interface::send_pcap_msg(LTE_FDD_ENB_PCAP_DIRECTION_ENUM  dir,
                                           uint32                           rnti,
-                                          uint32                           fn_combo,
-                                          LIBLTE_MSG_STRUCT               *msg)
+                                          uint32                           current_tti,
+                                          uint8                           *msg,
+                                          uint32                           N_bits)
 {
     LTE_fdd_enb_cnfg_db *cnfg_db = LTE_fdd_enb_cnfg_db::get_instance();
     struct timeval       time;
@@ -475,7 +570,7 @@ void LTE_fdd_enb_interface::send_pcap_msg(LTE_FDD_ENB_PCAP_DIRECTION_ENUM  dir,
 
         // SUBFN Tag and SUBFN
         pcap_c_hdr[9] = 4;
-        tmp           = htons((uint16)(fn_combo%10));
+        tmp           = htons((uint16)(current_tti%10));
         memcpy(&pcap_c_hdr[10], &tmp, sizeof(uint16));
 
         // CRC Status Tag and CRC Status
@@ -488,10 +583,10 @@ void LTE_fdd_enb_interface::send_pcap_msg(LTE_FDD_ENB_PCAP_DIRECTION_ENUM  dir,
         // Payload
         idx           = 0;
         pcap_msg[idx] = 0;
-        for(i=0; i<msg->N_bits; i++)
+        for(i=0; i<N_bits; i++)
         {
             pcap_msg[idx] <<= 1;
-            pcap_msg[idx]  |= msg->msg[i];
+            pcap_msg[idx]  |= msg[i];
             if((i % 8) == 7)
             {
                 idx++;

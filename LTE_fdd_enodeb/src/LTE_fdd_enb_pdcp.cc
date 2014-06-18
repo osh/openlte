@@ -1,3 +1,4 @@
+#line 2 "LTE_fdd_enb_pdcp.cc" // Make __FILE__ omit the path
 /*******************************************************************************
 
     Copyright 2013-2014 Ben Wojtowicz
@@ -27,6 +28,7 @@
     11/10/2013    Ben Wojtowicz    Created file
     01/18/2014    Ben Wojtowicz    Added level to debug prints.
     05/04/2014    Ben Wojtowicz    Added communication to RLC and RRC.
+    06/15/2014    Ben Wojtowicz    Added simple header parsing.
 
 *******************************************************************************/
 
@@ -102,8 +104,8 @@ LTE_fdd_enb_pdcp::~LTE_fdd_enb_pdcp()
 void LTE_fdd_enb_pdcp::start(void)
 {
     boost::mutex::scoped_lock lock(start_mutex);
-    msgq_cb                   rlc_cb(&msgq_cb_wrapper<LTE_fdd_enb_pdcp, &LTE_fdd_enb_pdcp::handle_rlc_msg>, this);
-    msgq_cb                   rrc_cb(&msgq_cb_wrapper<LTE_fdd_enb_pdcp, &LTE_fdd_enb_pdcp::handle_rrc_msg>, this);
+    LTE_fdd_enb_msgq_cb       rlc_cb(&LTE_fdd_enb_msgq_cb_wrapper<LTE_fdd_enb_pdcp, &LTE_fdd_enb_pdcp::handle_rlc_msg>, this);
+    LTE_fdd_enb_msgq_cb       rrc_cb(&LTE_fdd_enb_msgq_cb_wrapper<LTE_fdd_enb_pdcp, &LTE_fdd_enb_pdcp::handle_rrc_msg>, this);
 
     if(!started)
     {
@@ -209,7 +211,7 @@ void LTE_fdd_enb_pdcp::handle_pdu_ready(LTE_FDD_ENB_PDCP_PDU_READY_MSG_STRUCT *p
 {
     LTE_fdd_enb_interface                *interface = LTE_fdd_enb_interface::get_instance();
     LTE_FDD_ENB_RRC_PDU_READY_MSG_STRUCT  rrc_pdu_ready;
-    LIBLTE_MSG_STRUCT                    *pdu;
+    LIBLTE_BIT_MSG_STRUCT                *pdu;
 
     if(LTE_FDD_ENB_ERROR_NONE == pdu_ready->rb->get_next_pdcp_pdu(&pdu))
     {
@@ -238,6 +240,23 @@ void LTE_fdd_enb_pdcp::handle_pdu_ready(LTE_FDD_ENB_PDCP_PDU_READY_MSG_STRUCT *p
 
             // Delete the PDU
             pdu_ready->rb->delete_next_pdcp_pdu();
+        }else if(LTE_FDD_ENB_RB_SRB1 == pdu_ready->rb->get_rb_id()){
+            // Parse the header
+            // FIXME
+            memmove(&pdu->msg[0], &pdu->msg[8], pdu->N_bits-8);
+            pdu->N_bits -= 8;
+
+            // Queue the SDU for RRC
+            pdu_ready->rb->queue_rrc_pdu(pdu);
+
+            // Signal RRC
+            rrc_pdu_ready.user = pdu_ready->user;
+            rrc_pdu_ready.rb   = pdu_ready->rb;
+            LTE_fdd_enb_msgq::send(pdcp_rrc_mq,
+                                   LTE_FDD_ENB_MESSAGE_TYPE_RRC_PDU_READY,
+                                   LTE_FDD_ENB_DEST_LAYER_RRC,
+                                   (LTE_FDD_ENB_MESSAGE_UNION *)&rrc_pdu_ready,
+                                   sizeof(LTE_FDD_ENB_RRC_PDU_READY_MSG_STRUCT));
         }else{
             interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
                                       LTE_FDD_ENB_DEBUG_LEVEL_PDCP,
@@ -258,7 +277,8 @@ void LTE_fdd_enb_pdcp::handle_sdu_ready(LTE_FDD_ENB_PDCP_SDU_READY_MSG_STRUCT *s
 {
     LTE_fdd_enb_interface                *interface = LTE_fdd_enb_interface::get_instance();
     LTE_FDD_ENB_RLC_SDU_READY_MSG_STRUCT  rlc_sdu_ready;
-    LIBLTE_MSG_STRUCT                    *sdu;
+    LIBLTE_BIT_MSG_STRUCT                *sdu;
+    uint32                                i;
 
     if(LTE_FDD_ENB_ERROR_NONE == sdu_ready->rb->get_next_pdcp_sdu(&sdu))
     {
@@ -273,6 +293,16 @@ void LTE_fdd_enb_pdcp::handle_sdu_ready(LTE_FDD_ENB_PDCP_SDU_READY_MSG_STRUCT *s
 
         if(LTE_FDD_ENB_RB_SRB0 == sdu_ready->rb->get_rb_id())
         {
+            // Make sure the SDU is byte aligned
+            if((sdu->N_bits % 8) != 0)
+            {
+                for(i=0; i<8-(sdu->N_bits % 8); i++)
+                {
+                    sdu->msg[sdu->N_bits + i] = 0;
+                }
+                sdu->N_bits += 8 - (sdu->N_bits % 8);
+            }
+
             // Queue the PDU for RLC
             sdu_ready->rb->queue_rlc_sdu(sdu);
 

@@ -27,6 +27,8 @@
     07/21/2013    Ben Wojtowicz    Created file.
     03/26/2014    Ben Wojtowicz    Added DL-SCH/UL-SCH PDU handling.
     05/04/2014    Ben Wojtowicz    Added control element handling.
+    06/15/2014    Ben Wojtowicz    Added support for padding LCIDs and breaking
+                                   out max and min buffer sizes for BSRs.
 
 *******************************************************************************/
 
@@ -76,8 +78,9 @@
 // Enums
 // Structs
 typedef struct{
-    uint8 lcg_id;
-    uint8 buffer_size;
+    uint32 max_buffer_size;
+    uint32 min_buffer_size;
+    uint8  lcg_id;
 }LIBLTE_MAC_TRUNCATED_BSR_CE_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_mac_pack_truncated_bsr_ce(LIBLTE_MAC_TRUNCATED_BSR_CE_STRUCT  *truncated_bsr,
@@ -302,6 +305,7 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_activation_deactivation_ce(uint8            
 #define LIBLTE_MAC_DLSCH_UE_CONTENTION_RESOLUTION_ID_LCID 0x1C
 #define LIBLTE_MAC_DLSCH_TA_COMMAND_LCID                  0x1D
 #define LIBLTE_MAC_DLSCH_DRX_COMMAND_LCID                 0x1E
+#define LIBLTE_MAC_DLSCH_PADDING_LCID                     0x1F
 #define LIBLTE_MAC_ULSCH_CCCH_LCID                        0x00
 #define LIBLTE_MAC_ULSCH_DCCH_LCID_BEGIN                  0x01
 #define LIBLTE_MAC_ULSCH_DCCH_LCID_END                    0x0A
@@ -311,10 +315,12 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_activation_deactivation_ce(uint8            
 #define LIBLTE_MAC_ULSCH_TRUNCATED_BSR_LCID               0x1C
 #define LIBLTE_MAC_ULSCH_SHORT_BSR_LCID                   0x1D
 #define LIBLTE_MAC_ULSCH_LONG_BSR_LCID                    0x1E
+#define LIBLTE_MAC_ULSCH_PADDING_LCID                     0x1F
 #define LIBLTE_MAC_MCH_MCCH_LCID                          0x00
 #define LIBLTE_MAC_MCH_MTCH_LCID_BEGIN                    0x01
 #define LIBLTE_MAC_MCH_MTCH_LCID_END                      0x1C
 #define LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_LCID        0x1E
+#define LIBLTE_MAC_MCH_PADDING_LCID                       0x1F
 // Enums
 typedef enum{
     LIBLTE_MAC_CHAN_TYPE_DLSCH = 0,
@@ -333,7 +339,7 @@ typedef union{
     LIBLTE_MAC_EXT_POWER_HEADROOM_CE_STRUCT          ext_power_headroom;
     LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_CE_STRUCT  mch_sched_info;
     LIBLTE_MAC_ACTIVATION_DEACTIVATION_CE_STRUCT     act_deact;
-    LIBLTE_MSG_STRUCT                                sdu;
+    LIBLTE_BIT_MSG_STRUCT                            sdu;
 }LIBLTE_MAC_SUBHEADER_PAYLOAD_UNION;
 typedef struct{
     LIBLTE_MAC_SUBHEADER_PAYLOAD_UNION payload;
@@ -346,8 +352,8 @@ typedef struct{
 }LIBLTE_MAC_PDU_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_mac_pack_mac_pdu(LIBLTE_MAC_PDU_STRUCT *mac_pdu,
-                                          LIBLTE_MSG_STRUCT     *pdu);
-LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_MSG_STRUCT     *pdu,
+                                          LIBLTE_BIT_MSG_STRUCT *pdu);
+LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_BIT_MSG_STRUCT *pdu,
                                             LIBLTE_MAC_PDU_STRUCT *mac_pdu);
 
 /*********************************************************************
@@ -427,8 +433,8 @@ typedef struct{
 }LIBLTE_MAC_RAR_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_mac_pack_random_access_response_pdu(LIBLTE_MAC_RAR_STRUCT *rar,
-                                                             LIBLTE_MSG_STRUCT     *pdu);
-LIBLTE_ERROR_ENUM liblte_mac_unpack_random_access_response_pdu(LIBLTE_MSG_STRUCT     *pdu,
+                                                             LIBLTE_BIT_MSG_STRUCT *pdu);
+LIBLTE_ERROR_ENUM liblte_mac_unpack_random_access_response_pdu(LIBLTE_BIT_MSG_STRUCT *pdu,
                                                                LIBLTE_MAC_RAR_STRUCT *rar);
 
 #endif /* __LIBLTE_MAC_H__ */

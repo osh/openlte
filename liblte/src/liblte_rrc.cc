@@ -42,6 +42,7 @@
                                    RRC Connection Reestablishment Request,
                                    and UL CCCH Messages.
     05/04/2014    Ben Wojtowicz    Added support for DL CCCH Messages.
+    06/15/2014    Ben Wojtowicz    Added support for UL DCCH Messages.
 
 *******************************************************************************/
 
@@ -65,7 +66,7 @@
                               GLOBAL VARIABLES
 *******************************************************************************/
 
-LIBLTE_MSG_STRUCT global_msg;
+LIBLTE_BIT_MSG_STRUCT global_msg;
 
 /*******************************************************************************
                               LOCAL FUNCTION PROTOTYPES
@@ -329,9 +330,8 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_dedicated_info_cdma2000_ie(uint8  **ie_ptr,
 
     Document Reference: 36.331 v10.0.0 Section 6.3.6
 *********************************************************************/
-LIBLTE_ERROR_ENUM liblte_rrc_pack_dedicated_info_nas_ie(uint8   *ded_info_nas,
-                                                        uint32   length,
-                                                        uint8  **ie_ptr)
+LIBLTE_ERROR_ENUM liblte_rrc_pack_dedicated_info_nas_ie(LIBLTE_BYTE_MSG_STRUCT  *ded_info_nas,
+                                                        uint8                  **ie_ptr)
 {
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
     uint32            i;
@@ -339,21 +339,21 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_dedicated_info_nas_ie(uint8   *ded_info_nas,
     if(ded_info_nas != NULL &&
        ie_ptr       != NULL)
     {
-        if(length < 128)
+        if(ded_info_nas->N_bytes < 128)
         {
-            rrc_value_2_bits(0,      ie_ptr, 1);
-            rrc_value_2_bits(length, ie_ptr, 7);
-        }else if(length < 16383){
-            rrc_value_2_bits(1,      ie_ptr, 1);
-            rrc_value_2_bits(0,      ie_ptr, 1);
-            rrc_value_2_bits(length, ie_ptr, 14);
+            rrc_value_2_bits(0,                     ie_ptr, 1);
+            rrc_value_2_bits(ded_info_nas->N_bytes, ie_ptr, 7);
+        }else if(ded_info_nas->N_bytes < 16383){
+            rrc_value_2_bits(1,                     ie_ptr, 1);
+            rrc_value_2_bits(0,                     ie_ptr, 1);
+            rrc_value_2_bits(ded_info_nas->N_bytes, ie_ptr, 14);
         }else{
             // FIXME: Unlikely to have more than 16K of octets
         }
 
-        for(i=0; i<length; i++)
+        for(i=0; i<ded_info_nas->N_bytes; i++)
         {
-            rrc_value_2_bits(ded_info_nas[i], ie_ptr, 8);
+            rrc_value_2_bits(ded_info_nas->msg[i], ie_ptr, 8);
         }
 
         err = LIBLTE_SUCCESS;
@@ -361,9 +361,8 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_dedicated_info_nas_ie(uint8   *ded_info_nas,
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_dedicated_info_nas_ie(uint8  **ie_ptr,
-                                                          uint8   *ded_info_nas,
-                                                          uint32  *length)
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_dedicated_info_nas_ie(uint8                  **ie_ptr,
+                                                          LIBLTE_BYTE_MSG_STRUCT  *ded_info_nas)
 {
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
     uint32            i;
@@ -373,20 +372,20 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_dedicated_info_nas_ie(uint8  **ie_ptr,
     {
         if(0 == rrc_bits_2_value(ie_ptr, 1))
         {
-            *length = rrc_bits_2_value(ie_ptr, 7);
+            ded_info_nas->N_bytes = rrc_bits_2_value(ie_ptr, 7);
         }else{
             if(0 == rrc_bits_2_value(ie_ptr, 1))
             {
-                *length = rrc_bits_2_value(ie_ptr, 14);
+                ded_info_nas->N_bytes = rrc_bits_2_value(ie_ptr, 14);
             }else{
                 // FIXME: Unlikely to have more than 16K of octets
-                *length = 0;
+                ded_info_nas->N_bytes = 0;
             }
         }
 
-        for(i=0; i<*length; i++)
+        for(i=0; i<ded_info_nas->N_bytes; i++)
         {
-            ded_info_nas[i] = rrc_bits_2_value(ie_ptr, 8);
+            ded_info_nas->msg[i] = rrc_bits_2_value(ie_ptr, 8);
         }
 
         err = LIBLTE_SUCCESS;
@@ -7787,7 +7786,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_8_ie(uint8              
     Document Reference: 36.331 v10.0.0 Section 6.2.2
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_block_type_1_msg(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *sib1,
-                                                            LIBLTE_MSG_STRUCT                       *msg)
+                                                            LIBLTE_BIT_MSG_STRUCT                   *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -7877,7 +7876,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_block_type_1_msg(LIBLTE_RRC_SYS_INFO_
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_1_msg(LIBLTE_MSG_STRUCT                       *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_1_msg(LIBLTE_BIT_MSG_STRUCT                   *msg,
                                                               LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT *sib1,
                                                               uint32                                  *N_bits_used)
 {
@@ -7995,7 +7994,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_block_type_1_msg(LIBLTE_MSG_STRUCT 
     Document Reference: 36.331 v10.0.0 Section 6.2.2
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_msg(LIBLTE_RRC_SYS_INFO_MSG_STRUCT *sibs,
-                                               LIBLTE_MSG_STRUCT              *msg)
+                                               LIBLTE_BIT_MSG_STRUCT          *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -8061,7 +8060,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_sys_info_msg(LIBLTE_RRC_SYS_INFO_MSG_STRUCT *s
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_msg(LIBLTE_MSG_STRUCT              *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_msg(LIBLTE_BIT_MSG_STRUCT          *msg,
                                                  LIBLTE_RRC_SYS_INFO_MSG_STRUCT *sibs)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -8151,7 +8150,54 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_msg(LIBLTE_MSG_STRUCT              
 
     Document Reference: 36.331 v10.0.0 Section 6.2.2 
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_security_mode_failure_msg(LIBLTE_RRC_SECURITY_MODE_FAILURE_STRUCT *security_mode_failure,
+                                                            LIBLTE_BIT_MSG_STRUCT                   *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(security_mode_failure != NULL &&
+       msg                   != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_pack_rrc_transaction_identifier_ie(security_mode_failure->rrc_transaction_id,
+                                                      &msg_ptr);
+
+        // Extension choice
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // Optional indicator
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_security_mode_failure_msg(LIBLTE_BIT_MSG_STRUCT                   *msg,
+                                                              LIBLTE_RRC_SECURITY_MODE_FAILURE_STRUCT *security_mode_failure)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg                   != NULL &&
+       security_mode_failure != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_unpack_rrc_transaction_identifier_ie(&msg_ptr,
+                                                        &security_mode_failure->rrc_transaction_id);
+
+        // Extension choice
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // Optional indicator
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     Message Name: Security Mode Complete
@@ -8161,7 +8207,54 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_msg(LIBLTE_MSG_STRUCT              
 
     Document Reference: 36.331 v10.0.0 Section 6.2.2 
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_security_mode_complete_msg(LIBLTE_RRC_SECURITY_MODE_COMPLETE_STRUCT *security_mode_complete,
+                                                             LIBLTE_BIT_MSG_STRUCT                    *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(security_mode_complete != NULL &&
+       msg                    != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_pack_rrc_transaction_identifier_ie(security_mode_complete->rrc_transaction_id,
+                                                      &msg_ptr);
+
+        // Extension choice
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // Optional indicator
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_security_mode_complete_msg(LIBLTE_BIT_MSG_STRUCT                    *msg,
+                                                               LIBLTE_RRC_SECURITY_MODE_COMPLETE_STRUCT *security_mode_complete)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg                    != NULL &&
+       security_mode_complete != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_unpack_rrc_transaction_identifier_ie(&msg_ptr,
+                                                        &security_mode_complete->rrc_transaction_id);
+
+        // Extension choice
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // Optional indicator
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     Message Name: Security Mode Command
@@ -8180,7 +8273,112 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_msg(LIBLTE_MSG_STRUCT              
 
     Document Reference: 36.331 v10.0.0 Section 6.2.2 
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_setup_complete_msg(LIBLTE_RRC_CONNECTION_SETUP_COMPLETE_STRUCT *con_setup_complete,
+                                                                    LIBLTE_BIT_MSG_STRUCT                       *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(con_setup_complete != NULL &&
+       msg                != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_pack_rrc_transaction_identifier_ie(con_setup_complete->transaction_id, &msg_ptr);
+
+        // Extension choice
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // C1 choice
+        rrc_value_2_bits(0, &msg_ptr, 2);
+
+        // Optional indicators
+        rrc_value_2_bits(con_setup_complete->registered_mme_present, &msg_ptr, 1);
+        rrc_value_2_bits(0,                                          &msg_ptr, 1);
+
+        // Selected PLMN identity
+        rrc_value_2_bits(con_setup_complete->selected_plmn_id - 1, &msg_ptr, 3);
+
+        // Registered MME
+        if(con_setup_complete->registered_mme_present)
+        {
+            // Optional indicator
+            rrc_value_2_bits(con_setup_complete->registered_mme.plmn_id_present, &msg_ptr, 1);
+
+            // PLMN identity
+            if(con_setup_complete->registered_mme.plmn_id_present)
+            {
+                liblte_rrc_pack_plmn_identity_ie(&con_setup_complete->registered_mme.plmn_id, &msg_ptr);
+            }
+
+            // MMEGI
+            rrc_value_2_bits(con_setup_complete->registered_mme.mmegi, &msg_ptr, 16);
+
+            // MMEC
+            liblte_rrc_pack_mmec_ie(con_setup_complete->registered_mme.mmec, &msg_ptr);
+        }
+
+        // Dedicated info NAS
+        liblte_rrc_pack_dedicated_info_nas_ie(&con_setup_complete->dedicated_info_nas,
+                                              &msg_ptr);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_setup_complete_msg(LIBLTE_BIT_MSG_STRUCT                       *msg,
+                                                                      LIBLTE_RRC_CONNECTION_SETUP_COMPLETE_STRUCT *con_setup_complete)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg                != NULL &&
+       con_setup_complete != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_unpack_rrc_transaction_identifier_ie(&msg_ptr, &con_setup_complete->transaction_id);
+
+        // Extension choice
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // C1 choice
+        rrc_bits_2_value(&msg_ptr, 2);
+
+        // Optional indicators
+        con_setup_complete->registered_mme_present = rrc_bits_2_value(&msg_ptr, 1);
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // Selected PLMN identity
+        con_setup_complete->selected_plmn_id = rrc_bits_2_value(&msg_ptr, 3) + 1;
+
+        // Registered MME
+        if(con_setup_complete->registered_mme_present)
+        {
+            // Optional indicator
+            con_setup_complete->registered_mme.plmn_id_present = rrc_bits_2_value(&msg_ptr, 1);
+
+            // PLMN identity
+            if(con_setup_complete->registered_mme.plmn_id_present)
+            {
+                liblte_rrc_unpack_plmn_identity_ie(&msg_ptr, &con_setup_complete->registered_mme.plmn_id);
+            }
+
+            // MMEGI
+            con_setup_complete->registered_mme.mmegi = rrc_bits_2_value(&msg_ptr, 16);
+
+            // MMEC
+            liblte_rrc_unpack_mmec_ie(&msg_ptr, &con_setup_complete->registered_mme.mmec);
+        }
+
+        // Dedicated info NAS
+        liblte_rrc_unpack_dedicated_info_nas_ie(&msg_ptr,
+                                                &con_setup_complete->dedicated_info_nas);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     Message Name: RRC Connection Setup
@@ -8190,7 +8388,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_sys_info_msg(LIBLTE_MSG_STRUCT              
     Document Reference: 36.331 v10.0.0 Section 6.2.2 
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_setup_msg(LIBLTE_RRC_CONNECTION_SETUP_STRUCT *con_setup,
-                                                           LIBLTE_MSG_STRUCT                  *msg)
+                                                           LIBLTE_BIT_MSG_STRUCT              *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -8207,7 +8405,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_setup_msg(LIBLTE_RRC_CONNECTION
         // C1 choice
         rrc_value_2_bits(0, &msg_ptr, 3);
 
-        // Optional indicators
+        // Optional indicator
         rrc_value_2_bits(0, &msg_ptr, 1);
 
         // Radio Resource Config Dedicated
@@ -8218,7 +8416,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_setup_msg(LIBLTE_RRC_CONNECTION
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_setup_msg(LIBLTE_MSG_STRUCT                  *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_setup_msg(LIBLTE_BIT_MSG_STRUCT              *msg,
                                                              LIBLTE_RRC_CONNECTION_SETUP_STRUCT *con_setup)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -8236,7 +8434,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_setup_msg(LIBLTE_MSG_STRUCT  
         // C1 choice
         rrc_bits_2_value(&msg_ptr, 3);
 
-        // Optional indicators
+        // Optional indicator
         rrc_bits_2_value(&msg_ptr, 1);
 
         // Radio Resource Config Dedicated
@@ -8257,7 +8455,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_setup_msg(LIBLTE_MSG_STRUCT  
     Document Reference: 36.331 v10.0.0 Section 6.2.2
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_request_msg(LIBLTE_RRC_CONNECTION_REQUEST_STRUCT *con_req,
-                                                             LIBLTE_MSG_STRUCT                    *msg)
+                                                             LIBLTE_BIT_MSG_STRUCT                *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -8296,7 +8494,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_request_msg(LIBLTE_RRC_CONNECTI
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_request_msg(LIBLTE_MSG_STRUCT                    *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_request_msg(LIBLTE_BIT_MSG_STRUCT                *msg,
                                                                LIBLTE_RRC_CONNECTION_REQUEST_STRUCT *con_req)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -8348,7 +8546,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_request_msg(LIBLTE_MSG_STRUCT
     Document Reference: 36.331 v10.0.0 Section 6.2.2 
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_reject_msg(LIBLTE_RRC_CONNECTION_REJECT_STRUCT *con_rej,
-                                                            LIBLTE_MSG_STRUCT                   *msg)
+                                                            LIBLTE_BIT_MSG_STRUCT               *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -8373,7 +8571,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_reject_msg(LIBLTE_RRC_CONNECTIO
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reject_msg(LIBLTE_MSG_STRUCT                   *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reject_msg(LIBLTE_BIT_MSG_STRUCT               *msg,
                                                               LIBLTE_RRC_CONNECTION_REJECT_STRUCT *con_rej)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -8409,7 +8607,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reject_msg(LIBLTE_MSG_STRUCT 
     Document Reference: 36.331 v10.0.0 Section 6.2.2
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_reestablishment_request_msg(LIBLTE_RRC_CONNECTION_REESTABLISHMENT_REQUEST_STRUCT *con_reest_req,
-                                                                             LIBLTE_MSG_STRUCT                                    *msg)
+                                                                             LIBLTE_BIT_MSG_STRUCT                                *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -8448,7 +8646,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_reestablishment_request_msg(LIB
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_request_msg(LIBLTE_MSG_STRUCT                                    *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_request_msg(LIBLTE_BIT_MSG_STRUCT                                *msg,
                                                                                LIBLTE_RRC_CONNECTION_REESTABLISHMENT_REQUEST_STRUCT *con_reest_req)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -8492,7 +8690,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_request_msg(L
     Document Reference: 36.331 v10.0.0 Section 6.2.2 
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_reestablishment_reject_msg(LIBLTE_RRC_CONNECTION_REESTABLISHMENT_REJECT_STRUCT *con_reest_rej,
-                                                                            LIBLTE_MSG_STRUCT                                   *msg)
+                                                                            LIBLTE_BIT_MSG_STRUCT                               *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -8511,7 +8709,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_reestablishment_reject_msg(LIBL
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_reject_msg(LIBLTE_MSG_STRUCT                                   *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_reject_msg(LIBLTE_BIT_MSG_STRUCT                               *msg,
                                                                               LIBLTE_RRC_CONNECTION_REESTABLISHMENT_REJECT_STRUCT *con_reest_rej)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -8540,7 +8738,54 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_reject_msg(LI
 
     Document Reference: 36.331 v10.0.0 Section 6.2.2 
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_reestablishment_complete_msg(LIBLTE_RRC_CONNECTION_REESTABLISHMENT_COMPLETE_STRUCT *con_reest_complete,
+                                                                              LIBLTE_BIT_MSG_STRUCT                                 *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(con_reest_complete != NULL &&
+       msg                != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_pack_rrc_transaction_identifier_ie(con_reest_complete->rrc_transaction_id,
+                                                      &msg_ptr);
+
+        // Extension choice
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // Optional indicator
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_complete_msg(LIBLTE_BIT_MSG_STRUCT                                 *msg,
+                                                                                LIBLTE_RRC_CONNECTION_REESTABLISHMENT_COMPLETE_STRUCT *con_reest_complete)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg                != NULL &&
+       con_reest_complete != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_unpack_rrc_transaction_identifier_ie(&msg_ptr,
+                                                        &con_reest_complete->rrc_transaction_id);
+
+        // Extension choice
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // Optional indicator
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     Message Name: RRC Connection Reestablishment
@@ -8550,7 +8795,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_reject_msg(LI
     Document Reference: 36.331 v10.0.0 Section 6.2.2 
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_reestablishment_msg(LIBLTE_RRC_CONNECTION_REESTABLISHMENT_STRUCT *con_reest,
-                                                                     LIBLTE_MSG_STRUCT                            *msg)
+                                                                     LIBLTE_BIT_MSG_STRUCT                        *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -8581,7 +8826,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_reestablishment_msg(LIBLTE_RRC_
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_msg(LIBLTE_MSG_STRUCT                            *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_msg(LIBLTE_BIT_MSG_STRUCT                        *msg,
                                                                        LIBLTE_RRC_CONNECTION_REESTABLISHMENT_STRUCT *con_reest)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -8622,7 +8867,54 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_msg(LIBLTE_MS
 
     Document Reference: 36.331 v10.0.0 Section 6.2.2 
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rrc_connection_reconfiguration_complete_msg(LIBLTE_RRC_CONNECTION_RECONFIGURATION_COMPLETE_STRUCT *con_reconfig_complete,
+                                                                              LIBLTE_BIT_MSG_STRUCT                                 *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(con_reconfig_complete != NULL &&
+       msg                   != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_pack_rrc_transaction_identifier_ie(con_reconfig_complete->rrc_transaction_id,
+                                                      &msg_ptr);
+
+        // Extension choice
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // Optional indicator
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reconfiguration_complete_msg(LIBLTE_BIT_MSG_STRUCT                                 *msg,
+                                                                                LIBLTE_RRC_CONNECTION_RECONFIGURATION_COMPLETE_STRUCT *con_reconfig_complete)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg                   != NULL &&
+       con_reconfig_complete != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_unpack_rrc_transaction_identifier_ie(&msg_ptr,
+                                                        &con_reconfig_complete->rrc_transaction_id);
+
+        // Extension choice
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // Optional indicator
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     Message Name: RRC Connection Reconfiguration
@@ -8641,7 +8933,62 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_msg(LIBLTE_MS
 
     Document Reference: 36.331 v10.0.0 Section 6.2.2 
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_rn_reconfiguration_complete_msg(LIBLTE_RRC_RN_RECONFIGURATION_COMPLETE_STRUCT *rn_reconfig_complete,
+                                                                  LIBLTE_BIT_MSG_STRUCT                         *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(rn_reconfig_complete != NULL &&
+       msg                  != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_pack_rrc_transaction_identifier_ie(rn_reconfig_complete->rrc_transaction_id,
+                                                      &msg_ptr);
+
+        // Extension choice
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // C1 choice
+        rrc_value_2_bits(0, &msg_ptr, 2);
+
+        // Optional indicators
+        rrc_value_2_bits(0, &msg_ptr, 1);
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_rn_reconfiguration_complete_msg(LIBLTE_BIT_MSG_STRUCT                         *msg,
+                                                                    LIBLTE_RRC_RN_RECONFIGURATION_COMPLETE_STRUCT *rn_reconfig_complete)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg                  != NULL &&
+       rn_reconfig_complete != NULL)
+    {
+        // RRC Transaction ID
+        liblte_rrc_unpack_rrc_transaction_identifier_ie(&msg_ptr,
+                                                        &rn_reconfig_complete->rrc_transaction_id);
+
+        // Extension choice
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // C1 choice
+        rrc_bits_2_value(&msg_ptr, 2);
+
+        // Optional indicators
+        rrc_bits_2_value(&msg_ptr, 1);
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     Message Name: RN Reconfiguration
@@ -8662,7 +9009,90 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_msg(LIBLTE_MS
 
     Document Reference: 36.331 v10.0.0 Section 6.2.2 
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_proximity_indication_msg(LIBLTE_RRC_PROXIMITY_INDICATION_STRUCT *proximity_ind,
+                                                           LIBLTE_BIT_MSG_STRUCT                  *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(proximity_ind != NULL &&
+       msg           != NULL)
+    {
+        // Extension choice
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // C1 choice
+        rrc_value_2_bits(0, &msg_ptr, 2);
+
+        // Optional indicator
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // Proximity indication type
+        rrc_value_2_bits(proximity_ind->type, &msg_ptr, 1);
+
+        // Carrier frequency type extension indicator
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // Carrier frequency choice
+        rrc_value_2_bits(proximity_ind->carrier_freq_type, &msg_ptr, 1);
+
+        // Carrier frequency
+        if(LIBLTE_RRC_PROXIMITY_INDICATION_CARRIER_FREQ_TYPE_EUTRA == proximity_ind->carrier_freq_type)
+        {
+            liblte_rrc_pack_arfcn_value_eutra_ie(proximity_ind->carrier_freq,
+                                                 &msg_ptr);
+        }else{
+            liblte_rrc_pack_arfcn_value_utra_ie(proximity_ind->carrier_freq,
+                                                &msg_ptr);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_proximity_indication_msg(LIBLTE_BIT_MSG_STRUCT                  *msg,
+                                                             LIBLTE_RRC_PROXIMITY_INDICATION_STRUCT *proximity_ind)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg           != NULL &&
+       proximity_ind != NULL)
+    {
+        // Extension choice
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // C1 choice
+        rrc_bits_2_value(&msg_ptr, 2);
+
+        // Optional indicator
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // Proximity indication type
+        proximity_ind->type = (LIBLTE_RRC_PROXIMITY_INDICATION_TYPE_ENUM)rrc_bits_2_value(&msg_ptr, 1);
+
+        // Carrier frequency type extension indicator
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // Carrier frequency type
+        proximity_ind->carrier_freq_type = (LIBLTE_RRC_PROXIMITY_INDICATION_CARRIER_FREQ_TYPE_ENUM)rrc_bits_2_value(&msg_ptr, 1);
+
+        // Carrier frequency
+        if(LIBLTE_RRC_PROXIMITY_INDICATION_CARRIER_FREQ_TYPE_EUTRA == proximity_ind->carrier_freq)
+        {
+            liblte_rrc_unpack_arfcn_value_eutra_ie(&msg_ptr,
+                                                   &proximity_ind->carrier_freq);
+        }else{
+            liblte_rrc_unpack_arfcn_value_utra_ie(&msg_ptr,
+                                                  &proximity_ind->carrier_freq);
+        }
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     Message Name: Paging
@@ -8672,7 +9102,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_rrc_connection_reestablishment_msg(LIBLTE_MS
     Document Reference: 36.331 v10.0.0 Section 6.2.2
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_paging_msg(LIBLTE_RRC_PAGING_STRUCT *page,
-                                             LIBLTE_MSG_STRUCT        *msg)
+                                             LIBLTE_BIT_MSG_STRUCT    *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -8769,7 +9199,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_paging_msg(LIBLTE_RRC_PAGING_STRUCT *page,
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_paging_msg(LIBLTE_MSG_STRUCT        *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_paging_msg(LIBLTE_BIT_MSG_STRUCT    *msg,
                                                LIBLTE_RRC_PAGING_STRUCT *page)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -8951,7 +9381,46 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_paging_msg(LIBLTE_MSG_STRUCT        *msg,
 
     Document Reference: 36.331 v10.0.0 Section 6.2.2 
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_csfb_parameters_request_cdma2000_msg(LIBLTE_RRC_CSFB_PARAMETERS_REQUEST_CDMA2000_STRUCT *csfb_params_req_cdma2000,
+                                                                       LIBLTE_BIT_MSG_STRUCT                              *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(csfb_params_req_cdma2000 != NULL &&
+       msg                      != NULL)
+    {
+        // Extension choice
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        // Optional indicator
+        rrc_value_2_bits(0, &msg_ptr, 1);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_csfb_parameters_request_cdma2000_msg(LIBLTE_BIT_MSG_STRUCT                              *msg,
+                                                                         LIBLTE_RRC_CSFB_PARAMETERS_REQUEST_CDMA2000_STRUCT *csfb_params_req_cdma2000)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+
+    if(msg                      != NULL &&
+       csfb_params_req_cdma2000 != NULL)
+    {
+        // Extension choice
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        // Optional indicator
+        rrc_bits_2_value(&msg_ptr, 1);
+
+        err = LIBLTE_SUCCESS;
+    }
+
+    return(err);
+}
 
 /*********************************************************************
     Message Name: Counter Check Response
@@ -8984,7 +9453,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_paging_msg(LIBLTE_MSG_STRUCT        *msg,
     Document Reference: 36.331 v10.0.0 Sections 6.2.1 and 6.2.2
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_bcch_bch_msg(LIBLTE_RRC_MIB_STRUCT *mib,
-                                               LIBLTE_MSG_STRUCT     *msg)
+                                               LIBLTE_BIT_MSG_STRUCT *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -9012,7 +9481,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_bcch_bch_msg(LIBLTE_RRC_MIB_STRUCT *mib,
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_bch_msg(LIBLTE_MSG_STRUCT     *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_bch_msg(LIBLTE_BIT_MSG_STRUCT *msg,
                                                  LIBLTE_RRC_MIB_STRUCT *mib)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -9046,7 +9515,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_bch_msg(LIBLTE_MSG_STRUCT     *msg,
     Document Reference: 36.331 v10.0.0 Section 6.2.1
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_bcch_dlsch_msg(LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT *bcch_dlsch_msg,
-                                                 LIBLTE_MSG_STRUCT                *msg)
+                                                 LIBLTE_BIT_MSG_STRUCT            *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -9092,7 +9561,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_bcch_dlsch_msg(LIBLTE_RRC_BCCH_DLSCH_MSG_STRUC
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_dlsch_msg(LIBLTE_MSG_STRUCT                *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_dlsch_msg(LIBLTE_BIT_MSG_STRUCT            *msg,
                                                    LIBLTE_RRC_BCCH_DLSCH_MSG_STRUCT *bcch_dlsch_msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -9143,7 +9612,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_bcch_dlsch_msg(LIBLTE_MSG_STRUCT            
     Document Reference: 36.331 v10.0.0 Section 6.2.1
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_pcch_msg(LIBLTE_RRC_PCCH_MSG_STRUCT *pcch_msg,
-                                           LIBLTE_MSG_STRUCT          *msg)
+                                           LIBLTE_BIT_MSG_STRUCT      *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -9169,7 +9638,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_pcch_msg(LIBLTE_RRC_PCCH_MSG_STRUCT *pcch_msg,
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_pcch_msg(LIBLTE_MSG_STRUCT          *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_pcch_msg(LIBLTE_BIT_MSG_STRUCT      *msg,
                                              LIBLTE_RRC_PCCH_MSG_STRUCT *pcch_msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -9203,7 +9672,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_pcch_msg(LIBLTE_MSG_STRUCT          *msg,
     Document Reference: 36.331 v10.0.0 Section 6.2.1
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_dl_ccch_msg(LIBLTE_RRC_DL_CCCH_MSG_STRUCT *dl_ccch_msg,
-                                              LIBLTE_MSG_STRUCT             *msg)
+                                              LIBLTE_BIT_MSG_STRUCT         *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -9245,7 +9714,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_dl_ccch_msg(LIBLTE_RRC_DL_CCCH_MSG_STRUCT *dl_
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_dl_ccch_msg(LIBLTE_MSG_STRUCT             *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_dl_ccch_msg(LIBLTE_BIT_MSG_STRUCT         *msg,
                                                 LIBLTE_RRC_DL_CCCH_MSG_STRUCT *dl_ccch_msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -9304,7 +9773,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_dl_ccch_msg(LIBLTE_MSG_STRUCT             *m
     Document Reference: 36.331 v10.0.0 Section 6.2.1
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_rrc_pack_ul_ccch_msg(LIBLTE_RRC_UL_CCCH_MSG_STRUCT *ul_ccch_msg,
-                                              LIBLTE_MSG_STRUCT             *msg)
+                                              LIBLTE_BIT_MSG_STRUCT         *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -9340,7 +9809,7 @@ LIBLTE_ERROR_ENUM liblte_rrc_pack_ul_ccch_msg(LIBLTE_RRC_UL_CCCH_MSG_STRUCT *ul_
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_rrc_unpack_ul_ccch_msg(LIBLTE_MSG_STRUCT             *msg,
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_ul_ccch_msg(LIBLTE_BIT_MSG_STRUCT         *msg,
                                                 LIBLTE_RRC_UL_CCCH_MSG_STRUCT *ul_ccch_msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -9381,7 +9850,159 @@ LIBLTE_ERROR_ENUM liblte_rrc_unpack_ul_ccch_msg(LIBLTE_MSG_STRUCT             *m
 
     Document Reference: 36.331 v10.0.0 Section 6.2.1
 *********************************************************************/
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rrc_pack_ul_dcch_msg(LIBLTE_RRC_UL_DCCH_MSG_STRUCT *ul_dcch_msg,
+                                              LIBLTE_BIT_MSG_STRUCT         *msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint8              ext     = false;
+
+    if(ul_dcch_msg != NULL &&
+       msg         != NULL)
+    {
+        // Extension indicator
+        rrc_value_2_bits(ext, &msg_ptr, 1);
+
+        // Message type choice
+        rrc_value_2_bits(ul_dcch_msg->msg_type, &msg_ptr, 4);
+
+        // Message
+        if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_CSFB_PARAMS_REQ_CDMA2000 == ul_dcch_msg->msg_type)
+        {
+            err = liblte_rrc_pack_csfb_parameters_request_cdma2000_msg((LIBLTE_RRC_CSFB_PARAMETERS_REQUEST_CDMA2000_STRUCT *)&ul_dcch_msg->msg,
+                                                                       &global_msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_MEASUREMENT_REPORT == ul_dcch_msg->msg_type){
+            printf("NOT HANDLING MEASUREMENT REPORT\n");
+//            err = liblte_rrc_pack_measurement_report_msg((LIBLTE_RRC_MEASUREMENT_REPORT_STRUCT *)&ul_dcch_msg->msg,
+//                                                         &global_msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_RRC_CON_RECONFIG_COMPLETE == ul_dcch_msg->msg_type){
+            err = liblte_rrc_pack_rrc_connection_reconfiguration_complete_msg((LIBLTE_RRC_CONNECTION_RECONFIGURATION_COMPLETE_STRUCT *)&ul_dcch_msg->msg,
+                                                                              &global_msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_RRC_CON_REEST_COMPLETE == ul_dcch_msg->msg_type){
+            err = liblte_rrc_pack_rrc_connection_reestablishment_complete_msg((LIBLTE_RRC_CONNECTION_REESTABLISHMENT_COMPLETE_STRUCT *)&ul_dcch_msg->msg,
+                                                                              &global_msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_RRC_CON_SETUP_COMPLETE == ul_dcch_msg->msg_type){
+            err = liblte_rrc_pack_rrc_connection_setup_complete_msg((LIBLTE_RRC_CONNECTION_SETUP_COMPLETE_STRUCT *)&ul_dcch_msg->msg,
+                                                                    &global_msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_SECURITY_MODE_COMPLETE == ul_dcch_msg->msg_type){
+            err = liblte_rrc_pack_security_mode_complete_msg((LIBLTE_RRC_SECURITY_MODE_COMPLETE_STRUCT *)&ul_dcch_msg->msg,
+                                                             &global_msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_SECURITY_MODE_FAILURE == ul_dcch_msg->msg_type){
+            err = liblte_rrc_pack_security_mode_failure_msg((LIBLTE_RRC_SECURITY_MODE_FAILURE_STRUCT *)&ul_dcch_msg->msg,
+                                                            &global_msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_UE_CAPABILITY_INFO == ul_dcch_msg->msg_type){
+            printf("NOT HANDLING UE CAPABILITY INFO\n");
+//            err = liblte_rrc_pack_ue_capability_information_msg((LIBLTE_RRC_UE_CAPABILITY_INFORMATION_STRUCT *)&ul_dcch_msg->msg,
+//                                                                &global_msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_UL_HANDOVER_PREP_TRANSFER == ul_dcch_msg->msg_type){
+            printf("NOT HANDLING UL HANDOVER PREPARATION TRANSFER\n");
+//            err = liblte_rrc_pack_ul_handover_preparation_transfer_msg((LIBLTE_RRC_UL_HANDOVER_PREPARATION_TRANSFER_STRUCT *)&ul_dcch_msg->msg,
+//                                                                       &global_msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_UL_INFO_TRANSFER == ul_dcch_msg->msg_type){
+            printf("NOT HANDLING UL INFORMATION TRANSFER\n");
+//            err = liblte_rrc_pack_ul_information_transfer_msg((LIBLTE_RRC_UL_INFORMATION_TRANSFER_STRUCT *)&ul_dcch_msg->msg,
+//                                                              &global_msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_COUNTER_CHECK_RESP == ul_dcch_msg->msg_type){
+            printf("NOT HANDLING COUNTER CHECK RESPONSE\n");
+//            err = liblte_rrc_pack_counter_check_response_msg((LIBLTE_RRC_COUNTER_CHECK_RESPONSE_STRUCT *)&ul_dcch_msg->msg,
+//                                                             &global_msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_UE_INFO_RESP == ul_dcch_msg->msg_type){
+            printf("NOT HANDLING UE INFORMATION RESPONSE\n");
+//            err = liblte_rrc_pack_ue_information_response_msg((LIBLTE_RRC_UE_INFORMATION_RESPONSE_STRUCT *)&ul_dcch_msg->msg,
+//                                                              &global_msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_PROXIMITY_IND == ul_dcch_msg->msg_type){
+            err = liblte_rrc_pack_proximity_indication_msg((LIBLTE_RRC_PROXIMITY_INDICATION_STRUCT *)&ul_dcch_msg->msg,
+                                                           &global_msg);
+        }else{ // LIBLTE_RRC_UL_DCCH_MSG_TYPE_RN_RECONFIG_COMPLETE == ul_dcch_msg->msg_type
+            err = liblte_rrc_pack_rn_reconfiguration_complete_msg((LIBLTE_RRC_RN_RECONFIGURATION_COMPLETE_STRUCT *)&ul_dcch_msg->msg,
+                                                                  &global_msg);
+        }
+
+        if(global_msg.N_bits <= (LIBLTE_MAX_MSG_SIZE - 5))
+        {
+            memcpy(msg_ptr, global_msg.msg, global_msg.N_bits);
+            msg->N_bits = global_msg.N_bits + 5;
+        }else{
+            msg->N_bits = 0;
+            err         = LIBLTE_ERROR_INVALID_INPUTS;
+        }
+    }
+
+    return(err);
+}
+LIBLTE_ERROR_ENUM liblte_rrc_unpack_ul_dcch_msg(LIBLTE_BIT_MSG_STRUCT         *msg,
+                                                LIBLTE_RRC_UL_DCCH_MSG_STRUCT *ul_dcch_msg)
+{
+    LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             *msg_ptr = msg->msg;
+    uint8              ext;
+
+    if(msg         != NULL &&
+       ul_dcch_msg != NULL)
+    {
+        // Extension indicator
+        ext = rrc_bits_2_value(&msg_ptr, 1);
+
+        // Message type choice
+        ul_dcch_msg->msg_type = (LIBLTE_RRC_UL_DCCH_MSG_TYPE_ENUM)rrc_bits_2_value(&msg_ptr, 4);
+
+        // Message
+        memcpy(global_msg.msg, msg_ptr, msg->N_bits-(msg_ptr-msg->msg));
+        global_msg.N_bits = msg->N_bits-(msg_ptr-msg->msg);
+        if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_CSFB_PARAMS_REQ_CDMA2000 == ul_dcch_msg->msg_type)
+        {
+            err = liblte_rrc_unpack_csfb_parameters_request_cdma2000_msg(&global_msg,
+                                                                         (LIBLTE_RRC_CSFB_PARAMETERS_REQUEST_CDMA2000_STRUCT *)&ul_dcch_msg->msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_MEASUREMENT_REPORT == ul_dcch_msg->msg_type){
+            printf("NOT HANDLING MEASUREMENT REPORT\n");
+//            err = liblte_rrc_unpack_measurement_report_msg(&global_msg,
+//                                                           (LIBLTE_RRC_MEASUREMENT_REPORT_STRUCT *)&ul_dcch_msg->msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_RRC_CON_RECONFIG_COMPLETE == ul_dcch_msg->msg_type){
+            err = liblte_rrc_unpack_rrc_connection_reconfiguration_complete_msg(&global_msg,
+                                                                                (LIBLTE_RRC_CONNECTION_RECONFIGURATION_COMPLETE_STRUCT *)&ul_dcch_msg->msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_RRC_CON_REEST_COMPLETE == ul_dcch_msg->msg_type){
+            err = liblte_rrc_unpack_rrc_connection_reestablishment_complete_msg(&global_msg,
+                                                                                (LIBLTE_RRC_CONNECTION_REESTABLISHMENT_COMPLETE_STRUCT *)&ul_dcch_msg->msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_RRC_CON_SETUP_COMPLETE == ul_dcch_msg->msg_type){
+            err = liblte_rrc_unpack_rrc_connection_setup_complete_msg(&global_msg,
+                                                                      (LIBLTE_RRC_CONNECTION_SETUP_COMPLETE_STRUCT *)&ul_dcch_msg->msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_SECURITY_MODE_COMPLETE == ul_dcch_msg->msg_type){
+            err = liblte_rrc_unpack_security_mode_complete_msg(&global_msg,
+                                                               (LIBLTE_RRC_SECURITY_MODE_COMPLETE_STRUCT *)&ul_dcch_msg->msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_SECURITY_MODE_FAILURE == ul_dcch_msg->msg_type){
+            err = liblte_rrc_unpack_security_mode_failure_msg(&global_msg,
+                                                              (LIBLTE_RRC_SECURITY_MODE_FAILURE_STRUCT *)&ul_dcch_msg->msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_UE_CAPABILITY_INFO == ul_dcch_msg->msg_type){
+            printf("NOT HANDLING UE CAPABILITY INFO\n");
+//            err = liblte_rrc_unpack_ue_capability_information_msg(&global_msg,
+//                                                                  (LIBLTE_RRC_UE_CAPABILITY_INFORMATION_STRUCT *)&ul_dcch_msg->msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_UL_HANDOVER_PREP_TRANSFER == ul_dcch_msg->msg_type){
+            printf("NOT HANDLING UL HANDOVER PREPARATION TRANSFER\n");
+//            err = liblte_rrc_unpack_ul_handover_preparation_transfer_msg(&global_msg,
+//                                                                         (LIBLTE_RRC_UL_HANDOVER_PREPARATION_TRANSFER_STRUCT *)&ul_dcch_msg->msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_UL_INFO_TRANSFER == ul_dcch_msg->msg_type){
+            printf("NOT HANDLING UL INFORMATION TRANSFER\n");
+//            err = liblte_rrc_unpack_ul_information_transfer_msg(&global_msg,
+//                                                                (LIBLTE_RRC_UL_INFORMATION_TRANSFER_STRUCT *)&ul_dcch_msg->msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_COUNTER_CHECK_RESP == ul_dcch_msg->msg_type){
+            printf("NOT HANDLING COUNTER CHECK RESPONSE\n");
+//            err = liblte_rrc_unpack_counter_check_response_msg(&global_msg,
+//                                                               (LIBLTE_RRC_COUNTER_CHECK_RESPONSE_STRUCT *)&ul_dcch_msg->msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_UE_INFO_RESP == ul_dcch_msg->msg_type){
+            printf("NOT HANDLING UE INFORMATION RESPONSE\n");
+//            err = liblte_rrc_unpack_ue_information_response_msg(&global_msg,
+//                                                                (LIBLTE_RRC_UE_INFORMATION_RESPONSE_STRUCT *)&ul_dcch_msg->msg);
+        }else if(LIBLTE_RRC_UL_DCCH_MSG_TYPE_PROXIMITY_IND == ul_dcch_msg->msg_type){
+            err = liblte_rrc_unpack_proximity_indication_msg(&global_msg,
+                                                             (LIBLTE_RRC_PROXIMITY_INDICATION_STRUCT *)&ul_dcch_msg->msg);
+        }else{ // LIBLTE_RRC_UL_DCCH_MSG_TYPE_RN_RECONFIG_COMPLETE == ul_dcch_msg->msg_type
+            err = liblte_rrc_unpack_rn_reconfiguration_complete_msg(&global_msg,
+                                                                    (LIBLTE_RRC_RN_RECONFIGURATION_COMPLETE_STRUCT *)&ul_dcch_msg->msg);
+        }
+    }
+
+    return(err);
+}
 
 /*******************************************************************************
                               LOCAL FUNCTIONS

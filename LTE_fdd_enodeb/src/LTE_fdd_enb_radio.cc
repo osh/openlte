@@ -1,3 +1,4 @@
+#line 2 "LTE_fdd_enb_radio.cc" // Make __FILE__ omit the path
 /*******************************************************************************
 
     Copyright 2013-2014 Ben Wojtowicz
@@ -33,6 +34,7 @@
                                    no_rf case.
     04/12/2014    Ben Wojtowicz    Pulled in a patch from Max Suraev for more
                                    descriptive start failures.
+    06/15/2014    Ben Wojtowicz    Changed fn_combo to current_tti.
 
 *******************************************************************************/
 
@@ -435,20 +437,20 @@ void LTE_fdd_enb_radio::send(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *buf)
         metadata.start_of_burst = false;
         metadata.end_of_burst   = false;
 
-        // Check fn_combo
-        if(buf->fn_combo != next_tx_fn_combo)
+        // Check current_tti
+        if(buf->current_tti != next_tx_current_tti)
         {
-            if(buf->fn_combo > next_tx_fn_combo)
+            if(buf->current_tti > next_tx_current_tti)
             {
-                N_skipped_subfrs = buf->fn_combo - next_tx_fn_combo;
+                N_skipped_subfrs = buf->current_tti - next_tx_current_tti;
             }else{
-                N_skipped_subfrs = (buf->fn_combo + LTE_FDD_ENB_FN_COMBO_MAX + 1) - next_tx_fn_combo;
+                N_skipped_subfrs = (buf->current_tti + LTE_FDD_ENB_CURRENT_TTI_MAX + 1) - next_tx_current_tti;
             }
 
-            next_tx_ts       += uhd::time_spec_t::from_ticks(N_skipped_subfrs*N_samps_per_subfr, fs);
-            next_tx_fn_combo  = (buf->fn_combo + 1) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
+            next_tx_ts          += uhd::time_spec_t::from_ticks(N_skipped_subfrs*N_samps_per_subfr, fs);
+            next_tx_current_tti  = (buf->current_tti + 1) % (LTE_FDD_ENB_CURRENT_TTI_MAX + 1);
         }else{
-            next_tx_fn_combo = (next_tx_fn_combo + 1) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
+            next_tx_current_tti = (next_tx_current_tti + 1) % (LTE_FDD_ENB_CURRENT_TTI_MAX + 1);
         }
 
         while(samps_to_send > N_tx_samps)
@@ -470,7 +472,7 @@ void LTE_fdd_enb_radio::send(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *buf)
                                       __LINE__,
                                       "Sending subfr %lld %u",
                                       metadata.time_spec.to_ticks(fs),
-                                      buf->fn_combo);
+                                      buf->current_tti);
 #endif
             tx_stream->send(tx_buf, N_tx_samps, metadata);
             idx           += N_tx_samps;
@@ -496,7 +498,7 @@ void LTE_fdd_enb_radio::send(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *buf)
                                       __LINE__,
                                       "Sending subfr %lld %u",
                                       metadata.time_spec.to_ticks(fs),
-                                      buf->fn_combo);
+                                      buf->current_tti);
 #endif
             tx_stream->send(tx_buf, samps_to_send, metadata);
             next_tx_ts += uhd::time_spec_t::from_ticks(samps_to_send, fs);
@@ -526,17 +528,17 @@ void* LTE_fdd_enb_radio::radio_thread_func(void *inputs)
     int64                            metadata_ts_ticks;
     uint32                           i;
     uint32                           N_subfrs_dropped;
-    uint32                           recv_size   = radio->N_rx_samps;
-    uint32                           samp_rate   = radio->fs;
-    uint32                           buf_idx     = 0;
-    uint32                           recv_idx    = 0;
-    uint32                           samp_idx    = 0;
-    uint32                           num_samps   = 0;
-    uint32                           radio_idx   = radio->get_selected_radio_idx();
-    uint16                           rx_fn_combo = (LTE_FDD_ENB_FN_COMBO_MAX + 1) - 2;
-    bool                             not_done    = true;
-    bool                             init_needed = true;
-    bool                             rx_synced   = false;
+    uint32                           recv_size      = radio->N_rx_samps;
+    uint32                           samp_rate      = radio->fs;
+    uint32                           buf_idx        = 0;
+    uint32                           recv_idx       = 0;
+    uint32                           samp_idx       = 0;
+    uint32                           num_samps      = 0;
+    uint32                           radio_idx      = radio->get_selected_radio_idx();
+    uint16                           rx_current_tti = (LTE_FDD_ENB_CURRENT_TTI_MAX + 1) - 2;
+    bool                             not_done       = true;
+    bool                             init_needed    = true;
+    bool                             rx_synced      = false;
 
     // Set highest priority
     priority.sched_priority = 99;
@@ -557,10 +559,10 @@ void* LTE_fdd_enb_radio::radio_thread_func(void *inputs)
                 phy->radio_interface(&tx_radio_buf[1]);
                 init_needed = false;
             }
-            rx_radio_buf[buf_idx].fn_combo = rx_fn_combo;
+            rx_radio_buf[buf_idx].current_tti = rx_current_tti;
             phy->radio_interface(&tx_radio_buf[buf_idx], &rx_radio_buf[buf_idx]);
-            buf_idx     = (buf_idx + 1) % 2;
-            rx_fn_combo = (rx_fn_combo + 1) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
+            buf_idx        = (buf_idx + 1) % 2;
+            rx_current_tti = (rx_current_tti + 1) % (LTE_FDD_ENB_CURRENT_TTI_MAX + 1);
             nanosleep(&sleep_time, &time_rem);
         }else{
             if(init_needed)
@@ -654,8 +656,8 @@ void* LTE_fdd_enb_radio::radio_thread_func(void *inputs)
                         // Determine how many subframes we are going to drop
                         N_subfrs_dropped = ((metadata_ts_ticks - next_rx_ts_ticks)/radio->N_samps_per_subfr) + 2;
 
-                        // Jump the rx_fn_combo
-                        rx_fn_combo = (rx_fn_combo + N_subfrs_dropped) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
+                        // Jump the rx_current_tti
+                        rx_current_tti = (rx_current_tti + N_subfrs_dropped) % (LTE_FDD_ENB_CURRENT_TTI_MAX + 1);
 
                         // Align the samples coming from the radio
                         rx_synced         = false;
@@ -695,12 +697,12 @@ void* LTE_fdd_enb_radio::radio_thread_func(void *inputs)
                                                               __LINE__,
                                                               "Receiving subfr %lld %u",
                                                               next_rx_subfr_ts.to_ticks(samp_rate),
-                                                              rx_fn_combo);
+                                                              rx_current_tti);
 #endif
-                                    rx_radio_buf[buf_idx].fn_combo = rx_fn_combo;
+                                    rx_radio_buf[buf_idx].current_tti = rx_current_tti;
                                     phy->radio_interface(&tx_radio_buf[buf_idx], &rx_radio_buf[buf_idx]);
                                     buf_idx           = (buf_idx + 1) % 2;
-                                    rx_fn_combo       = (rx_fn_combo + 1) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
+                                    rx_current_tti    = (rx_current_tti + 1) % (LTE_FDD_ENB_CURRENT_TTI_MAX + 1);
                                     samp_idx          = 0;
                                     next_rx_subfr_ts += uhd::time_spec_t::from_ticks(radio->N_samps_per_subfr, samp_rate);
                                 }
@@ -719,12 +721,12 @@ void* LTE_fdd_enb_radio::radio_thread_func(void *inputs)
                                                           __LINE__,
                                                           "Receiving subfr %lld %u",
                                                           next_rx_subfr_ts.to_ticks(samp_rate),
-                                                          rx_fn_combo);
+                                                          rx_current_tti);
 #endif
-                                rx_radio_buf[buf_idx].fn_combo = rx_fn_combo;
+                                rx_radio_buf[buf_idx].current_tti = rx_current_tti;
                                 phy->radio_interface(&tx_radio_buf[buf_idx], &rx_radio_buf[buf_idx]);
                                 buf_idx           = (buf_idx + 1) % 2;
-                                rx_fn_combo       = (rx_fn_combo + 1) % (LTE_FDD_ENB_FN_COMBO_MAX + 1);
+                                rx_current_tti    = (rx_current_tti + 1) % (LTE_FDD_ENB_CURRENT_TTI_MAX + 1);
                                 num_samps        -= (radio->N_samps_per_subfr - samp_idx);
                                 recv_idx          = (radio->N_samps_per_subfr - samp_idx);
                                 samp_idx          = 0;

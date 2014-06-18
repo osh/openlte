@@ -9,6 +9,7 @@ add_executable(LTE_fdd_enodeb
   src/LTE_fdd_enb_interface.cc
   src/LTE_fdd_enb_cnfg_db.cc
   src/LTE_fdd_enb_msgq.cc
+  src/LTE_fdd_enb_hss.cc
   src/LTE_fdd_enb_user.cc
   src/LTE_fdd_enb_user_mgr.cc
   src/LTE_fdd_enb_rb.cc

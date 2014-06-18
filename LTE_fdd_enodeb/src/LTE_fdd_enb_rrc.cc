@@ -1,3 +1,4 @@
+#line 2 "LTE_fdd_enb_rrc.cc" // Make __FILE__ omit the path
 /*******************************************************************************
 
     Copyright 2013-2014 Ben Wojtowicz
@@ -28,6 +29,8 @@
     01/18/2014    Ben Wojtowicz    Added level to debug prints.
     05/04/2014    Ben Wojtowicz    Added PDCP communication and UL CCCH state
                                    machine.
+    06/15/2014    Ben Wojtowicz    Added UL DCCH message handling and MME NAS
+                                   message handling.
 
 *******************************************************************************/
 
@@ -103,8 +106,8 @@ LTE_fdd_enb_rrc::~LTE_fdd_enb_rrc()
 void LTE_fdd_enb_rrc::start(void)
 {
     boost::mutex::scoped_lock lock(start_mutex);
-    msgq_cb                   pdcp_cb(&msgq_cb_wrapper<LTE_fdd_enb_rrc, &LTE_fdd_enb_rrc::handle_pdcp_msg>, this);
-    msgq_cb                   mme_cb(&msgq_cb_wrapper<LTE_fdd_enb_rrc, &LTE_fdd_enb_rrc::handle_mme_msg>, this);
+    LTE_fdd_enb_msgq_cb       pdcp_cb(&LTE_fdd_enb_msgq_cb_wrapper<LTE_fdd_enb_rrc, &LTE_fdd_enb_rrc::handle_pdcp_msg>, this);
+    LTE_fdd_enb_msgq_cb       mme_cb(&LTE_fdd_enb_msgq_cb_wrapper<LTE_fdd_enb_rrc, &LTE_fdd_enb_rrc::handle_mme_msg>, this);
 
     if(!started)
     {
@@ -169,13 +172,22 @@ void LTE_fdd_enb_rrc::handle_mme_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
     if(LTE_FDD_ENB_DEST_LAYER_RRC == msg->dest_layer ||
        LTE_FDD_ENB_DEST_LAYER_ANY == msg->dest_layer)
     {
-        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
-                                  LTE_FDD_ENB_DEBUG_LEVEL_RRC,
-                                  __FILE__,
-                                  __LINE__,
-                                  "Received MME message %s",
-                                  LTE_fdd_enb_message_type_text[msg->type]);
-        delete msg;
+        switch(msg->type)
+        {
+        case LTE_FDD_ENB_MESSAGE_TYPE_RRC_NAS_MSG_READY:
+            handle_nas_msg(&msg->msg.rrc_nas_msg_ready);
+            delete msg;
+            break;
+        default:
+            interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                      LTE_FDD_ENB_DEBUG_LEVEL_RRC,
+                                      __FILE__,
+                                      __LINE__,
+                                      "Received invalid MME message %s",
+                                      LTE_fdd_enb_message_type_text[msg->type]);
+            delete msg;
+            break;
+        }
     }else{
         // Forward message to PDCP
         rrc_pdcp_mq->send(&msg, sizeof(msg), 0);
@@ -200,7 +212,7 @@ void LTE_fdd_enb_rrc::update_sys_info(void)
 void LTE_fdd_enb_rrc::handle_pdu_ready(LTE_FDD_ENB_RRC_PDU_READY_MSG_STRUCT *pdu_ready)
 {
     LTE_fdd_enb_interface *interface = LTE_fdd_enb_interface::get_instance();
-    LIBLTE_MSG_STRUCT     *pdu;
+    LIBLTE_BIT_MSG_STRUCT *pdu;
 
     if(LTE_FDD_ENB_ERROR_NONE == pdu_ready->rb->get_next_rrc_pdu(&pdu))
     {
@@ -217,7 +229,11 @@ void LTE_fdd_enb_rrc::handle_pdu_ready(LTE_FDD_ENB_RRC_PDU_READY_MSG_STRUCT *pdu
         switch(pdu_ready->rb->get_rb_id())
         {
         case LTE_FDD_ENB_RB_SRB0:
-            ul_ccch_message_sm(pdu, pdu_ready->user, pdu_ready->rb);
+            ccch_sm(pdu, pdu_ready->user, pdu_ready->rb);
+            break;
+        case LTE_FDD_ENB_RB_SRB1:
+        case LTE_FDD_ENB_RB_SRB2:
+            dcch_sm(pdu, pdu_ready->user, pdu_ready->rb);
             break;
         default:
             interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
@@ -245,15 +261,20 @@ void LTE_fdd_enb_rrc::handle_pdu_ready(LTE_FDD_ENB_RRC_PDU_READY_MSG_STRUCT *pdu
 /******************************/
 /*    MME Message Handlers    */
 /******************************/
+void LTE_fdd_enb_rrc::handle_nas_msg(LTE_FDD_ENB_RRC_NAS_MSG_READY_MSG_STRUCT *nas_msg)
+{
+    // FIXME
+}
 
 /************************/
 /*    State Machines    */
 /************************/
-void LTE_fdd_enb_rrc::ul_ccch_message_sm(LIBLTE_MSG_STRUCT *msg,
-                                         LTE_fdd_enb_user  *user,
-                                         LTE_fdd_enb_rb    *rb)
+void LTE_fdd_enb_rrc::ccch_sm(LIBLTE_BIT_MSG_STRUCT *msg,
+                              LTE_fdd_enb_user      *user,
+                              LTE_fdd_enb_rb        *rb)
 {
     LTE_fdd_enb_interface *interface = LTE_fdd_enb_interface::get_instance();
+    LTE_fdd_enb_rb        *srb1      = NULL;
 
     // Parse the message
     parse_ul_ccch_message(msg, user, rb);
@@ -264,8 +285,22 @@ void LTE_fdd_enb_rrc::ul_ccch_message_sm(LIBLTE_MSG_STRUCT *msg,
         switch(rb->get_rrc_state())
         {
         case LTE_FDD_ENB_RRC_STATE_IDLE:
-            send_rrc_con_setup(user, rb);
-            rb->set_rrc_state(LTE_FDD_ENB_RRC_STATE_RRC_CON_SETUP_SENT, user->get_c_rnti());
+            if(LTE_FDD_ENB_ERROR_NONE == user->setup_srb1(&srb1))
+            {
+                rb->set_rrc_state(LTE_FDD_ENB_RRC_STATE_SRB1_SETUP);
+                send_rrc_con_setup(user, rb);
+
+                // Setup uplink scheduling
+                srb1->set_rrc_procedure(LTE_FDD_ENB_RRC_PROC_RRC_CON_REQ);
+                srb1->set_rrc_state(LTE_FDD_ENB_RRC_STATE_WAIT_FOR_CON_SETUP_COMPLETE);
+                srb1->set_qos(LTE_FDD_ENB_QOS_SIGNALLING);
+            }else{
+                interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                          LTE_FDD_ENB_DEBUG_LEVEL_RRC,
+                                          __FILE__,
+                                          __LINE__,
+                                          "UL-CCCH-Message can't setup srb1");
+            }
             break;
         default:
             interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
@@ -277,12 +312,49 @@ void LTE_fdd_enb_rrc::ul_ccch_message_sm(LIBLTE_MSG_STRUCT *msg,
             break;
         }
         break;
+    case LTE_FDD_ENB_RRC_PROC_RRC_CON_REEST_REQ:
+        // FIXME: Not handling RRC Connection Reestablishment Request
     default:
         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
                                   LTE_FDD_ENB_DEBUG_LEVEL_RRC,
                                   __FILE__,
                                   __LINE__,
-                                  "UL-CCCH-Message state machine invalid procedure %s",
+                                  "CCCH state machine invalid procedure %s",
+                                  LTE_fdd_enb_rrc_proc_text[rb->get_rrc_procedure()]);
+        break;
+    }
+}
+void LTE_fdd_enb_rrc::dcch_sm(LIBLTE_BIT_MSG_STRUCT *msg,
+                              LTE_fdd_enb_user      *user,
+                              LTE_fdd_enb_rb        *rb)
+{
+    LTE_fdd_enb_interface *interface = LTE_fdd_enb_interface::get_instance();
+
+    switch(rb->get_rrc_procedure())
+    {
+    case LTE_FDD_ENB_RRC_PROC_RRC_CON_REQ:
+        switch(rb->get_rrc_state())
+        {
+        case LTE_FDD_ENB_RRC_STATE_WAIT_FOR_CON_SETUP_COMPLETE:
+            // Parse the message
+            parse_ul_dcch_message(msg, user, rb);
+            break;
+        default:
+            interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                      LTE_FDD_ENB_DEBUG_LEVEL_RRC,
+                                      __FILE__,
+                                      __LINE__,
+                                      "UL-DCCH-Message RRC CON REQ state machine invalid state %s",
+                                      LTE_fdd_enb_rrc_state_text[rb->get_rrc_state()]);
+            break;
+        }
+        break;
+    default:
+        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_RRC,
+                                  __FILE__,
+                                  __LINE__,
+                                  "DCCH state machine invalid procedure %s",
                                   LTE_fdd_enb_rrc_proc_text[rb->get_rrc_procedure()]);
         break;
     }
@@ -291,9 +363,9 @@ void LTE_fdd_enb_rrc::ul_ccch_message_sm(LIBLTE_MSG_STRUCT *msg,
 /*************************/
 /*    Message Parsers    */
 /*************************/
-void LTE_fdd_enb_rrc::parse_ul_ccch_message(LIBLTE_MSG_STRUCT *msg,
-                                            LTE_fdd_enb_user  *user,
-                                            LTE_fdd_enb_rb    *rb)
+void LTE_fdd_enb_rrc::parse_ul_ccch_message(LIBLTE_BIT_MSG_STRUCT *msg,
+                                            LTE_fdd_enb_user      *user,
+                                            LTE_fdd_enb_rb        *rb)
 {
     LTE_fdd_enb_interface *interface = LTE_fdd_enb_interface::get_instance();
 
@@ -305,14 +377,15 @@ void LTE_fdd_enb_rrc::parse_ul_ccch_message(LIBLTE_MSG_STRUCT *msg,
                               LTE_FDD_ENB_DEBUG_LEVEL_RRC,
                               __FILE__,
                               __LINE__,
-                              "Received %s for RNTI=%u",
+                              "Received %s for RNTI=%u, RB=%s",
                               liblte_rrc_ul_ccch_msg_type_text[rb->ul_ccch_msg.msg_type],
-                              user->get_c_rnti());
+                              user->get_c_rnti(),
+                              LTE_fdd_enb_rb_text[rb->get_rb_id()]);
 
     switch(rb->ul_ccch_msg.msg_type)
     {
     case LIBLTE_RRC_UL_CCCH_MSG_TYPE_RRC_CON_REQ:
-        rb->set_rrc_procedure(LTE_FDD_ENB_RRC_PROC_RRC_CON_REQ, user->get_c_rnti());
+        rb->set_rrc_procedure(LTE_FDD_ENB_RRC_PROC_RRC_CON_REQ);
         break;
     case LIBLTE_RRC_UL_CCCH_MSG_TYPE_RRC_CON_REEST_REQ:
         interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
@@ -333,6 +406,54 @@ void LTE_fdd_enb_rrc::parse_ul_ccch_message(LIBLTE_MSG_STRUCT *msg,
         break;
     }
 }
+void LTE_fdd_enb_rrc::parse_ul_dcch_message(LIBLTE_BIT_MSG_STRUCT *msg,
+                                            LTE_fdd_enb_user      *user,
+                                            LTE_fdd_enb_rb        *rb)
+{
+    LTE_fdd_enb_interface                    *interface = LTE_fdd_enb_interface::get_instance();
+    LTE_FDD_ENB_MME_NAS_MSG_READY_MSG_STRUCT  nas_msg_ready;
+
+    // Parse the message
+    liblte_rrc_unpack_ul_dcch_msg(msg,
+                                  &rb->ul_dcch_msg);
+
+    interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_INFO,
+                              LTE_FDD_ENB_DEBUG_LEVEL_RRC,
+                              __FILE__,
+                              __LINE__,
+                              "Received %s for RNTI=%u, RB=%s",
+                              liblte_rrc_ul_dcch_msg_type_text[rb->ul_dcch_msg.msg_type],
+                              user->get_c_rnti(),
+                              LTE_fdd_enb_rb_text[rb->get_rb_id()]);
+
+    switch(rb->ul_dcch_msg.msg_type)
+    {
+    case LIBLTE_RRC_UL_DCCH_MSG_TYPE_RRC_CON_SETUP_COMPLETE:
+        rb->set_rrc_state(LTE_FDD_ENB_RRC_STATE_RRC_CONNECTED);
+
+        // Queue the NAS message for MME
+        rb->queue_mme_nas_msg(&rb->ul_dcch_msg.msg.rrc_con_setup_complete.dedicated_info_nas);
+
+        // Signal MME
+        nas_msg_ready.user = user;
+        nas_msg_ready.rb   = rb;
+        LTE_fdd_enb_msgq::send(rrc_mme_mq,
+                               LTE_FDD_ENB_MESSAGE_TYPE_MME_NAS_MSG_READY,
+                               LTE_FDD_ENB_DEST_LAYER_MME,
+                               (LTE_FDD_ENB_MESSAGE_UNION *)&nas_msg_ready,
+                               sizeof(LTE_FDD_ENB_MME_NAS_MSG_READY_MSG_STRUCT));
+        break;
+    default:
+        interface->send_debug_msg(LTE_FDD_ENB_DEBUG_TYPE_ERROR,
+                                  LTE_FDD_ENB_DEBUG_LEVEL_RRC,
+                                  __FILE__,
+                                  __LINE__,
+                                  msg,
+                                  "UL-DCCH-Message received with invalid msg_type=%s",
+                                  liblte_rrc_ul_dcch_msg_type_text[rb->ul_dcch_msg.msg_type]);
+        break;
+    }
+}
 
 /*************************/
 /*    Message Senders    */
@@ -343,7 +464,7 @@ void LTE_fdd_enb_rrc::send_rrc_con_setup(LTE_fdd_enb_user *user,
     LTE_fdd_enb_interface                 *interface = LTE_fdd_enb_interface::get_instance();
     LTE_FDD_ENB_PDCP_SDU_READY_MSG_STRUCT  pdcp_sdu_ready;
     LIBLTE_RRC_CONNECTION_SETUP_STRUCT    *rrc_con_setup;
-    LIBLTE_MSG_STRUCT                      msg;
+    LIBLTE_BIT_MSG_STRUCT                  msg;
 
     // RRC Connection Setup
     rb->dl_ccch_msg.msg_type                                                                  = LIBLTE_RRC_DL_CCCH_MSG_TYPE_RRC_CON_SETUP;
@@ -380,9 +501,6 @@ void LTE_fdd_enb_rrc::send_rrc_con_setup(LTE_fdd_enb_user *user,
                               "Sending RRC Connection Setup for RNTI=%u, RB=%s",
                               user->get_c_rnti(),
                               LTE_fdd_enb_rb_text[rb->get_rb_id()]);
-
-    // Setup SRB1
-    user->setup_srb1();
 
     // Queue the PDU for PDCP
     rb->queue_pdcp_sdu(&msg);

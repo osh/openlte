@@ -103,3 +103,10 @@ v00.13.00     Added MAC control element handling, PHICH support, TPC support, an
               RRC DL CCCH message support to the LTE library, added PCAP support,
               UL and DL CCCH MAC support, communication up to RRC, UL CCCH RRC
               support, radio bearer, timer, and timer manager support to the eNodeB.
+v00.14.00     Split LIBLTE_MSG_STRUCT into bit and byte messages, fixed a bug when
+              adding more than 1 CCE to PDCCH, added MME, RLC, MAC padding LCID,
+              TPC for DCI 0, RRC UL DCCH message processing, and DCI 0 pack support
+              to the LTE library, added PCAP support to LTE_fdd_dl_scan, added HSS,
+              QoS, uplink scheduling, RRC and MME NAS message handling, and RLC AM
+              processing support, omitting the path from __FILE__, and deleteing
+              users on C-RNTI expiration in LTE_fdd_enodeb.

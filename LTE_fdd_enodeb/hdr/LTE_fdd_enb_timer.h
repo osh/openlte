@@ -25,6 +25,8 @@
     Revision History
     ----------    -------------    --------------------------------------------
     05/04/2014    Ben Wojtowicz    Created file
+    06/15/2014    Ben Wojtowicz    Added millisecond resolution and seperated
+                                   the callback calling functionality.
 
 *******************************************************************************/
 
@@ -57,19 +59,19 @@
 *******************************************************************************/
 
 // Timer callback
-class timer_cb
+class LTE_fdd_enb_timer_cb
 {
 public:
     typedef void (*FuncType)(void*, uint32);
-    timer_cb();
-    timer_cb(FuncType f, void* o);
+    LTE_fdd_enb_timer_cb();
+    LTE_fdd_enb_timer_cb(FuncType f, void* o);
     void operator()(uint32 id);
 private:
     FuncType  func;
     void     *obj;
 };
 template<class class_type, void (class_type::*Func)(uint32)>
-    void timer_cb_wrapper(void *o, uint32 id)
+    void LTE_fdd_enb_timer_cb_wrapper(void *o, uint32 id)
 {
     return (static_cast<class_type*>(o)->*Func)(id);
 }
@@ -78,19 +80,20 @@ class LTE_fdd_enb_timer
 {
 public:
     // Constructor/Destructor
-    LTE_fdd_enb_timer(uint32 seconds, uint32 _id, timer_cb _cb);
+    LTE_fdd_enb_timer(uint32 m_seconds, uint32 _id, LTE_fdd_enb_timer_cb _cb);
     ~LTE_fdd_enb_timer();
 
     // External interface
     void increment(void);
     bool expired(void);
+    void call_callback(void);
 
 private:
     // Identity
-    timer_cb cb;
-    uint32   id;
-    uint32   expiry_seconds;
-    uint32   current_seconds;
+    LTE_fdd_enb_timer_cb cb;
+    uint32               id;
+    uint32               expiry_m_seconds;
+    uint32               current_m_seconds;
 };
 
 #endif /* __LTE_FDD_ENB_TIMER_H__ */

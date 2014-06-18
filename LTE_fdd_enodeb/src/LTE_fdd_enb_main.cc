@@ -1,6 +1,7 @@
+#line 2 "LTE_fdd_enb_main.cc" // Make __FILE__ omit the path
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +26,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     11/09/2013    Ben Wojtowicz    Created file
+    06/15/2014    Ben Wojtowicz    Omitting path from __FILE__.
 
 *******************************************************************************/
 

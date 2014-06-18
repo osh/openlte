@@ -1,3 +1,4 @@
+#line 2 "LTE_fdd_enb_msgq.cc" // Make __FILE__ omit the path
 /*******************************************************************************
 
     Copyright 2013-2014 Ben Wojtowicz
@@ -26,7 +27,8 @@
     ----------    -------------    --------------------------------------------
     11/10/2013    Ben Wojtowicz    Created file
     11/23/2013    Ben Wojtowicz    Fixed a bug with receive size.
-    01/18/2013    Ben Wojtowicz    Added ability to set priorities.
+    01/18/2014    Ben Wojtowicz    Added ability to set priorities.
+    06/15/2014    Ben Wojtowicz    Omitting path from __FILE__.
 
 *******************************************************************************/
 
@@ -59,15 +61,15 @@
 /******************/
 /*    Callback    */
 /******************/
-msgq_cb::msgq_cb()
+LTE_fdd_enb_msgq_cb::LTE_fdd_enb_msgq_cb()
 {
 }
-msgq_cb::msgq_cb(FuncType f, void* o)
+LTE_fdd_enb_msgq_cb::LTE_fdd_enb_msgq_cb(FuncType f, void* o)
 {
     func = f;
     obj  = o;
 }
-void msgq_cb::operator()(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
+void LTE_fdd_enb_msgq_cb::operator()(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
 {
     return (*func)(obj, msg);
 }
@@ -75,17 +77,17 @@ void msgq_cb::operator()(LTE_FDD_ENB_MESSAGE_STRUCT *msg)
 /********************************/
 /*    Constructor/Destructor    */
 /********************************/
-LTE_fdd_enb_msgq::LTE_fdd_enb_msgq(std::string _msgq_name,
-                                   msgq_cb     cb)
+LTE_fdd_enb_msgq::LTE_fdd_enb_msgq(std::string         _msgq_name,
+                                   LTE_fdd_enb_msgq_cb cb)
 {
     msgq_name = _msgq_name;
     callback  = cb;
     prio      = 0;
     pthread_create(&rx_thread, NULL, &receive_thread, this);
 }
-LTE_fdd_enb_msgq::LTE_fdd_enb_msgq(std::string _msgq_name,
-                                   msgq_cb     cb,
-                                   uint32      _prio)
+LTE_fdd_enb_msgq::LTE_fdd_enb_msgq(std::string         _msgq_name,
+                                   LTE_fdd_enb_msgq_cb cb,
+                                   uint32              _prio)
 {
     msgq_name = _msgq_name;
     callback  = cb;

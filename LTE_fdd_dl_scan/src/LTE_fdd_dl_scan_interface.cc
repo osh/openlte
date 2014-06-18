@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -26,6 +26,7 @@
     ----------    -------------    --------------------------------------------
     02/26/2013    Ben Wojtowicz    Created file
     07/21/2013    Ben Wojtowicz    Added support for decoding SIBs.
+    06/15/2014    Ben Wojtowicz    Added PCAP support.
 
 *******************************************************************************/
 
@@ -41,6 +42,7 @@
 #include <limits.h>
 #include <stdarg.h>
 #include <boost/lexical_cast.hpp>
+#include <arpa/inet.h>
 
 /*******************************************************************************
                               DEFINES
@@ -49,6 +51,7 @@
 #define BAND_PARAM           "band"
 #define DL_EARFCN_LIST_PARAM "dl_earfcn_list"
 #define REPEAT_PARAM         "repeat"
+#define ENABLE_PCAP_PARAM    "enable_pcap"
 
 /*******************************************************************************
                               TYPEDEFS
@@ -111,11 +114,16 @@ LTE_fdd_dl_scan_interface::LTE_fdd_dl_scan_interface()
     }
     current_dl_earfcn = dl_earfcn_list[dl_earfcn_list_idx];
     repeat            = true;
+    enable_pcap       = false;
     shutdown          = false;
+
+    open_pcap_fd();
 }
 LTE_fdd_dl_scan_interface::~LTE_fdd_dl_scan_interface()
 {
     stop_ctrl_port();
+
+    fclose(pcap_fd);
 }
 
 // Communication
@@ -1319,6 +1327,106 @@ void LTE_fdd_dl_scan_interface::send_ctrl_status_msg(LTE_FDD_DL_SCAN_STATUS_ENUM
         ctrl_socket->send(tmp_msg);
     }
 }
+void LTE_fdd_dl_scan_interface::open_pcap_fd(void)
+{
+    uint32 magic_number  = 0xa1b2c3d4;
+    uint32 timezone      = 0;
+    uint32 sigfigs       = 0;
+    uint32 snap_len      = (LIBLTE_MAX_MSG_SIZE/4);
+    uint32 dlt           = 147;
+    uint16 major_version = 2;
+    uint16 minor_version = 4;
+
+    pcap_fd = fopen("/tmp/LTE_fdd_dl_scan.pcap", "w");
+
+    fwrite(&magic_number,  sizeof(magic_number),  1, pcap_fd);
+    fwrite(&major_version, sizeof(major_version), 1, pcap_fd);
+    fwrite(&minor_version, sizeof(minor_version), 1, pcap_fd);
+    fwrite(&timezone,      sizeof(timezone),      1, pcap_fd);
+    fwrite(&sigfigs,       sizeof(sigfigs),       1, pcap_fd);
+    fwrite(&snap_len,      sizeof(snap_len),      1, pcap_fd);
+    fwrite(&dlt,           sizeof(dlt),           1, pcap_fd);
+}
+void LTE_fdd_dl_scan_interface::send_pcap_msg(uint32                 rnti,
+                                              uint32                 current_tti,
+                                              LIBLTE_BIT_MSG_STRUCT *msg)
+{
+    struct timeval  time;
+    struct timezone time_zone;
+    uint32          i;
+    uint32          idx;
+    uint32          length;
+    uint16          tmp;
+    uint8           pcap_c_hdr[15];
+    uint8           pcap_msg[LIBLTE_MAX_MSG_SIZE/8];
+
+    if(enable_pcap)
+    {
+        // Get approximate time stamp
+        gettimeofday(&time, &time_zone);
+
+        // Radio Type
+        pcap_c_hdr[0] = 1;
+
+        // Direction
+        pcap_c_hdr[1] = 1; // DL only for now
+
+        // RNTI Type
+        if(0xFFFFFFFF == rnti)
+        {
+            pcap_c_hdr[2] = 0;
+        }else{
+            pcap_c_hdr[2] = 4;
+        }
+
+        // RNTI Tag and RNTI
+        pcap_c_hdr[3] = 2;
+        tmp           = htons((uint16)rnti);
+        memcpy(&pcap_c_hdr[4], &tmp, sizeof(uint16));
+
+        // UEID Tag and UEID
+        pcap_c_hdr[6] = 3;
+        pcap_c_hdr[7] = 0;
+        pcap_c_hdr[8] = 0;
+
+        // SUBFN Tag and SUBFN
+        pcap_c_hdr[9] = 4;
+        tmp           = htons((uint16)(current_tti%10));
+        memcpy(&pcap_c_hdr[10], &tmp, sizeof(uint16));
+
+        // CRC Status Tag and CRC Status
+        pcap_c_hdr[12] = 7;
+        pcap_c_hdr[13] = 1;
+
+        // Payload Tag
+        pcap_c_hdr[14] = 1;
+
+        // Payload
+        idx           = 0;
+        pcap_msg[idx] = 0;
+        for(i=0; i<msg->N_bits; i++)
+        {
+            pcap_msg[idx] <<= 1;
+            pcap_msg[idx]  |= msg->msg[i];
+            if((i % 8) == 7)
+            {
+                idx++;
+                pcap_msg[idx] = 0;
+            }
+        }
+
+        // Total Length
+        length = 15 + idx;
+
+        // Write Data
+        fwrite(&time.tv_sec,  sizeof(uint32), 1,   pcap_fd);
+        fwrite(&time.tv_usec, sizeof(uint32), 1,   pcap_fd);
+        fwrite(&length,       sizeof(uint32), 1,   pcap_fd);
+        fwrite(&length,       sizeof(uint32), 1,   pcap_fd);
+        fwrite(pcap_c_hdr,    sizeof(uint8),  15,  pcap_fd);
+        fwrite(pcap_msg,      sizeof(uint8),  idx, pcap_fd);
+    }
+}
 void LTE_fdd_dl_scan_interface::handle_ctrl_msg(std::string msg)
 {
     LTE_fdd_dl_scan_interface *interface = LTE_fdd_dl_scan_interface::get_instance();
@@ -1374,6 +1482,8 @@ void LTE_fdd_dl_scan_interface::handle_read(std::string msg)
         read_dl_earfcn_list();
     }else if(std::string::npos != msg.find(REPEAT_PARAM)){
         read_repeat();
+    }else if(std::string::npos != msg.find(ENABLE_PCAP_PARAM)){
+        read_enable_pcap();
     }else{
         send_ctrl_status_msg(LTE_FDD_DL_SCAN_STATUS_FAIL, "Invalid read");
     }
@@ -1387,6 +1497,8 @@ void LTE_fdd_dl_scan_interface::handle_write(std::string msg)
         write_dl_earfcn_list(msg.substr(msg.find(DL_EARFCN_LIST_PARAM)+sizeof(DL_EARFCN_LIST_PARAM), std::string::npos).c_str());
     }else if(std::string::npos != msg.find(REPEAT_PARAM)){
         write_repeat(msg.substr(msg.find(REPEAT_PARAM)+sizeof(REPEAT_PARAM), std::string::npos).c_str());
+    }else if(std::string::npos != msg.find(ENABLE_PCAP_PARAM)){
+        write_enable_pcap(msg.substr(msg.find(ENABLE_PCAP_PARAM)+sizeof(ENABLE_PCAP_PARAM), std::string::npos).c_str());
     }else{
         send_ctrl_status_msg(LTE_FDD_DL_SCAN_STATUS_FAIL, "Invalid write");
     }
@@ -1612,6 +1724,28 @@ void LTE_fdd_dl_scan_interface::write_repeat(std::string repeat_str)
         send_ctrl_status_msg(LTE_FDD_DL_SCAN_STATUS_OK, "");
     }else{
         send_ctrl_status_msg(LTE_FDD_DL_SCAN_STATUS_FAIL, "Invalid Repeat");
+    }
+}
+void LTE_fdd_dl_scan_interface::read_enable_pcap(void)
+{
+    if(true == enable_pcap)
+    {
+        send_ctrl_status_msg(LTE_FDD_DL_SCAN_STATUS_OK, "on");
+    }else{
+        send_ctrl_status_msg(LTE_FDD_DL_SCAN_STATUS_OK, "off");
+    }
+}
+void LTE_fdd_dl_scan_interface::write_enable_pcap(std::string enable_pcap_str)
+{
+    if(enable_pcap_str == "on")
+    {
+        enable_pcap = true;
+        send_ctrl_status_msg(LTE_FDD_DL_SCAN_STATUS_OK, "");
+    }else if(enable_pcap_str == "off"){
+        enable_pcap = false;
+        send_ctrl_status_msg(LTE_FDD_DL_SCAN_STATUS_OK, "");
+    }else{
+        send_ctrl_status_msg(LTE_FDD_DL_SCAN_STATUS_FAIL, "Invalid enable_pcap");
     }
 }
 

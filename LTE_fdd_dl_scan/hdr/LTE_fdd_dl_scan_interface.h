@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -26,6 +26,7 @@
     ----------    -------------    --------------------------------------------
     02/26/2013    Ben Wojtowicz    Created file
     07/21/2013    Ben Wojtowicz    Added support for decoding SIBs.
+    06/15/2014    Ben Wojtowicz    Added PCAP support.
 
 *******************************************************************************/
 
@@ -96,11 +97,14 @@ public:
     void send_ctrl_channel_found_end_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data);
     void send_ctrl_channel_not_found_msg(void);
     void send_ctrl_status_msg(LTE_FDD_DL_SCAN_STATUS_ENUM status, std::string msg);
+    void open_pcap_fd(void);
+    void send_pcap_msg(uint32 rnti, uint32 current_tti, LIBLTE_BIT_MSG_STRUCT *msg);
     static void handle_ctrl_msg(std::string msg);
     static void handle_ctrl_connect(void);
     static void handle_ctrl_disconnect(void);
     static void handle_ctrl_error(LIBTOOLS_SOCKET_WRAP_ERROR_ENUM err);
     boost::mutex          ctrl_mutex;
+    FILE                 *pcap_fd;
     libtools_socket_wrap *ctrl_socket;
     int16                 ctrl_port;
     static bool           ctrl_connected;
@@ -131,6 +135,8 @@ private:
     void write_dl_earfcn_list(std::string dl_earfcn_list_str);
     void read_repeat(void);
     void write_repeat(std::string repeat_str);
+    void read_enable_pcap(void);
+    void write_enable_pcap(std::string enable_pcap_str);
 
     // Variables
     boost::mutex               dl_earfcn_list_mutex;
@@ -140,6 +146,7 @@ private:
     uint16                     dl_earfcn_list_size;
     uint16                     dl_earfcn_list_idx;
     bool                       repeat;
+    bool                       enable_pcap;
     bool                       shutdown;
 };
 

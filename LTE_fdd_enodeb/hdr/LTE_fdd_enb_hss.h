@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2014 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -17,27 +17,27 @@
 
 *******************************************************************************
 
-    File: LTE_fdd_enb_c_rnti_mgr.h
+    File: LTE_fdd_enb_hss.h
 
     Description: Contains all the definitions for the LTE FDD eNodeB
-                 C-RNTI manager.
+                 home subscriber server.
 
     Revision History
     ----------    -------------    --------------------------------------------
-    11/09/2013    Ben Wojtowicz    Created file
+    06/15/2014    Ben Wojtowicz    Created file
 
 *******************************************************************************/
 
-#ifndef __LTE_FDD_ENB_C_RNTI_MGR_H__
-#define __LTE_FDD_ENB_C_RNTI_MGR_H__
+#ifndef __LTE_FDD_ENB_HSS_H__
+#define __LTE_FDD_ENB_HSS_H__
 
 /*******************************************************************************
                               INCLUDES
 *******************************************************************************/
 
+#include "LTE_fdd_enb_interface.h"
 #include "LTE_fdd_enb_user.h"
-#include "typedefs.h"
-#include <boost/thread/mutex.hpp>
+#include <list>
 
 /*******************************************************************************
                               DEFINES
@@ -58,27 +58,28 @@
                               CLASS DECLARATIONS
 *******************************************************************************/
 
-class LTE_fdd_enb_c_rnti_mgr
+class LTE_fdd_enb_hss
 {
 public:
     // Singleton
-    static LTE_fdd_enb_c_rnti_mgr* get_instance(void);
+    static LTE_fdd_enb_hss* get_instance(void);
     static void cleanup(void);
 
     // External interface
-    void add_c_rnti(uint16 c_rnti, LTE_fdd_enb_user *user);
-    void update_c_rnti_user(uint16 c_rnti, LTE_fdd_enb_user *user);
-    void del_c_rnti(uint16 c_rnti);
+    LTE_FDD_ENB_ERROR_ENUM add_user(std::string imsi);
+    LTE_FDD_ENB_ERROR_ENUM find_user(std::string imsi, LTE_fdd_enb_user **user);
+    LTE_FDD_ENB_ERROR_ENUM del_user(std::string imsi);
+    std::string print_all_users(void);
 
 private:
     // Singleton
-    static LTE_fdd_enb_c_rnti_mgr *instance;
-    LTE_fdd_enb_c_rnti_mgr();
-    ~LTE_fdd_enb_c_rnti_mgr();
+    static LTE_fdd_enb_hss *instance;
+    LTE_fdd_enb_hss();
+    ~LTE_fdd_enb_hss();
 
-    // User map
-    std::map<uint16, LTE_fdd_enb_user*> c_rnti_map;
-    boost::mutex                        c_rnti_mutex;
+    // Allowed users
+    boost::mutex                  user_mutex;
+    std::list<LTE_fdd_enb_user *> user_list;
 };
 
-#endif /* __LTE_FDD_ENB_C_RNTI_MGR_H__ */
+#endif /* __LTE_FDD_ENB_HSS_H__ */

@@ -93,6 +93,8 @@
     05/04/2014    Ben Wojtowicz    Added PHICH support, C-RNTI support for
                                    DCIs, and seperated PHICH and PCFICH from
                                    PDCCH encode/decode.
+    06/15/2014    Ben Wojtowicz    Added DCI 0 packing and proper support for
+                                   transmission of more than one CCE in PDCCH.
 
 *******************************************************************************/
 
@@ -1918,8 +1920,8 @@ void dci_channel_encode(LIBLTE_PHY_STRUCT *phy_struct,
                         uint32             N_in_bits,
                         uint16             rnti,
                         uint8              ue_ant,
-                        uint8             *out_bits,
-                        uint32            *N_out_bits);
+                        uint32             N_out_bits,
+                        uint8             *out_bits);
 
 /*********************************************************************
     Name: dci_channel_decode
@@ -1944,6 +1946,52 @@ LIBLTE_ERROR_ENUM dci_channel_decode(LIBLTE_PHY_STRUCT *phy_struct,
                                      uint16            *rnti_found);
 
 /*********************************************************************
+    Name: dci_0_pack
+
+    Description: Packs all of the fields into the Downlink Control
+                 Information format 0
+
+    Document Reference: 3GPP TS 36.212 v10.1.0 section 5.3.3.1.1
+                        3GPP TS 36.213 v10.3.0 section 8.1.1
+                        3GPP TS 36.213 v10.3.0 section 8.6
+
+    Notes: Currently only handles non-hopping single-cluster
+           assignments
+*********************************************************************/
+// Defines
+#define DCI_0_1A_FLAG_0          0
+#define DCI_0_1A_FLAG_1A         1
+#define DCI_VRB_TYPE_LOCALIZED   0
+#define DCI_VRB_TYPE_DISTRIBUTED 1
+// Enums
+// Structs
+// Functions
+void dci_0_pack(LIBLTE_PHY_ALLOCATION_STRUCT    *alloc,
+                LIBLTE_PHY_DCI_CA_PRESENCE_ENUM  ca_presence,
+                uint32                           N_rb_ul,
+                uint8                            N_ant,
+                uint8                           *out_bits,
+                uint32                          *N_out_bits);
+
+/*********************************************************************
+    Name: dci_0_unpack
+
+    Description: Unpacks all of the fields from the Downlink Control
+                 Information format 0
+
+    Document Reference: 3GPP TS 36.212 v10.1.0 section 5.3.3.1.1
+                        3GPP TS 36.213 v10.3.0 section 8.1.1
+                        3GPP TS 36.213 v10.3.0 section 8.6
+
+    Notes: N/A
+*********************************************************************/
+// Defines
+// Enums
+// Structs
+// Functions
+// FIXME
+
+/*********************************************************************
     Name: dci_1a_pack
 
     Description: Packs all of the fields into the Downlink Control
@@ -1953,14 +2001,9 @@ LIBLTE_ERROR_ENUM dci_channel_decode(LIBLTE_PHY_STRUCT *phy_struct,
                         3GPP TS 36.213 v10.3.0 section 7.1.6.3
                         3GPP TS 36.213 v10.3.0 section 7.1.7
 
-    Notes: Currently only handles SI-RNTI or P-RNTI, and localized
-           virtual resource blocks
+    Notes: Currently only handles localized virtual resource blocks
 *********************************************************************/
 // Defines
-#define DCI_0_1A_FLAG_0          0
-#define DCI_0_1A_FLAG_1A         1
-#define DCI_VRB_TYPE_LOCALIZED   0
-#define DCI_VRB_TYPE_DISTRIBUTED 1
 // Enums
 // Structs
 // Functions
@@ -1981,8 +2024,8 @@ void dci_1a_pack(LIBLTE_PHY_ALLOCATION_STRUCT    *alloc,
                         3GPP TS 36.213 v10.3.0 section 7.1.6.3
                         3GPP TS 36.213 v10.3.0 section 7.1.7
 
-    Notes: Currently only handles SI-RNTI or P-RNTI, and localized
-           virtual resource blocks
+    Notes: Currently only handles SI-RNTI, P-RNTI, or RA-RNTI and
+           localized virtual resource blocks
 *********************************************************************/
 // Defines
 // Enums
@@ -2104,6 +2147,9 @@ float get_soft_decision(float rx_re,
                         float rx_im,
                         float exp_re,
                         float exp_im,
+                        float max_dist);
+float get_soft_decision(float rx,
+                        float exp,
                         float max_dist);
 
 /*********************************************************************
@@ -2814,7 +2860,6 @@ LIBLTE_ERROR_ENUM liblte_phy_pusch_channel_decode(LIBLTE_PHY_STRUCT            *
                   subframe->num,
                   phy_struct->pusch_c_est_re,
                   phy_struct->pusch_c_est_im);
-
         pre_decoder_and_matched_filter_ul(phy_struct->pusch_z_est_re,
                                           phy_struct->pusch_z_est_im,
                                           phy_struct->pusch_c_est_re,
@@ -3207,115 +3252,118 @@ LIBLTE_ERROR_ENUM liblte_phy_pdsch_channel_encode(LIBLTE_PHY_STRUCT          *ph
 
         for(alloc_idx=0; alloc_idx<pdcch->N_alloc; alloc_idx++)
         {
-            // Determine the number of bits available for transmission
-            N_bits_tot = 0;
-            for(i=0; i<pdcch->alloc[alloc_idx].N_prb; i++)
+            if(pdcch->alloc[alloc_idx].chan_type == LIBLTE_PHY_CHAN_TYPE_DLSCH)
             {
-                N_bits_tot += get_num_bits_in_prb(subframe->num,
-                                                  pdcch->N_symbs,
-                                                  pdcch->alloc[alloc_idx].prb[0][i],
-                                                  phy_struct->N_rb_dl,
-                                                  N_ant,
-                                                  pdcch->alloc[alloc_idx].mod_type);
-            }
-            // Encode the PDSCH
-            dlsch_channel_encode(phy_struct,
-                                 pdcch->alloc[alloc_idx].msg.msg,
-                                 pdcch->alloc[alloc_idx].msg.N_bits,
-                                 pdcch->alloc[alloc_idx].tbs,
-                                 pdcch->alloc[alloc_idx].tx_mode,
-                                 pdcch->alloc[alloc_idx].rv_idx,
-                                 N_bits_tot,
-                                 2,
-                                 2,
-                                 8,
-                                 250368,
-                                 phy_struct->pdsch_encode_bits,
-                                 &N_bits);
-            // FIXME: Only handling 1 codeword
-            c_init = (pdcch->alloc[alloc_idx].rnti << 14) | (0 << 13) | (subframe->num << 9) | N_id_cell;
-            generate_prs_c(c_init, N_bits, phy_struct->pdsch_c);
-            for(i=0; i<N_bits; i++)
-            {
-                phy_struct->pdsch_scramb_bits[i] = phy_struct->pdsch_encode_bits[i] ^ phy_struct->pdsch_c[i];
-            }
-            modulation_mapper(phy_struct->pdsch_scramb_bits,
-                              N_bits,
-                              pdcch->alloc[alloc_idx].mod_type,
-                              phy_struct->pdsch_d_re,
-                              phy_struct->pdsch_d_im,
-                              &M_symb);
-            layer_mapper_dl(phy_struct->pdsch_d_re,
-                            phy_struct->pdsch_d_im,
-                            M_symb,
-                            N_ant,
-                            1,
-                            pdcch->alloc[alloc_idx].pre_coder_type,
-                            phy_struct->pdsch_x_re,
-                            phy_struct->pdsch_x_im,
-                            &M_layer_symb);
-            pre_coder_dl(phy_struct->pdsch_x_re,
-                         phy_struct->pdsch_x_im,
-                         M_layer_symb,
-                         N_ant,
-                         pdcch->alloc[alloc_idx].pre_coder_type,
-                         phy_struct->pdsch_y_re[0],
-                         phy_struct->pdsch_y_im[0],
-                         5000,
-                         &M_ap_symb);
-
-            // Map the symbols to resource elements 3GPP TS 36.211 v10.1.0 section 6.3.5
-            for(p=0; p<N_ant; p++)
-            {
-                idx = 0;
-                for(L=pdcch->N_symbs; L<14; L++)
+                // Determine the number of bits available for transmission
+                N_bits_tot = 0;
+                for(i=0; i<pdcch->alloc[alloc_idx].N_prb; i++)
                 {
-                    for(prb_idx=0; prb_idx<pdcch->alloc[alloc_idx].N_prb; prb_idx++)
+                    N_bits_tot += get_num_bits_in_prb(subframe->num,
+                                                      pdcch->N_symbs,
+                                                      pdcch->alloc[alloc_idx].prb[0][i],
+                                                      phy_struct->N_rb_dl,
+                                                      N_ant,
+                                                      pdcch->alloc[alloc_idx].mod_type);
+                }
+                // Encode the PDSCH
+                dlsch_channel_encode(phy_struct,
+                                     pdcch->alloc[alloc_idx].msg.msg,
+                                     pdcch->alloc[alloc_idx].msg.N_bits,
+                                     pdcch->alloc[alloc_idx].tbs,
+                                     pdcch->alloc[alloc_idx].tx_mode,
+                                     pdcch->alloc[alloc_idx].rv_idx,
+                                     N_bits_tot,
+                                     2,
+                                     2,
+                                     8,
+                                     250368,
+                                     phy_struct->pdsch_encode_bits,
+                                     &N_bits);
+                // FIXME: Only handling 1 codeword
+                c_init = (pdcch->alloc[alloc_idx].rnti << 14) | (0 << 13) | (subframe->num << 9) | N_id_cell;
+                generate_prs_c(c_init, N_bits, phy_struct->pdsch_c);
+                for(i=0; i<N_bits; i++)
+                {
+                    phy_struct->pdsch_scramb_bits[i] = phy_struct->pdsch_encode_bits[i] ^ phy_struct->pdsch_c[i];
+                }
+                modulation_mapper(phy_struct->pdsch_scramb_bits,
+                                  N_bits,
+                                  pdcch->alloc[alloc_idx].mod_type,
+                                  phy_struct->pdsch_d_re,
+                                  phy_struct->pdsch_d_im,
+                                  &M_symb);
+                layer_mapper_dl(phy_struct->pdsch_d_re,
+                                phy_struct->pdsch_d_im,
+                                M_symb,
+                                N_ant,
+                                1,
+                                pdcch->alloc[alloc_idx].pre_coder_type,
+                                phy_struct->pdsch_x_re,
+                                phy_struct->pdsch_x_im,
+                                &M_layer_symb);
+                pre_coder_dl(phy_struct->pdsch_x_re,
+                             phy_struct->pdsch_x_im,
+                             M_layer_symb,
+                             N_ant,
+                             pdcch->alloc[alloc_idx].pre_coder_type,
+                             phy_struct->pdsch_y_re[0],
+                             phy_struct->pdsch_y_im[0],
+                             5000,
+                             &M_ap_symb);
+
+                // Map the symbols to resource elements 3GPP TS 36.211 v10.1.0 section 6.3.5
+                for(p=0; p<N_ant; p++)
+                {
+                    idx = 0;
+                    for(L=pdcch->N_symbs; L<14; L++)
                     {
-                        i = pdcch->alloc[alloc_idx].prb[L/7][prb_idx];
-                        for(j=0; j<phy_struct->N_sc_rb_dl; j++)
+                        for(prb_idx=0; prb_idx<pdcch->alloc[alloc_idx].N_prb; prb_idx++)
                         {
-                            if(N_ant           == 1 &&
-                               (L % 7)         == 0 &&
-                               (N_id_cell % 6) == (j % 6))
+                            i = pdcch->alloc[alloc_idx].prb[L/7][prb_idx];
+                            for(j=0; j<phy_struct->N_sc_rb_dl; j++)
                             {
-                                // Skip CRS
-                            }else if(N_ant               == 1 &&
-                                     (L % 7)             == 4 &&
-                                     ((N_id_cell+3) % 6) == (j % 6)){
-                                // Skip CRS
-                            }else if((N_ant          == 2  ||
-                                      N_ant          == 4) &&
-                                     ((L % 7)        == 0  ||
-                                      (L % 7)        == 4) &&
-                                     (N_id_cell % 3) == (j % 3)){
-                                // Skip CRS
-                            }else if(N_ant           == 4 &&
-                                     (L % 7)         == 1 &&
-                                     (N_id_cell % 3) == (j % 3)){
-                                // Skip CRS
-                            }else if(subframe->num                == 0        &&
-                                     (i*phy_struct->N_sc_rb_dl+j) >= first_sc &&
-                                     (i*phy_struct->N_sc_rb_dl+j) <= last_sc  &&
-                                     L                            >= 7        &&
-                                     L                            <= 10){
-                                // Skip PBCH
-                            }else if((subframe->num               == 0        ||
-                                      subframe->num               == 5)       &&
-                                     (i*phy_struct->N_sc_rb_dl+j) >= first_sc &&
-                                     (i*phy_struct->N_sc_rb_dl+j) <= last_sc  &&
-                                     L                            == 6){
-                                // Skip PSS
-                            }else if((subframe->num               == 0        ||
-                                      subframe->num               == 5)       &&
-                                     (i*phy_struct->N_sc_rb_dl+j) >= first_sc &&
-                                     (i*phy_struct->N_sc_rb_dl+j) <= last_sc  &&
-                                     L                            == 5){
-                                // Skip SSS
-                            }else{
-                                subframe->tx_symb_re[p][L][i*phy_struct->N_sc_rb_dl+j] = phy_struct->pdsch_y_re[p][idx];
-                                subframe->tx_symb_im[p][L][i*phy_struct->N_sc_rb_dl+j] = phy_struct->pdsch_y_im[p][idx];
-                                idx++;
+                                if(N_ant           == 1 &&
+                                   (L % 7)         == 0 &&
+                                   (N_id_cell % 6) == (j % 6))
+                                {
+                                    // Skip CRS
+                                }else if(N_ant               == 1 &&
+                                         (L % 7)             == 4 &&
+                                         ((N_id_cell+3) % 6) == (j % 6)){
+                                    // Skip CRS
+                                }else if((N_ant          == 2  ||
+                                          N_ant          == 4) &&
+                                         ((L % 7)        == 0  ||
+                                          (L % 7)        == 4) &&
+                                         (N_id_cell % 3) == (j % 3)){
+                                    // Skip CRS
+                                }else if(N_ant           == 4 &&
+                                         (L % 7)         == 1 &&
+                                         (N_id_cell % 3) == (j % 3)){
+                                    // Skip CRS
+                                }else if(subframe->num                == 0        &&
+                                         (i*phy_struct->N_sc_rb_dl+j) >= first_sc &&
+                                         (i*phy_struct->N_sc_rb_dl+j) <= last_sc  &&
+                                         L                            >= 7        &&
+                                         L                            <= 10){
+                                    // Skip PBCH
+                                }else if((subframe->num               == 0        ||
+                                          subframe->num               == 5)       &&
+                                         (i*phy_struct->N_sc_rb_dl+j) >= first_sc &&
+                                         (i*phy_struct->N_sc_rb_dl+j) <= last_sc  &&
+                                         L                            == 6){
+                                    // Skip PSS
+                                }else if((subframe->num               == 0        ||
+                                          subframe->num               == 5)       &&
+                                         (i*phy_struct->N_sc_rb_dl+j) >= first_sc &&
+                                         (i*phy_struct->N_sc_rb_dl+j) <= last_sc  &&
+                                         L                            == 5){
+                                    // Skip SSS
+                                }else{
+                                    subframe->tx_symb_re[p][L][i*phy_struct->N_sc_rb_dl+j] = phy_struct->pdsch_y_re[p][idx];
+                                    subframe->tx_symb_im[p][L][i*phy_struct->N_sc_rb_dl+j] = phy_struct->pdsch_y_im[p][idx];
+                                    idx++;
+                                }
                             }
                         }
                     }
@@ -3773,6 +3821,10 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
     uint32            k;
     uint32            p;
     uint32            idx;
+    uint32            a_idx;
+    uint32            css_idx;
+    uint32            uss_idx;
+    uint32            actual_idx;
     uint32            c_init;
     uint32            N_bits;
     uint32            M_symb;
@@ -3827,50 +3879,7 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
                 N_reg_pdcch -= phy_struct->N_rb_dl;
             }
             N_cce_pdcch = N_reg_pdcch/N_reg_cce;
-            // Encode the DCI
-            dci_1a_pack(&pdcch->alloc[0], // FIXME
-                        LIBLTE_PHY_DCI_CA_NOT_PRESENT,
-                        phy_struct->N_rb_dl,
-                        N_ant,
-                        phy_struct->pdcch_dci,
-                        &dci_size);
-            dci_channel_encode(phy_struct,
-                               phy_struct->pdcch_dci,
-                               dci_size,
-                               pdcch->alloc[0].rnti, // FIXME
-                               0,
-                               phy_struct->pdcch_encode_bits,
-                               &N_bits);
-            c_init = (subframe->num << 9) + N_id_cell;
-            generate_prs_c(c_init, N_bits, phy_struct->pdcch_c);
-            for(i=0; i<N_bits; i++)
-            {
-                phy_struct->pdcch_scramb_bits[i] = phy_struct->pdcch_encode_bits[i] ^ phy_struct->pdcch_c[i];
-            }
-            modulation_mapper(phy_struct->pdcch_scramb_bits,
-                              N_bits,
-                              LIBLTE_PHY_MODULATION_TYPE_QPSK,
-                              phy_struct->pdcch_d_re,
-                              phy_struct->pdcch_d_im,
-                              &M_symb);
-            layer_mapper_dl(phy_struct->pdcch_d_re,
-                            phy_struct->pdcch_d_im,
-                            M_symb,
-                            N_ant,
-                            1,
-                            LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
-                            phy_struct->pdcch_x_re,
-                            phy_struct->pdcch_x_im,
-                            &M_layer_symb);
-            pre_coder_dl(phy_struct->pdcch_x_re,
-                         phy_struct->pdcch_x_im,
-                         M_layer_symb,
-                         N_ant,
-                         LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
-                         phy_struct->pdcch_y_re[0],
-                         phy_struct->pdcch_y_im[0],
-                         576,
-                         &M_ap_symb);
+
             // Initialize the search space
             for(p=0; p<N_ant; p++)
             {
@@ -3881,48 +3890,165 @@ LIBLTE_ERROR_ENUM liblte_phy_pdcch_channel_encode(LIBLTE_PHY_STRUCT             
                         phy_struct->pdcch_cce_re[p][i][j] = 0;
                         phy_struct->pdcch_cce_im[p][i][j] = 0;
                     }
+                    phy_struct->pdcch_cce_used[i] = false;
                 }
             }
-            // Add the DCIs to the search space, FIXME: only handling alloc[0]
-            if(LIBLTE_MAC_SI_RNTI        == pdcch->alloc[0].rnti ||
-               LIBLTE_MAC_P_RNTI         == pdcch->alloc[0].rnti ||
-               (LIBLTE_MAC_RA_RNTI_START <= pdcch->alloc[0].rnti &&
-                LIBLTE_MAC_RA_RNTI_END   >= pdcch->alloc[0].rnti))
+
+            // Generate the scrambling sequence
+            c_init = (subframe->num << 9) + N_id_cell;
+            generate_prs_c(c_init, 1152, phy_struct->pdcch_c);
+
+            // Add the DCIs
+            for(a_idx=0; a_idx<pdcch->N_alloc; a_idx++)
             {
-                // Add to the common search space, using aggregation level of 8
-                for(p=0; p<N_ant; p++)
+                // Encode the DCI
+                if(LIBLTE_PHY_CHAN_TYPE_DLSCH == pdcch->alloc[a_idx].chan_type)
                 {
-                    idx = 0;
-                    for(i=0; i<8; i++)
+                    dci_1a_pack(&pdcch->alloc[a_idx],
+                                LIBLTE_PHY_DCI_CA_NOT_PRESENT,
+                                phy_struct->N_rb_dl,
+                                N_ant,
+                                phy_struct->pdcch_dci,
+                                &dci_size);
+                }else{ // LIBLTE_PHY_CHAN_TYPE_ULSCH == pdcch->alloc[a_idx].chan_type
+                    dci_0_pack(&pdcch->alloc[a_idx],
+                               LIBLTE_PHY_DCI_CA_NOT_PRESENT,
+                               phy_struct->N_rb_ul,
+                               N_ant,
+                               phy_struct->pdcch_dci,
+                               &dci_size);
+                }
+                N_bits = 288; // Using aggregation level 4 (4*9*4*2 = 288)
+                dci_channel_encode(phy_struct,
+                                   phy_struct->pdcch_dci,
+                                   dci_size,
+                                   pdcch->alloc[a_idx].rnti,
+                                   0,
+                                   N_bits,
+                                   phy_struct->pdcch_encode_bits);
+
+// FIXME: User Specific search space does not work
+//                // Add the DCIs to the search space
+//                if(LIBLTE_MAC_SI_RNTI        == pdcch->alloc[a_idx].rnti ||
+//                   LIBLTE_MAC_P_RNTI         == pdcch->alloc[a_idx].rnti ||
+//                   (LIBLTE_MAC_RA_RNTI_START <= pdcch->alloc[a_idx].rnti &&
+//                    LIBLTE_MAC_RA_RNTI_END   >= pdcch->alloc[a_idx].rnti))
+//                {
+                    // Add to the common search space, using aggregation level of 4
+                    for(css_idx=0; css_idx<4; css_idx++)
                     {
-                        for(j=0; j<(4*N_reg_cce); j++)
+                        if(!phy_struct->pdcch_cce_used[4*css_idx+0] &&
+                           !phy_struct->pdcch_cce_used[4*css_idx+1] &&
+                           !phy_struct->pdcch_cce_used[4*css_idx+2] &&
+                           !phy_struct->pdcch_cce_used[4*css_idx+3])
                         {
-                            phy_struct->pdcch_cce_re[p][i][j] = phy_struct->pdcch_y_re[p][idx];
-                            phy_struct->pdcch_cce_im[p][i][j] = phy_struct->pdcch_y_im[p][idx];
-                            idx++;
+                            for(i=0; i<N_bits; i++)
+                            {
+                                phy_struct->pdcch_scramb_bits[i] = phy_struct->pdcch_encode_bits[i] ^ phy_struct->pdcch_c[4*css_idx*N_reg_cce*4*2 + i];
+                            }
+                            modulation_mapper(phy_struct->pdcch_scramb_bits,
+                                              N_bits,
+                                              LIBLTE_PHY_MODULATION_TYPE_QPSK,
+                                              phy_struct->pdcch_d_re,
+                                              phy_struct->pdcch_d_im,
+                                              &M_symb);
+                            layer_mapper_dl(phy_struct->pdcch_d_re,
+                                            phy_struct->pdcch_d_im,
+                                            M_symb,
+                                            N_ant,
+                                            1,
+                                            LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
+                                            phy_struct->pdcch_x_re,
+                                            phy_struct->pdcch_x_im,
+                                            &M_layer_symb);
+                            pre_coder_dl(phy_struct->pdcch_x_re,
+                                         phy_struct->pdcch_x_im,
+                                         M_layer_symb,
+                                         N_ant,
+                                         LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
+                                         phy_struct->pdcch_y_re[0],
+                                         phy_struct->pdcch_y_im[0],
+                                         576,
+                                         &M_ap_symb);
+                            for(p=0; p<N_ant; p++)
+                            {
+                                idx = 0;
+                                for(i=0; i<4; i++)
+                                {
+                                    for(j=0; j<(4*N_reg_cce); j++)
+                                    {
+                                        phy_struct->pdcch_cce_re[p][4*css_idx+i][j] = phy_struct->pdcch_y_re[p][idx];
+                                        phy_struct->pdcch_cce_im[p][4*css_idx+i][j] = phy_struct->pdcch_y_im[p][idx];
+                                        idx++;
+                                    }
+                                    phy_struct->pdcch_cce_used[4*css_idx+i] = true;
+                                }
+                            }
+                            break;
                         }
                     }
-                }
-            }else{
-                // Add to the user search space, using aggregation level of 8
-                Y_k = pdcch->alloc[0].rnti; // FIXME
-                for(i=0; i<subframe->num; i++)
-                {
-                    Y_k = (39827 * Y_k) % 65537;
-                }
-                for(p=0; p<N_ant; p++)
-                {
-                    idx = 0;
-                    for(i=0; i<8; i++)
-                    {
-                        for(j=0; j<(4*N_reg_cce); j++)
-                        {
-                            phy_struct->pdcch_cce_re[p][8 * (Y_k % (N_cce_pdcch/8)) + i][j] = phy_struct->pdcch_y_re[p][idx];
-                            phy_struct->pdcch_cce_im[p][8 * (Y_k % (N_cce_pdcch/8)) + i][j] = phy_struct->pdcch_y_im[p][idx];
-                            idx++;
-                        }
-                    }
-                }
+// FIXME: User Specific search space does not work
+//                }else{
+//                    // Add to the user search space, using aggregation level of 4
+//                    Y_k = pdcch->alloc[a_idx].rnti;
+//                    for(i=0; i<=subframe->num; i++)
+//                    {
+//                        Y_k = (39827 * Y_k) % 65537;
+//                    }
+//                    for(uss_idx=0; uss_idx<2; uss_idx++)
+//                    {
+//                        actual_idx = 4*((Y_k+uss_idx) % (N_cce_pdcch/4));
+//                        if(!phy_struct->pdcch_cce_used[actual_idx+0] &&
+//                           !phy_struct->pdcch_cce_used[actual_idx+1] &&
+//                           !phy_struct->pdcch_cce_used[actual_idx+2] &&
+//                           !phy_struct->pdcch_cce_used[actual_idx+3])
+//                        {
+//                            for(i=0; i<N_bits; i++)
+//                            {
+//                                phy_struct->pdcch_scramb_bits[i] = phy_struct->pdcch_encode_bits[i] ^ phy_struct->pdcch_c[4*actual_idx*N_reg_cce*4*2 + i];
+//                            }
+//                            modulation_mapper(phy_struct->pdcch_scramb_bits,
+//                                              N_bits,
+//                                              LIBLTE_PHY_MODULATION_TYPE_QPSK,
+//                                              phy_struct->pdcch_d_re,
+//                                              phy_struct->pdcch_d_im,
+//                                              &M_symb);
+//                            layer_mapper_dl(phy_struct->pdcch_d_re,
+//                                            phy_struct->pdcch_d_im,
+//                                            M_symb,
+//                                            N_ant,
+//                                            1,
+//                                            LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
+//                                            phy_struct->pdcch_x_re,
+//                                            phy_struct->pdcch_x_im,
+//                                            &M_layer_symb);
+//                            pre_coder_dl(phy_struct->pdcch_x_re,
+//                                         phy_struct->pdcch_x_im,
+//                                         M_layer_symb,
+//                                         N_ant,
+//                                         LIBLTE_PHY_PRE_CODER_TYPE_TX_DIVERSITY,
+//                                         phy_struct->pdcch_y_re[0],
+//                                         phy_struct->pdcch_y_im[0],
+//                                         576,
+//                                         &M_ap_symb);
+//                            for(p=0; p<N_ant; p++)
+//                            {
+//                                idx = 0;
+//                                for(i=0; i<4; i++)
+//                                {
+//                                    for(j=0; j<(4*N_reg_cce); j++)
+//                                    {
+//                                        phy_struct->pdcch_cce_re[p][actual_idx+i][j] = phy_struct->pdcch_y_re[p][idx];
+//                                        phy_struct->pdcch_cce_im[p][actual_idx+i][j] = phy_struct->pdcch_y_im[p][idx];
+//                                        idx++;
+//                                    }
+//                                    phy_struct->pdcch_cce_used[actual_idx+i] = true;
+//                                }
+//                            }
+//                            break;
+//                        }
+//                    }
+//                }
             }
             // Construct REGs
             for(p=0; p<N_ant; p++)
@@ -5836,7 +5962,7 @@ LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_dl(uint32  N_bits,
             N_prb_tmp = 2;
             for(i=0; i<27; i++)
             {
-                if(N_bits < TBS_71721[i][N_prb_tmp])
+                if(N_bits <= TBS_71721[i][N_prb_tmp])
                 {
                     *tbs = TBS_71721[i][N_prb_tmp];
                     *mcs = i;
@@ -5913,7 +6039,7 @@ LIBLTE_ERROR_ENUM liblte_phy_get_tbs_and_n_prb_for_dl(uint32  N_bits,
         // Determine N_prb
         for(i=0; i<N_rb_dl; i++)
         {
-            if(N_bits < TBS_71721[I_tbs][i])
+            if(N_bits <= TBS_71721[I_tbs][i])
             {
                 *tbs   = TBS_71721[I_tbs][i];
                 *N_prb = i + 1;
@@ -5958,10 +6084,15 @@ LIBLTE_ERROR_ENUM liblte_phy_get_tbs_mcs_and_n_prb_for_ul(uint32  N_bits,
             {
                 if(N_bits <= TBS_71721[i][j])
                 {
-                    I_tbs  = i;
-                    *tbs   = TBS_71721[i][j];
-                    *N_prb = j + 1;
-                    break;
+                    if(((j + 1) % 2) == 0 ||
+                       ((j + 1) % 3) == 0 ||
+                       ((j + 1) % 5) == 0)
+                    {
+                        I_tbs  = i;
+                        *tbs   = TBS_71721[i][j];
+                        *N_prb = j + 1;
+                        break;
+                    }
                 }
             }
             if(I_tbs != 1000)
@@ -6248,7 +6379,7 @@ void pre_decoder_and_matched_filter_ul(float  *z_re,
         *M_layer_symb = M_ap_symb;
         for(i=0; i<M_ap_symb; i++)
         {
-            h_norm  = h_re[i] * h_re[i] + h_im[i] * h_im[i];
+            h_norm  = sqrt(h_re[i] * h_re[i] + h_im[i] * h_im[i]);
             y_re[i] = (z_re[i]*h_re[i] + z_im[i]*h_im[i]) / h_norm;
             y_im[i] = (z_im[i]*h_re[i] - z_re[i]*h_im[i]) / h_norm;
         }
@@ -6340,7 +6471,7 @@ void generate_ul_rs(LIBLTE_PHY_STRUCT         *phy_struct,
     // Determine r_bar_u_v
     if(M_sc_rs >= 3*LIBLTE_PHY_N_SC_RB_UL)
     {
-        q_bar = N_zc_rs*(u+1)/31;
+        q_bar = (float)N_zc_rs*(float)(u+1)/(float)31;
         if((((uint32)(2*q_bar)) % 2) == 0)
         {
             q = (uint32)(q_bar + 0.5) + v;
@@ -12158,8 +12289,8 @@ void dci_channel_encode(LIBLTE_PHY_STRUCT *phy_struct,
                         uint32             N_in_bits,
                         uint16             rnti,
                         uint8              ue_ant,
-                        uint8             *out_bits,
-                        uint32            *N_out_bits)
+                        uint32             N_out_bits,
+                        uint8             *out_bits)
 {
     uint32 i;
     uint32 N_d_bits;
@@ -12212,9 +12343,7 @@ void dci_channel_encode(LIBLTE_PHY_STRUCT *phy_struct,
                 &N_d_bits);
 
     // Determine e_bits
-    // Always use 576 as the number of bits can be reduced later
-    rate_match_conv(phy_struct, phy_struct->dci_tx_d_bits, N_d_bits, 576, out_bits);
-    *N_out_bits = 576;
+    rate_match_conv(phy_struct, phy_struct->dci_tx_d_bits, N_d_bits, N_out_bits, out_bits);
 }
 
 /*********************************************************************
@@ -12315,6 +12444,106 @@ LIBLTE_ERROR_ENUM dci_channel_decode(LIBLTE_PHY_STRUCT *phy_struct,
 }
 
 /*********************************************************************
+    Name: dci_0_pack
+
+    Description: Packs all of the fields into the Downlink Control
+                 Information format 0
+
+    Document Reference: 3GPP TS 36.212 v10.1.0 section 5.3.3.1.1
+                        3GPP TS 36.213 v10.3.0 section 8.1.1
+                        3GPP TS 36.213 v10.3.0 section 8.6
+
+    Notes: Currently only handles non-hopping single-cluster
+           assignments
+*********************************************************************/
+void dci_0_pack(LIBLTE_PHY_ALLOCATION_STRUCT    *alloc,
+                LIBLTE_PHY_DCI_CA_PRESENCE_ENUM  ca_presence,
+                uint32                           N_rb_ul,
+                uint8                            N_ant,
+                uint8                           *out_bits,
+                uint32                          *N_out_bits)
+{
+    uint32  RIV;
+    uint32  RIV_length;
+    uint32  size;
+    uint8  *dci = out_bits;
+
+    // Carrier indicator
+    if(LIBLTE_PHY_DCI_CA_PRESENT == ca_presence)
+    {
+        printf("WARNING: Not handling carrier indicator\n");
+        phy_value_2_bits(0, &dci, 3);
+    }
+
+    // Format 0/1A flag is set to format 0
+    phy_value_2_bits(DCI_0_1A_FLAG_0, &dci, 1);
+
+    // Frequency hopping flag
+    phy_value_2_bits(0, &dci, 1);
+
+    // RBA
+    // FIXME: Only supporting non-hopping single-cluster
+    RIV_length = (uint32)ceilf(logf(N_rb_ul*(N_rb_ul+1)/2)/logf(2));
+    if((alloc->N_prb-1) <= (N_rb_ul/2))
+    {
+        RIV = N_rb_ul*(alloc->N_prb-1) + alloc->prb[0][0];
+    }else{
+        RIV = N_rb_ul*(N_rb_ul - alloc->N_prb + 1) + (N_rb_ul - 1 - alloc->prb[0][0]);
+    }
+    phy_value_2_bits(RIV, &dci, RIV_length);
+
+    // Modulation and coding scheme and redundancy version
+    phy_value_2_bits(alloc->mcs, &dci, 5);
+
+    // New data indicator
+    phy_value_2_bits(alloc->ndi, &dci, 1);
+
+    // TPC command
+    phy_value_2_bits(alloc->tpc, &dci, 2);
+
+    // Cyclic shift
+    phy_value_2_bits(0, &dci, 3);
+
+    // CSI request
+    phy_value_2_bits(0, &dci, 1);
+
+    // Pad bit
+    phy_value_2_bits(0, &dci, 1);
+
+    // Pad if needed
+    size = dci - out_bits;
+    if(size == 12 ||
+       size == 14 ||
+       size == 16 ||
+       size == 20 ||
+       size == 24 ||
+       size == 26 ||
+       size == 32 ||
+       size == 40 ||
+       size == 44 ||
+       size == 56)
+    {
+        size++;
+        phy_value_2_bits(0, &dci, 1);
+    }
+    *N_out_bits = size;
+}
+
+/*********************************************************************
+    Name: dci_0_unpack
+
+    Description: Unpacks all of the fields from the Downlink Control
+                 Information format 0
+
+    Document Reference: 3GPP TS 36.212 v10.1.0 section 5.3.3.1.1
+                        3GPP TS 36.213 v10.3.0 section 8.1.1
+                        3GPP TS 36.213 v10.3.0 section 8.6
+
+    Notes: N/A
+*********************************************************************/
+// FIXME
+
+/*********************************************************************
     Name: dci_1a_pack
 
     Description: Packs all of the fields into the Downlink Control
@@ -12324,8 +12553,7 @@ LIBLTE_ERROR_ENUM dci_channel_decode(LIBLTE_PHY_STRUCT *phy_struct,
                         3GPP TS 36.213 v10.3.0 section 7.1.6.3
                         3GPP TS 36.213 v10.3.0 section 7.1.7
 
-    Notes: Currently only handles SI-RNTI or P-RNTI, and localized
-           virtual resource blocks
+    Notes: Currently only handles localized virtual resource blocks
 *********************************************************************/
 void dci_1a_pack(LIBLTE_PHY_ALLOCATION_STRUCT    *alloc,
                  LIBLTE_PHY_DCI_CA_PRESENCE_ENUM  ca_presence,
@@ -12347,7 +12575,7 @@ void dci_1a_pack(LIBLTE_PHY_ALLOCATION_STRUCT    *alloc,
         phy_value_2_bits(0, &dci, 3);
     }
 
-    // Format 0/1A flag is set to 1A
+    // Format 0/1A flag is set to format 1A
     phy_value_2_bits(DCI_0_1A_FLAG_1A, &dci, 1);
 
     if(LIBLTE_MAC_SI_RNTI        == alloc->rnti ||
@@ -12392,7 +12620,7 @@ void dci_1a_pack(LIBLTE_PHY_ALLOCATION_STRUCT    *alloc,
         {
             RIV = N_rb_dl*(alloc->N_prb-1) + alloc->prb[0][0];
         }else{
-            RIV = N_rb_dl*(N_rb_dl-alloc->N_prb+1) + (N_rb_dl - 1 - alloc->prb[0][0]);
+            RIV = N_rb_dl*(N_rb_dl - alloc->N_prb + 1) + (N_rb_dl - 1 - alloc->prb[0][0]);
         }
         phy_value_2_bits(RIV, &dci, RIV_length);
 
@@ -12412,7 +12640,7 @@ void dci_1a_pack(LIBLTE_PHY_ALLOCATION_STRUCT    *alloc,
         phy_value_2_bits(alloc->tpc, &dci, 2);
 
         // Calculate the TBS
-        alloc->tbs = TBS_71721[alloc->mcs][alloc->N_prb];
+        alloc->tbs = TBS_71721[alloc->mcs][alloc->N_prb-1];
     }
 
     // Pad if needed
@@ -12444,8 +12672,8 @@ void dci_1a_pack(LIBLTE_PHY_ALLOCATION_STRUCT    *alloc,
                         3GPP TS 36.213 v10.3.0 section 7.1.6.3
                         3GPP TS 36.213 v10.3.0 section 7.1.7
 
-    Notes: Currently only handles SI-RNTI or P-RNTI, and localized
-           virtual resource blocks
+    Notes: Currently only handles SI-RNTI, P-RNTI, or RA-RNTI and
+           localized virtual resource blocks
 *********************************************************************/
 void dci_1a_unpack(uint8                           *in_bits,
                    uint32                           N_in_bits,
@@ -12493,28 +12721,10 @@ void dci_1a_unpack(uint8                           *in_bits,
         loc_or_dist = phy_bits_2_value(&dci, 1);
 
         // Find the RIV that was sent 3GPP TS 36.213 v10.3.0 section 7.1.6.3
-        RIV_length = (uint32)ceilf(logf(N_rb_dl*(N_rb_dl+1)/2)/logf(2));
-        RIV        = phy_bits_2_value(&dci, RIV_length);
-        for(i=1; i<=N_rb_dl; i++) // L_crb running variable (1 to N_rb_dl)
-        {
-            for(j=0; j<=(N_rb_dl-i); j++) // RB_start running variable (0 to N_rb_dl-L_crb)
-            {
-                if((i-1) <= (N_rb_dl/2))
-                {
-                    if(RIV == (N_rb_dl*(i-1)+j))
-                    {
-                        alloc->N_prb = i;
-                        RB_start     = j;
-                    }
-                }else{
-                    if(RIV == (N_rb_dl*(N_rb_dl-i+1)+(N_rb_dl-1-j)))
-                    {
-                        alloc->N_prb = i;
-                        RB_start     = j;
-                    }
-                }
-            }
-        }
+        RIV_length   = (uint32)ceilf(logf(N_rb_dl*(N_rb_dl+1)/2)/logf(2));
+        RIV          = phy_bits_2_value(&dci, RIV_length);
+        alloc->N_prb = RIV/N_rb_dl + 1;
+        RB_start     = RIV % N_rb_dl;
 
         // Extract the rest of the fields
         alloc->mcs    = phy_bits_2_value(&dci, 5);
@@ -12992,6 +13202,32 @@ float get_soft_decision(float rx_re,
     }
 
     return(max_dist - dist);
+}
+float get_soft_decision(float rx,
+                        float exp,
+                        float max_dist)
+{
+    float dist;
+
+    if(rx > exp)
+    {
+        dist = rx - exp;
+    }else{
+        dist = exp - rx;
+    }
+
+    if(dist > 0.176)
+    {
+        dist = 1;
+    }else if(dist > 0.353){
+        dist = 0.75;
+    }else if(dist > 0.530){
+        dist = 0.5;
+    }else{
+        dist = 0.25;
+    }
+
+    return(dist);
 }
 
 /*********************************************************************

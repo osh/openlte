@@ -27,6 +27,8 @@
     07/21/2013    Ben Wojtowicz    Created file.
     03/26/2014    Ben Wojtowicz    Added DL-SCH/UL-SCH PDU handling.
     05/04/2014    Ben Wojtowicz    Added control element handling.
+    06/15/2014    Ben Wojtowicz    Added support for padding LCIDs and breaking
+                                   out max and min buffer sizes for BSRs.
 
 *******************************************************************************/
 
@@ -50,6 +52,22 @@
                               GLOBAL VARIABLES
 *******************************************************************************/
 
+uint32 truncated_short_bsr_max_buffer_size[64] = {     0,     10,     12,     14,     17,     19,     22,     26,
+                                                      31,     36,     42,     49,     57,     67,     78,     91,
+                                                     107,    125,    146,    171,    200,    234,    274,    321,
+                                                     376,    440,    515,    603,    706,    826,    967,   1132,
+                                                    1326,   1552,   1817,   2127,   2490,   2915,   3413,   3995,
+                                                    4677,   5476,   6411,   7505,   8787,  10287,  12043,  14099,
+                                                   16507,  19325,  22624,  26487,  31009,  36304,  42502,  49759,
+                                                   58255,  68201,  79864,  93479, 109439, 128125, 150000, 150000};
+uint32 truncated_short_bsr_min_buffer_size[64] = {     0,      0,     10,     12,     14,     17,     19,     22,
+                                                      26,     31,     36,     42,     49,     57,     67,     78,
+                                                      91,    107,    125,    146,    171,    200,    234,    274,
+                                                     321,    376,    440,    515,    603,    706,    826,    967,
+                                                    1132,   1326,   1552,   1817,   2127,   2490,   2915,   3413,
+                                                    3995,   4677,   5476,   6411,   7505,   8787,  10287,  12043,
+                                                   14099,  16507,  19325,  22624,  26487,  31009,  36304,  42502,
+                                                   49759,  58255,  68201,  79864,  93479, 109439, 128125, 150000};
 
 /*******************************************************************************
                               LOCAL FUNCTION PROTOTYPES
@@ -88,12 +106,25 @@ LIBLTE_ERROR_ENUM liblte_mac_pack_truncated_bsr_ce(LIBLTE_MAC_TRUNCATED_BSR_CE_S
                                                    uint8                              **ce_ptr)
 {
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint32            i;
 
     if(truncated_bsr != NULL &&
        ce_ptr        != NULL)
     {
-        mac_value_2_bits(truncated_bsr->lcg_id,      ce_ptr, 2);
-        mac_value_2_bits(truncated_bsr->buffer_size, ce_ptr, 6);
+        mac_value_2_bits(truncated_bsr->lcg_id, ce_ptr, 2);
+        for(i=0; i<64; i++)
+        {
+            if(truncated_bsr->max_buffer_size  > truncated_short_bsr_min_buffer_size[i] &&
+               truncated_bsr->max_buffer_size <= truncated_short_bsr_max_buffer_size[i])
+            {
+                mac_value_2_bits(i, ce_ptr, 6);
+                break;
+            }
+        }
+        if(i == 64)
+        {
+            mac_value_2_bits(63, ce_ptr, 6);
+        }
 
         err = LIBLTE_SUCCESS;
     }
@@ -104,12 +135,15 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_truncated_bsr_ce(uint8                      
                                                      LIBLTE_MAC_TRUNCATED_BSR_CE_STRUCT  *truncated_bsr)
 {
     LIBLTE_ERROR_ENUM err = LIBLTE_ERROR_INVALID_INPUTS;
+    uint8             buffer_size_idx;
 
     if(ce_ptr        != NULL &&
        truncated_bsr != NULL)
     {
-        truncated_bsr->lcg_id      = mac_bits_2_value(ce_ptr, 2);
-        truncated_bsr->buffer_size = mac_bits_2_value(ce_ptr, 6);
+        truncated_bsr->lcg_id          = mac_bits_2_value(ce_ptr, 2);
+        buffer_size_idx                = mac_bits_2_value(ce_ptr, 6);
+        truncated_bsr->max_buffer_size = truncated_short_bsr_max_buffer_size[buffer_size_idx];
+        truncated_bsr->min_buffer_size = truncated_short_bsr_min_buffer_size[buffer_size_idx];
 
         err = LIBLTE_SUCCESS;
     }
@@ -487,7 +521,7 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_activation_deactivation_ce(uint8            
     Document Reference: 36.321 v10.2.0 Section 6.1.2
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_mac_pack_mac_pdu(LIBLTE_MAC_PDU_STRUCT *pdu,
-                                          LIBLTE_MSG_STRUCT     *msg)
+                                          LIBLTE_BIT_MSG_STRUCT *msg)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *msg_ptr = msg->msg;
@@ -513,7 +547,8 @@ LIBLTE_ERROR_ENUM liblte_mac_pack_mac_pdu(LIBLTE_MAC_PDU_STRUCT *pdu,
                 if(!(LIBLTE_MAC_DLSCH_ACTIVATION_DEACTIVATION_LCID     == pdu->subheader[i].lcid ||
                      LIBLTE_MAC_DLSCH_UE_CONTENTION_RESOLUTION_ID_LCID == pdu->subheader[i].lcid ||
                      LIBLTE_MAC_DLSCH_TA_COMMAND_LCID                  == pdu->subheader[i].lcid ||
-                     LIBLTE_MAC_DLSCH_DRX_COMMAND_LCID                 == pdu->subheader[i].lcid))
+                     LIBLTE_MAC_DLSCH_DRX_COMMAND_LCID                 == pdu->subheader[i].lcid ||
+                     LIBLTE_MAC_DLSCH_PADDING_LCID                     == pdu->subheader[i].lcid))
                 {
                     if(i != (pdu->N_subheaders-1))
                     {
@@ -535,7 +570,8 @@ LIBLTE_ERROR_ENUM liblte_mac_pack_mac_pdu(LIBLTE_MAC_PDU_STRUCT *pdu,
                            LIBLTE_MAC_ULSCH_C_RNTI_LCID                == pdu->subheader[i].lcid ||
                            LIBLTE_MAC_ULSCH_TRUNCATED_BSR_LCID         == pdu->subheader[i].lcid ||
                            LIBLTE_MAC_ULSCH_SHORT_BSR_LCID             == pdu->subheader[i].lcid ||
-                           LIBLTE_MAC_ULSCH_LONG_BSR_LCID              == pdu->subheader[i].lcid)){
+                           LIBLTE_MAC_ULSCH_LONG_BSR_LCID              == pdu->subheader[i].lcid ||
+                           LIBLTE_MAC_ULSCH_PADDING_LCID               == pdu->subheader[i].lcid)){
                     if(i != (pdu->N_subheaders-1))
                     {
                         if((pdu->subheader[i].payload.sdu.N_bits/8) < 128)
@@ -631,7 +667,7 @@ LIBLTE_ERROR_ENUM liblte_mac_pack_mac_pdu(LIBLTE_MAC_PDU_STRUCT *pdu,
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_MSG_STRUCT     *msg,
+LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_BIT_MSG_STRUCT *msg,
                                             LIBLTE_MAC_PDU_STRUCT *pdu)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
@@ -652,10 +688,11 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_MSG_STRUCT     *msg,
 
             if(LIBLTE_MAC_CHAN_TYPE_DLSCH == pdu->chan_type)
             {
-                if(!(LIBLTE_MAC_DLSCH_ACTIVATION_DEACTIVATION_LCID     == pdu->subheader[i].lcid ||
-                     LIBLTE_MAC_DLSCH_UE_CONTENTION_RESOLUTION_ID_LCID == pdu->subheader[i].lcid ||
-                     LIBLTE_MAC_DLSCH_TA_COMMAND_LCID                  == pdu->subheader[i].lcid ||
-                     LIBLTE_MAC_DLSCH_DRX_COMMAND_LCID                 == pdu->subheader[i].lcid))
+                if(!(LIBLTE_MAC_DLSCH_ACTIVATION_DEACTIVATION_LCID     == pdu->subheader[pdu->N_subheaders].lcid ||
+                     LIBLTE_MAC_DLSCH_UE_CONTENTION_RESOLUTION_ID_LCID == pdu->subheader[pdu->N_subheaders].lcid ||
+                     LIBLTE_MAC_DLSCH_TA_COMMAND_LCID                  == pdu->subheader[pdu->N_subheaders].lcid ||
+                     LIBLTE_MAC_DLSCH_DRX_COMMAND_LCID                 == pdu->subheader[pdu->N_subheaders].lcid ||
+                     LIBLTE_MAC_DLSCH_PADDING_LCID                     == pdu->subheader[pdu->N_subheaders].lcid))
                 {
                     if(e_bit)
                     {
@@ -670,14 +707,15 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_MSG_STRUCT     *msg,
                     }
                 }
             }else if(LIBLTE_MAC_CHAN_TYPE_ULSCH == pdu->chan_type){
-                if(LIBLTE_MAC_ULSCH_EXT_POWER_HEADROOM_REPORT_LCID == pdu->subheader[i].lcid)
+                if(LIBLTE_MAC_ULSCH_EXT_POWER_HEADROOM_REPORT_LCID == pdu->subheader[pdu->N_subheaders].lcid)
                 {
                     // FIXME
-                }else if(!(LIBLTE_MAC_ULSCH_POWER_HEADROOM_REPORT_LCID == pdu->subheader[i].lcid ||
-                           LIBLTE_MAC_ULSCH_C_RNTI_LCID                == pdu->subheader[i].lcid ||
-                           LIBLTE_MAC_ULSCH_TRUNCATED_BSR_LCID         == pdu->subheader[i].lcid ||
-                           LIBLTE_MAC_ULSCH_SHORT_BSR_LCID             == pdu->subheader[i].lcid ||
-                           LIBLTE_MAC_ULSCH_LONG_BSR_LCID              == pdu->subheader[i].lcid)){
+                }else if(!(LIBLTE_MAC_ULSCH_POWER_HEADROOM_REPORT_LCID == pdu->subheader[pdu->N_subheaders].lcid ||
+                           LIBLTE_MAC_ULSCH_C_RNTI_LCID                == pdu->subheader[pdu->N_subheaders].lcid ||
+                           LIBLTE_MAC_ULSCH_TRUNCATED_BSR_LCID         == pdu->subheader[pdu->N_subheaders].lcid ||
+                           LIBLTE_MAC_ULSCH_SHORT_BSR_LCID             == pdu->subheader[pdu->N_subheaders].lcid ||
+                           LIBLTE_MAC_ULSCH_LONG_BSR_LCID              == pdu->subheader[pdu->N_subheaders].lcid ||
+                           LIBLTE_MAC_ULSCH_PADDING_LCID               == pdu->subheader[pdu->N_subheaders].lcid)){
                     if(e_bit)
                     {
                         if(mac_bits_2_value(&msg_ptr, 1)) // F
@@ -691,7 +729,7 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_MSG_STRUCT     *msg,
                     }
                 }
             }else{ // LIBLTE_MAC_CHAN_TYPE_MCH == mac_pdu->subheader[i].lcid
-                if(LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_LCID == pdu->subheader[i].lcid)
+                if(LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_LCID == pdu->subheader[pdu->N_subheaders].lcid)
                 {
                     if(e_bit)
                     {
@@ -735,6 +773,8 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_MSG_STRUCT     *msg,
                     liblte_mac_unpack_ta_command_ce(&msg_ptr, &pdu->subheader[i].payload.ta_command);
                 }else if(LIBLTE_MAC_DLSCH_DRX_COMMAND_LCID == pdu->subheader[i].lcid){
                     // No content for DRX Command CE
+                }else if(LIBLTE_MAC_DLSCH_PADDING_LCID == pdu->subheader[i].lcid){
+                    // No content for PADDING CE
                 }else{ // SDU
                     if(pdu->subheader[i].payload.sdu.N_bits == 0)
                     {
@@ -757,6 +797,8 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_MSG_STRUCT     *msg,
                     liblte_mac_unpack_short_bsr_ce(&msg_ptr, &pdu->subheader[i].payload.short_bsr);
                 }else if(LIBLTE_MAC_ULSCH_LONG_BSR_LCID == pdu->subheader[i].lcid){
                     liblte_mac_unpack_long_bsr_ce(&msg_ptr, &pdu->subheader[i].payload.long_bsr);
+                }else if(LIBLTE_MAC_ULSCH_PADDING_LCID == pdu->subheader[i].lcid){
+                    // No content for PADDING CE
                 }else{ // SDU
                     if(pdu->subheader[i].payload.sdu.N_bits == 0)
                     {
@@ -773,6 +815,8 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_MSG_STRUCT     *msg,
                         pdu->subheader[i].payload.mch_sched_info.N_items = ((msg->N_bits - (msg_ptr - msg->msg)) / 8) / 2;
                     }
                     liblte_mac_unpack_mch_scheduling_information_ce(&msg_ptr, &pdu->subheader[i].payload.mch_sched_info);
+                }else if(LIBLTE_MAC_MCH_PADDING_LCID == pdu->subheader[i].lcid){
+                    // No content for PADDING CE
                 }else{ // SDU
                     if(pdu->subheader[i].payload.sdu.N_bits == 0)
                     {
@@ -810,7 +854,7 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_MSG_STRUCT     *msg,
     Notes: Currently only supports 1 RAR per PDU
 *********************************************************************/
 LIBLTE_ERROR_ENUM liblte_mac_pack_random_access_response_pdu(LIBLTE_MAC_RAR_STRUCT *rar,
-                                                             LIBLTE_MSG_STRUCT     *pdu)
+                                                             LIBLTE_BIT_MSG_STRUCT *pdu)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;
     uint8             *pdu_ptr = pdu->msg;
@@ -852,7 +896,7 @@ LIBLTE_ERROR_ENUM liblte_mac_pack_random_access_response_pdu(LIBLTE_MAC_RAR_STRU
 
     return(err);
 }
-LIBLTE_ERROR_ENUM liblte_mac_unpack_random_access_response_pdu(LIBLTE_MSG_STRUCT     *pdu,
+LIBLTE_ERROR_ENUM liblte_mac_unpack_random_access_response_pdu(LIBLTE_BIT_MSG_STRUCT *pdu,
                                                                LIBLTE_MAC_RAR_STRUCT *rar)
 {
     LIBLTE_ERROR_ENUM  err     = LIBLTE_ERROR_INVALID_INPUTS;

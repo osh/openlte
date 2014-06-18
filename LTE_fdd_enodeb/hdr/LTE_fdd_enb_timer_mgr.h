@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     05/04/2014    Ben Wojtowicz    Created file
+    06/15/2014    Ben Wojtowicz    Added millisecond resolution.
 
 *******************************************************************************/
 
@@ -66,7 +67,7 @@ public:
     static void cleanup(void);
 
     // External Interface
-    LTE_FDD_ENB_ERROR_ENUM start_timer(uint32 seconds, timer_cb cb, uint32 *timer_id);
+    LTE_FDD_ENB_ERROR_ENUM start_timer(uint32 m_seconds, LTE_fdd_enb_timer_cb cb, uint32 *timer_id);
     LTE_FDD_ENB_ERROR_ENUM stop_timer(uint32 timer_id);
     void handle_tick(void);
 
