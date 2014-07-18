@@ -23,5 +23,5 @@ add_executable(LTE_fdd_enodeb
   src/LTE_fdd_enb_rrc.cc
   src/LTE_fdd_enb_mme.cc
 )
-target_link_libraries(LTE_fdd_enodeb lte fftw3f uhd tools pthread rt ${Boost_LIBRARIES} ${GNURADIO_RUNTIME_LIBRARIES} ${GNURADIO_PMT_LIBRARIES})
+target_link_libraries(LTE_fdd_enodeb lte fftw3f tools pthread rt ${UHD_LIBRARIES} ${Boost_LIBRARIES} ${GNURADIO_RUNTIME_LIBRARIES} ${GNURADIO_PMT_LIBRARIES})
 install(TARGETS LTE_fdd_enodeb DESTINATION bin)
