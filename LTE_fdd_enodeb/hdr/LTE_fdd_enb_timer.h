@@ -27,6 +27,7 @@
     05/04/2014    Ben Wojtowicz    Created file
     06/15/2014    Ben Wojtowicz    Added millisecond resolution and seperated
                                    the callback calling functionality.
+    11/29/2014    Ben Wojtowicz    Added timer reset support.
 
 *******************************************************************************/
 
@@ -84,6 +85,7 @@ public:
     ~LTE_fdd_enb_timer();
 
     // External interface
+    void reset(void);
     void increment(void);
     bool expired(void);
     void call_callback(void);

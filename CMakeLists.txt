@@ -23,7 +23,7 @@
 ########################################################################
 cmake_minimum_required(VERSION 2.6)
 project(openLTE CXX C)
-set(openLTE_version 0.14.0)
+set(openLTE_version 0.20.5)
 enable_testing()
 
 #select the release build type by default to get optimization flags
@@ -92,7 +92,9 @@ set(GR_REQUIRED_COMPONENTS RUNTIME BLOCKS FILTER PMT)
 find_package(Gnuradio "3.7.0")
 find_package(GnuradioOsmosdr)
 find_package(Uhd)
+find_package(LibbladeRF)
 find_package(FFTW3F)
+find_package(MbedTLS)
 
 if(NOT GNURADIO_RUNTIME_FOUND)
     message(FATAL_ERROR "GNURadio required to compile openLTE")
@@ -104,6 +106,10 @@ endif()
 
 if(NOT UHD_FOUND)
     message(FATAL_ERROR "UHD required to compile openLTE (http://code.ettus.com/redmine/ettus/projects/uhd/wiki)")
+endif()
+
+if(NOT LIBBLADERF_FOUND)
+    message(FATAL_ERROR "LibbladeRF required to compile openLTE")
 endif()
 
 if(NOT FFTW3F_FOUND)

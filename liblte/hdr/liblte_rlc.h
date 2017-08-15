@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2014 Ben Wojtowicz
+    Copyright 2014-2016 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,13 @@
     Revision History
     ----------    -------------    --------------------------------------------
     06/15/2014    Ben Wojtowicz    Created file.
+    08/03/2014    Ben Wojtowicz    Added NACK support.
+    11/29/2014    Ben Wojtowicz    Added UMD support and using the byte message
+                                   struct.
+    02/15/2015    Ben Wojtowicz    Added header extension handling to UMD.
+    03/11/2015    Ben Wojtowicz    Added header extension handling to AMD.
+    07/03/2016    Ben Wojtowicz    Added AMD PDU segment support.
+    12/18/2016    Ben Wojtowicz    Properly handling multiple AMD PDUs.
 
 *******************************************************************************/
 
@@ -243,10 +250,33 @@ static const char liblte_rlc_e2_field_text[LIBLTE_RLC_E2_FIELD_N_ITEMS][20] = {"
     Document Reference: 36.322 v10.0.0 Section 6.2.1.3
 *********************************************************************/
 // Defines
+#define LIBLTE_RLC_UMD_MAX_N_DATA 5
 // Enums
+typedef enum{
+    LIBLTE_RLC_UMD_SN_SIZE_5_BITS = 0,
+    LIBLTE_RLC_UMD_SN_SIZE_10_BITS,
+    LIBLTE_RLC_UMD_SN_SIZE_N_ITEMS,
+}LIBLTE_RLC_UMD_SN_SIZE_ENUM;
+static const char liblte_rlc_umd_sn_size_text[LIBLTE_RLC_UMD_SN_SIZE_N_ITEMS][20] = {"5 bits", "10 bits"};
 // Structs
+typedef struct{
+    LIBLTE_RLC_FI_FIELD_ENUM    fi;
+    LIBLTE_RLC_UMD_SN_SIZE_ENUM sn_size;
+    uint16                      sn;
+}LIBLTE_RLC_UMD_PDU_HEADER_STRUCT;
+typedef struct{
+    LIBLTE_RLC_UMD_PDU_HEADER_STRUCT hdr;
+    LIBLTE_BYTE_MSG_STRUCT           data[LIBLTE_RLC_UMD_MAX_N_DATA];
+    uint32                           N_data;
+}LIBLTE_RLC_UMD_PDU_STRUCT;
 // Functions
-// FIXME
+LIBLTE_ERROR_ENUM liblte_rlc_pack_umd_pdu(LIBLTE_RLC_UMD_PDU_STRUCT *umd,
+                                          LIBLTE_BYTE_MSG_STRUCT    *pdu);
+LIBLTE_ERROR_ENUM liblte_rlc_pack_umd_pdu(LIBLTE_RLC_UMD_PDU_STRUCT *umd,
+                                          LIBLTE_BYTE_MSG_STRUCT    *data,
+                                          LIBLTE_BYTE_MSG_STRUCT    *pdu);
+LIBLTE_ERROR_ENUM liblte_rlc_unpack_umd_pdu(LIBLTE_BYTE_MSG_STRUCT    *pdu,
+                                            LIBLTE_RLC_UMD_PDU_STRUCT *umd);
 
 /*********************************************************************
     PDU Type: Acknowledged Mode Data PDU
@@ -254,23 +284,34 @@ static const char liblte_rlc_e2_field_text[LIBLTE_RLC_E2_FIELD_N_ITEMS][20] = {"
     Document Reference: 36.322 v10.0.0 Sections 6.2.1.4 & 6.2.1.5
 *********************************************************************/
 // Defines
+#define LIBLTE_RLC_AMD_MAX_N_PDU 5
 // Enums
 // Structs
 typedef struct{
-    LIBLTE_RLC_RF_FIELD_ENUM rf;
-    LIBLTE_RLC_P_FIELD_ENUM  p;
-    LIBLTE_RLC_FI_FIELD_ENUM fi;
-    uint16                   sn;
+    LIBLTE_RLC_DC_FIELD_ENUM  dc;
+    LIBLTE_RLC_RF_FIELD_ENUM  rf;
+    LIBLTE_RLC_P_FIELD_ENUM   p;
+    LIBLTE_RLC_FI_FIELD_ENUM  fi;
+    LIBLTE_RLC_LSF_FIELD_ENUM lsf;
+    uint16                    sn;
+    uint16                    so;
 }LIBLTE_RLC_AMD_PDU_HEADER_STRUCT;
 typedef struct{
     LIBLTE_RLC_AMD_PDU_HEADER_STRUCT hdr;
-    LIBLTE_BIT_MSG_STRUCT            data;
-}LIBLTE_RLC_AMD_PDU_STRUCT;
+    LIBLTE_BYTE_MSG_STRUCT           data;
+}LIBLTE_RLC_SINGLE_AMD_PDU_STRUCT;
+typedef struct{
+    LIBLTE_RLC_SINGLE_AMD_PDU_STRUCT pdu[LIBLTE_RLC_AMD_MAX_N_PDU];
+    uint32                           N_pdu;
+}LIBLTE_RLC_AMD_PDUS_STRUCT;
 // Functions
-LIBLTE_ERROR_ENUM liblte_rlc_pack_amd_pdu(LIBLTE_RLC_AMD_PDU_STRUCT *amd,
-                                          LIBLTE_BIT_MSG_STRUCT     *pdu);
-LIBLTE_ERROR_ENUM liblte_rlc_unpack_amd_pdu(LIBLTE_BIT_MSG_STRUCT     *pdu,
-                                            LIBLTE_RLC_AMD_PDU_STRUCT *amd);
+LIBLTE_ERROR_ENUM liblte_rlc_pack_amd_pdu(LIBLTE_RLC_AMD_PDUS_STRUCT *amd,
+                                          LIBLTE_BYTE_MSG_STRUCT     *pdu);
+LIBLTE_ERROR_ENUM liblte_rlc_pack_amd_pdu(LIBLTE_RLC_SINGLE_AMD_PDU_STRUCT *amd,
+                                          LIBLTE_BYTE_MSG_STRUCT           *data,
+                                          LIBLTE_BYTE_MSG_STRUCT           *pdu);
+LIBLTE_ERROR_ENUM liblte_rlc_unpack_amd_pdu(LIBLTE_BYTE_MSG_STRUCT     *pdu,
+                                            LIBLTE_RLC_AMD_PDUS_STRUCT *amd);
 
 /*********************************************************************
     PDU Type: Status PDU
@@ -281,12 +322,14 @@ LIBLTE_ERROR_ENUM liblte_rlc_unpack_amd_pdu(LIBLTE_BIT_MSG_STRUCT     *pdu,
 // Enums
 // Structs
 typedef struct{
+    uint32 N_nack;
     uint16 ack_sn;
+    uint16 nack_sn[LIBLTE_RLC_AM_WINDOW_SIZE];
 }LIBLTE_RLC_STATUS_PDU_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_rlc_pack_status_pdu(LIBLTE_RLC_STATUS_PDU_STRUCT *status,
-                                             LIBLTE_BIT_MSG_STRUCT        *pdu);
-LIBLTE_ERROR_ENUM liblte_rlc_unpack_status_pdu(LIBLTE_BIT_MSG_STRUCT        *pdu,
+                                             LIBLTE_BYTE_MSG_STRUCT       *pdu);
+LIBLTE_ERROR_ENUM liblte_rlc_unpack_status_pdu(LIBLTE_BYTE_MSG_STRUCT       *pdu,
                                                LIBLTE_RLC_STATUS_PDU_STRUCT *status);
 
 #endif /* __LIBLTE_RLC_H__ */

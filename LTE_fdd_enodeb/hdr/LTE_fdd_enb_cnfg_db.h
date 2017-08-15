@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013-2014 Ben Wojtowicz
+    Copyright 2013-2014, 2017 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -27,6 +27,11 @@
     11/09/2013    Ben Wojtowicz    Created file
     01/18/2014    Ben Wojtowicz    Added set/get routines for uint32 values.
     03/26/2014    Ben Wojtowicz    Using the latest LTE library.
+    08/03/2014    Ben Wojtowicz    Added support for limiting PCAP output.
+    09/03/2014    Ben Wojtowicz    Added better MCC/MNC support.
+    11/01/2014    Ben Wojtowicz    Added config file support.
+    07/29/2017    Ben Wojtowicz    Added a routine for filling RRC physical
+                                   layer dedicated configurations.
 
 *******************************************************************************/
 
@@ -47,11 +52,14 @@
                               DEFINES
 *******************************************************************************/
 
+#define LTE_FDD_ENB_MAX_LINE_SIZE 512
 
 /*******************************************************************************
                               FORWARD DECLARATIONS
 *******************************************************************************/
 
+class LTE_fdd_enb_pdcp;
+class LTE_fdd_enb_mme;
 
 /*******************************************************************************
                               TYPEDEFS
@@ -79,12 +87,18 @@ typedef struct{
     uint32                                  N_sc_rb_ul;
     uint32                                  si_periodicity_T;
     uint32                                  si_win_len;
+    uint16                                  mcc;
+    uint16                                  mnc;
     bool                                    sib3_present;
     bool                                    sib4_present;
     bool                                    sib5_present;
     bool                                    sib6_present;
     bool                                    sib7_present;
     bool                                    sib8_present;
+    bool                                    mib_pcap_sent;
+    bool                                    sib1_pcap_sent;
+    bool                                    sib_pcap_sent[4];
+    bool                                    continuous_sib_pcap;
 }LTE_FDD_ENB_SYS_INFO_STRUCT;
 
 /*******************************************************************************
@@ -109,8 +123,18 @@ public:
     LTE_FDD_ENB_ERROR_ENUM get_param(LTE_FDD_ENB_PARAM_ENUM param, uint32 &value);
 
     // MIB/SIB Construction
-    void construct_sys_info(void);
+    void construct_sys_info(LTE_fdd_enb_pdcp *pdcp, LTE_fdd_enb_mme *mme);
     void get_sys_info(LTE_FDD_ENB_SYS_INFO_STRUCT &_sys_info);
+
+    // Config File
+    void read_cnfg_file(void);
+
+    // Helpers
+    void populate_rrc_phy_config_dedicated(LIBLTE_RRC_PHYSICAL_CONFIG_DEDICATED_STRUCT *cnfg,
+                                           uint32                                       i_cqi_pmi,
+                                           uint32                                       i_ri,
+                                           uint32                                       i_sr,
+                                           uint32                                       n_1_p_pucch);
 
 private:
     // Singleton
@@ -125,6 +149,11 @@ private:
 
     // System information
     LTE_FDD_ENB_SYS_INFO_STRUCT sys_info;
+
+    // Config File
+    void write_cnfg_file(void);
+    void delete_cnfg_file(void);
+    bool use_cnfg_file;
 };
 
 #endif /* __LTE_FDD_ENB_CNFG_DB_H__ */

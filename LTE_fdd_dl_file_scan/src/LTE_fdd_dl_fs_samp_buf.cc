@@ -48,6 +48,8 @@
     09/28/2013    Ben Wojtowicz    Added support for setting the sample rate
                                    and input data type.
     03/26/2014    Ben Wojtowicz    Using the latest LTE library.
+    11/01/2014    Ben Wojtowicz    Using the latest LTE library.
+    11/09/2014    Ben Wojtowicz    Added SIB13 printing.
 
 *******************************************************************************/
 
@@ -262,15 +264,16 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
 
         while(samp_buf_r_idx < (samp_buf_w_idx - num_samps_needed))
         {
-            if(mib_printed  == true          &&
-               sib1_printed == true          &&
-               sib2_printed == true          &&
-               sib3_printed == sib3_expected &&
-               sib4_printed == sib4_expected &&
-               sib5_printed == sib5_expected &&
-               sib6_printed == sib6_expected &&
-               sib7_printed == sib7_expected &&
-               sib8_printed == sib8_expected)
+            if(mib_printed   == true          &&
+               sib1_printed  == true          &&
+               sib2_printed  == true          &&
+               sib3_printed  == sib3_expected &&
+               sib4_printed  == sib4_expected &&
+               sib5_printed  == sib5_expected &&
+               sib6_printed  == sib6_expected &&
+               sib7_printed  == sib7_expected &&
+               sib8_printed  == sib8_expected &&
+               sib13_printed == sib13_expected)
             {
                 corr_peak_idx++;
                 init();
@@ -543,6 +546,9 @@ int32 LTE_fdd_dl_fs_samp_buf::work(int32                      ninput_items,
                             case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8:
                                 print_sib8((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT *)&bcch_dlsch_msg.sibs[i].sib);
                                 break;
+                            case LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_13:
+                                print_sib13((LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_13_STRUCT *)&bcch_dlsch_msg.sibs[i].sib);
+                                break;
                             default:
                                 printf("Not handling SIB %u\n", bcch_dlsch_msg.sibs[i].sib_type);
                                 break;
@@ -644,6 +650,8 @@ void LTE_fdd_dl_fs_samp_buf::init(void)
     sib7_expected           = false;
     sib8_printed            = false;
     sib8_expected           = false;
+    sib13_printed           = false;
+    sib13_expected          = false;
 }
 
 void LTE_fdd_dl_fs_samp_buf::copy_input_to_samp_buf(gr_vector_const_void_star &input_items, int32 ninput_items)
@@ -734,14 +742,15 @@ void LTE_fdd_dl_fs_samp_buf::print_sib1(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT 
        prev_si_value_tag != sib1->system_info_value_tag)
     {
         printf("\tSystem Info value tag changed\n");
-        sib1_printed = false;
-        sib2_printed = false;
-        sib3_printed = false;
-        sib4_printed = false;
-        sib5_printed = false;
-        sib6_printed = false;
-        sib7_printed = false;
-        sib8_printed = false;
+        sib1_printed  = false;
+        sib2_printed  = false;
+        sib3_printed  = false;
+        sib4_printed  = false;
+        sib5_printed  = false;
+        sib6_printed  = false;
+        sib7_printed  = false;
+        sib8_printed  = false;
+        sib13_printed = false;
     }
 
     if(false == sib1_printed)
@@ -847,6 +856,9 @@ void LTE_fdd_dl_fs_samp_buf::print_sib1(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT 
                 case LIBLTE_RRC_SIB_TYPE_8:
                     sib8_expected = true;
                     break;
+                case LIBLTE_RRC_SIB_TYPE_13_v920:
+                    sib13_expected = true;
+                    break;
                 }
             }
         }
@@ -855,8 +867,8 @@ void LTE_fdd_dl_fs_samp_buf::print_sib1(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_1_STRUCT 
             printf("\t\t%-40s=%20s\n", "Duplexing Mode", "FDD");
         }else{
             printf("\t\t%-40s=%20s\n", "Duplexing Mode", "TDD");
-            printf("\t\t%-40s=%20s\n", "Subframe Assignment", liblte_rrc_subframe_assignment_text[sib1->sf_assignment]);
-            printf("\t\t%-40s=%20s\n", "Special Subframe Patterns", liblte_rrc_special_subframe_patterns_text[sib1->special_sf_patterns]);
+            printf("\t\t%-40s=%20s\n", "Subframe Assignment", liblte_rrc_subframe_assignment_text[sib1->tdd_cnfg.sf_assignment]);
+            printf("\t\t%-40s=%20s\n", "Special Subframe Patterns", liblte_rrc_special_subframe_patterns_text[sib1->tdd_cnfg.special_sf_patterns]);
         }
         printf("\t\t%-40s=%20u\n", "SI Value Tag", sib1->system_info_value_tag);
         prev_si_value_tag       = sib1->system_info_value_tag;
@@ -1690,6 +1702,35 @@ void LTE_fdd_dl_fs_samp_buf::print_sib8(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT 
         }
 
         sib8_printed = true;
+    }
+}
+
+void LTE_fdd_dl_fs_samp_buf::print_sib13(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_13_STRUCT *sib13)
+{
+    uint32 i;
+
+    if(false == sib13_printed)
+    {
+        printf("\tSIB13 Decoded:\n");
+
+        printf("\t\tMBSFN Area Info List R9:\n");
+        for(i=0; i<sib13->mbsfn_area_info_list_r9_size; i++)
+        {
+            printf("\t\t\t%-40s=%20u\n", "MBSFN Area ID R9", sib13->mbsfn_area_info_list_r9[i].mbsfn_area_id_r9);
+            printf("\t\t\t%-40s=%20s\n", "Non-MBSFN Region Length", liblte_rrc_non_mbsfn_region_length_text[sib13->mbsfn_area_info_list_r9[i].non_mbsfn_region_length]);
+            printf("\t\t\t%-40s=%20u\n", "Notification Indicator R9", sib13->mbsfn_area_info_list_r9[i].notification_indicator_r9);
+            printf("\t\t\t%-40s=%20s\n", "MCCH Repetition Period R9", liblte_rrc_mcch_repetition_period_r9_text[sib13->mbsfn_area_info_list_r9[i].mcch_repetition_period_r9]);
+            printf("\t\t\t%-40s=%20u\n", "MCCH Offset R9", sib13->mbsfn_area_info_list_r9[i].mcch_offset_r9);
+            printf("\t\t\t%-40s=%20s\n", "MCCH Modification Period R9", liblte_rrc_mcch_modification_period_r9_text[sib13->mbsfn_area_info_list_r9[i].mcch_modification_period_r9]);
+            printf("\t\t\t%-40s=%20u\n", "SF Alloc Info R9", sib13->mbsfn_area_info_list_r9[i].sf_alloc_info_r9);
+            printf("\t\t\t%-40s=%20s\n", "Signalling MCS R9", liblte_rrc_mcch_signalling_mcs_r9_text[sib13->mbsfn_area_info_list_r9[i].signalling_mcs_r9]);
+        }
+
+        printf("\t\t%-40s=%20s\n", "Repetition Coeff", liblte_rrc_notification_repetition_coeff_r9_text[sib13->mbms_notification_config.repetition_coeff]);
+        printf("\t\t%-40s=%20u\n", "Offset", sib13->mbms_notification_config.offset);
+        printf("\t\t%-40s=%20u\n", "SF Index", sib13->mbms_notification_config.sf_index);
+
+        sib13_printed = true;
     }
 }
 

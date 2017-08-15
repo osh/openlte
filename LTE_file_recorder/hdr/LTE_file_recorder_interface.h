@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013,2015 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,7 @@
     Revision History
     ----------    -------------    --------------------------------------------
     08/26/2013    Ben Wojtowicz    Created file
+    12/06/2015    Ben Wojtowicz    Changed boost::mutex to pthread_mutex_t.
 
 *******************************************************************************/
 
@@ -37,7 +38,6 @@
 
 #include "liblte_interface.h"
 #include "libtools_socket_wrap.h"
-#include <boost/thread/mutex.hpp>
 #include <string>
 
 /*******************************************************************************
@@ -82,7 +82,7 @@ public:
     static void handle_ctrl_connect(void);
     static void handle_ctrl_disconnect(void);
     static void handle_ctrl_error(LIBTOOLS_SOCKET_WRAP_ERROR_ENUM err);
-    boost::mutex          ctrl_mutex;
+    pthread_mutex_t       ctrl_mutex;
     libtools_socket_wrap *ctrl_socket;
     int16                 ctrl_port;
     static bool           ctrl_connected;

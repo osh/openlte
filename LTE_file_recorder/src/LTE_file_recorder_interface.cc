@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013,2015,2017 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -25,6 +25,8 @@
     Revision History
     ----------    -------------    --------------------------------------------
     08/26/2013    Ben Wojtowicz    Created file
+    12/06/2015    Ben Wojtowicz    Changed boost::mutex to pthread_mutex_t.
+    07/29/2017    Ben Wojtowicz    Using the latest tools library.
 
 *******************************************************************************/
 
@@ -34,7 +36,8 @@
 
 #include "LTE_file_recorder_interface.h"
 #include "LTE_file_recorder_flowgraph.h"
-#include <boost/lexical_cast.hpp>
+#include "libtools_scoped_lock.h"
+#include "libtools_helpers.h"
 
 /*******************************************************************************
                               DEFINES
@@ -52,9 +55,9 @@
                               GLOBAL VARIABLES
 *******************************************************************************/
 
-LTE_file_recorder_interface* LTE_file_recorder_interface::instance = NULL;
-boost::mutex                 interface_instance_mutex;
-boost::mutex                 connect_mutex;
+LTE_file_recorder_interface* LTE_file_recorder_interface::instance       = NULL;
+static pthread_mutex_t       interface_instance_mutex                    = PTHREAD_MUTEX_INITIALIZER;
+static pthread_mutex_t       connect_mutex                               = PTHREAD_MUTEX_INITIALIZER;
 bool                         LTE_file_recorder_interface::ctrl_connected = false;
 
 /*******************************************************************************
@@ -64,7 +67,7 @@ bool                         LTE_file_recorder_interface::ctrl_connected = false
 // Singleton
 LTE_file_recorder_interface* LTE_file_recorder_interface::get_instance(void)
 {
-    boost::mutex::scoped_lock lock(interface_instance_mutex);
+    libtools_scoped_lock lock(interface_instance_mutex);
 
     if(NULL == instance)
     {
@@ -75,7 +78,7 @@ LTE_file_recorder_interface* LTE_file_recorder_interface::get_instance(void)
 }
 void LTE_file_recorder_interface::cleanup(void)
 {
-    boost::mutex::scoped_lock lock(interface_instance_mutex);
+    libtools_scoped_lock lock(interface_instance_mutex);
 
     if(NULL != instance)
     {
@@ -90,6 +93,7 @@ LTE_file_recorder_interface::LTE_file_recorder_interface()
     uint32 i;
 
     // Communication
+    pthread_mutex_init(&ctrl_mutex, NULL);
     ctrl_socket    = NULL;
     ctrl_port      = LTE_FILE_RECORDER_DEFAULT_CTRL_PORT;
     ctrl_connected = false;
@@ -102,12 +106,13 @@ LTE_file_recorder_interface::LTE_file_recorder_interface()
 LTE_file_recorder_interface::~LTE_file_recorder_interface()
 {
     stop_ctrl_port();
+    pthread_mutex_destroy(&ctrl_mutex);
 }
 
 // Communication
 void LTE_file_recorder_interface::set_ctrl_port(int16 port)
 {
-    boost::mutex::scoped_lock lock(connect_mutex);
+    libtools_scoped_lock lock(connect_mutex);
 
     if(!ctrl_connected)
     {
@@ -116,7 +121,7 @@ void LTE_file_recorder_interface::set_ctrl_port(int16 port)
 }
 void LTE_file_recorder_interface::start_ctrl_port(void)
 {
-    boost::mutex::scoped_lock       lock(ctrl_mutex);
+    libtools_scoped_lock            lock(ctrl_mutex);
     LIBTOOLS_SOCKET_WRAP_ERROR_ENUM error;
 
     if(NULL == ctrl_socket)
@@ -138,7 +143,7 @@ void LTE_file_recorder_interface::start_ctrl_port(void)
 }
 void LTE_file_recorder_interface::stop_ctrl_port(void)
 {
-    boost::mutex::scoped_lock lock(ctrl_mutex);
+    libtools_scoped_lock lock(ctrl_mutex);
 
     if(NULL != ctrl_socket)
     {
@@ -148,8 +153,8 @@ void LTE_file_recorder_interface::stop_ctrl_port(void)
 }
 void LTE_file_recorder_interface::send_ctrl_msg(std::string msg)
 {
-    boost::mutex::scoped_lock lock(connect_mutex);
-    std::string               tmp_msg;
+    libtools_scoped_lock lock(connect_mutex);
+    std::string          tmp_msg;
 
     if(ctrl_connected)
     {
@@ -160,8 +165,8 @@ void LTE_file_recorder_interface::send_ctrl_msg(std::string msg)
 }
 void LTE_file_recorder_interface::send_ctrl_info_msg(std::string msg)
 {
-    boost::mutex::scoped_lock lock(connect_mutex);
-    std::string               tmp_msg;
+    libtools_scoped_lock lock(connect_mutex);
+    std::string          tmp_msg;
 
     if(ctrl_connected)
     {
@@ -174,8 +179,8 @@ void LTE_file_recorder_interface::send_ctrl_info_msg(std::string msg)
 void LTE_file_recorder_interface::send_ctrl_status_msg(LTE_FILE_RECORDER_STATUS_ENUM status,
                                                        std::string                   msg)
 {
-    boost::mutex::scoped_lock lock(connect_mutex);
-    std::string               tmp_msg;
+    libtools_scoped_lock lock(connect_mutex);
+    std::string          tmp_msg;
 
     if(ctrl_connected)
     {
@@ -217,16 +222,16 @@ void LTE_file_recorder_interface::handle_ctrl_connect(void)
 {
     LTE_file_recorder_interface *interface = LTE_file_recorder_interface::get_instance();
 
-    connect_mutex.lock();
+    pthread_mutex_lock(&connect_mutex);
     LTE_file_recorder_interface::ctrl_connected = true;
-    connect_mutex.unlock();
+    pthread_mutex_unlock(&connect_mutex);
 
     interface->send_ctrl_msg("*** LTE File Recorder ***");
     interface->send_ctrl_msg("Type help to see a list of commands");
 }
 void LTE_file_recorder_interface::handle_ctrl_disconnect(void)
 {
-    boost::mutex::scoped_lock lock(connect_mutex);
+    libtools_scoped_lock lock(connect_mutex);
 
     LTE_file_recorder_interface::ctrl_connected = false;
 }
@@ -306,15 +311,10 @@ void LTE_file_recorder_interface::handle_help(void)
     send_ctrl_msg("\tParameters:");
 
     // EARFCN
-    try
-    {
-        tmp_str  = "\t\t";
-        tmp_str += EARFCN_PARAM;
-        tmp_str += " = ";
-        tmp_str += boost::lexical_cast<std::string>(earfcn);
-    }catch(boost::bad_lexical_cast &){
-        // Intentionally do nothing
-    }
+    tmp_str  = "\t\t";
+    tmp_str += EARFCN_PARAM;
+    tmp_str += " = ";
+    tmp_str += to_string(earfcn);
     send_ctrl_msg(tmp_str);
 
     // FILE_NAME
@@ -333,23 +333,13 @@ bool LTE_file_recorder_interface::get_shutdown(void)
 // Reads/Writes
 void LTE_file_recorder_interface::read_earfcn(void)
 {
-    try
-    {
-        send_ctrl_status_msg(LTE_FILE_RECORDER_STATUS_OK, boost::lexical_cast<std::string>(earfcn).c_str());
-    }catch(boost::bad_lexical_cast &){
-        send_ctrl_status_msg(LTE_FILE_RECORDER_STATUS_FAIL, "bad earfcn");
-    }
+    send_ctrl_status_msg(LTE_FILE_RECORDER_STATUS_OK, to_string(earfcn).c_str());
 }
 void LTE_file_recorder_interface::write_earfcn(std::string earfcn_str)
 {
     uint16 tmp_earfcn = LIBLTE_INTERFACE_DL_EARFCN_INVALID;
 
-    try
-    {
-        tmp_earfcn = boost::lexical_cast<uint16>(earfcn_str);
-    }catch(boost::bad_lexical_cast &){
-        // Intentionally do nothing
-    }
+    to_number(earfcn_str, &tmp_earfcn);
 
     if(0 != liblte_interface_dl_earfcn_to_frequency(tmp_earfcn) ||
        0 != liblte_interface_ul_earfcn_to_frequency(tmp_earfcn))

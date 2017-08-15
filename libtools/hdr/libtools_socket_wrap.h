@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013,2015 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -26,6 +26,7 @@
     ----------    -------------    --------------------------------------------
     02/26/2013    Ben Wojtowicz    Created file
     07/21/2013    Ben Wojtowicz    Added enum to text conversion
+    12/06/2015    Ben Wojtowicz    Change from boost::mutex to sem_t.
 
 *******************************************************************************/
 
@@ -37,9 +38,9 @@
 *******************************************************************************/
 
 #include "typedefs.h"
-#include <boost/thread/mutex.hpp>
 #include <pthread.h>
 #include <string>
+#include <semaphore.h>
 
 /*******************************************************************************
                               DEFINES
@@ -119,7 +120,7 @@ private:
     LIBTOOLS_SOCKET_WRAP_THREAD_INPUTS_STRUCT thread_inputs;
     LIBTOOLS_SOCKET_WRAP_STATE_ENUM           socket_state;
     pthread_t                                 socket_thread;
-    boost::mutex                              socket_mutex;
+    sem_t                                     socket_sem;
     uint32                                    socket_ip_addr;
     int32                                     socket_fd;
     int32                                     sock;
