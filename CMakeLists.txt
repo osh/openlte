@@ -94,7 +94,7 @@ find_package(GnuradioOsmosdr)
 find_package(Uhd)
 find_package(LibbladeRF)
 find_package(FFTW3F)
-find_package(Polarssl)
+find_package(MbedTLS)
 
 if(NOT GNURADIO_RUNTIME_FOUND)
     message(FATAL_ERROR "GNURadio required to compile openLTE")

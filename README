@@ -25,7 +25,7 @@ openLTE is dependant on the following:
 4) UHD
 5) HackRF
 6) bladeRF
-7) polarssl
+7) mbedtls
 8) iptables
 
 To build the C++ and python code use the following:
