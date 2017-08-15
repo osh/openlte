@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013-2015 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -27,6 +27,9 @@
     02/26/2013    Ben Wojtowicz    Created file
     08/26/2013    Ben Wojtowicz    Moved to using select with a timeout for
                                    socket management.
+    07/22/2014    Ben Wojtowicz    Pulled in a patch from Jeff Long to fix
+                                   double unlocking of mutex.
+    12/06/2015    Ben Wojtowicz    Change from boost::mutex to sem_t.
 
 *******************************************************************************/
 
@@ -35,6 +38,7 @@
 *******************************************************************************/
 
 #include "libtools_socket_wrap.h"
+#include "libtools_scoped_lock.h"
 #include <sys/socket.h>
 #include <sys/select.h>
 #include <netinet/in.h>
@@ -71,9 +75,11 @@ libtools_socket_wrap::libtools_socket_wrap(uint32                          *ip_a
                                            void                             (*handle_error)(LIBTOOLS_SOCKET_WRAP_ERROR_ENUM err),
                                            LIBTOOLS_SOCKET_WRAP_ERROR_ENUM *error)
 {
-    boost::mutex::scoped_lock lock(socket_mutex);
-    struct sockaddr_in        s_addr;
-    struct linger             linger;
+    sem_init(&socket_sem, 0, 1);
+
+    libtools_scoped_lock lock(socket_sem);
+    struct sockaddr_in   s_addr;
+    struct linger        linger;
 
     if(handle_msg        == NULL ||
        handle_connect    == NULL ||
@@ -150,7 +156,7 @@ libtools_socket_wrap::libtools_socket_wrap(uint32                          *ip_a
 }
 libtools_socket_wrap::~libtools_socket_wrap()
 {
-    boost::mutex::scoped_lock lock(socket_mutex);
+    libtools_scoped_lock lock(socket_sem);
 
     if(LIBTOOLS_SOCKET_WRAP_STATE_DISCONNECTED != socket_state)
     {
@@ -166,7 +172,7 @@ libtools_socket_wrap::~libtools_socket_wrap()
 // Send
 LIBTOOLS_SOCKET_WRAP_ERROR_ENUM libtools_socket_wrap::send(std::string msg)
 {
-    boost::mutex::scoped_lock       lock(socket_mutex);
+    libtools_scoped_lock            lock(socket_sem);
     LIBTOOLS_SOCKET_WRAP_ERROR_ENUM err = LIBTOOLS_SOCKET_WRAP_ERROR_SOCKET;
 
     if(LIBTOOLS_SOCKET_WRAP_STATE_CONNECTED == socket_state)
@@ -230,20 +236,21 @@ void* libtools_socket_wrap::server_thread(void *inputs)
                 if(i == act_inputs->sock)
                 {
                     // Accept connections
-                    act_inputs->socket_wrap->socket_mutex.lock();
+                    sem_wait(&act_inputs->socket_wrap->socket_sem);
                     if(act_inputs->socket_wrap->socket_state != LIBTOOLS_SOCKET_WRAP_STATE_CONNECTED)
                     {
                         sock_fd = accept(act_inputs->sock, (struct sockaddr *)&c_addr, &c_addr_len);
                         if(0 > sock_fd)
                         {
                             act_inputs->handle_error(LIBTOOLS_SOCKET_WRAP_ERROR_SOCKET);
+                            sem_post(&act_inputs->socket_wrap->socket_sem);
                             return(NULL);
                         }
 
                         // Finish setup
                         act_inputs->socket_wrap->socket_fd    = sock_fd;
                         act_inputs->socket_wrap->socket_state = LIBTOOLS_SOCKET_WRAP_STATE_CONNECTED;
-                        act_inputs->socket_wrap->socket_mutex.unlock();
+                        sem_post(&act_inputs->socket_wrap->socket_sem);
                         act_inputs->handle_connect();
 
                         // Finish FD_SET setup
@@ -252,8 +259,9 @@ void* libtools_socket_wrap::server_thread(void *inputs)
                         {
                             fd_max = sock_fd;
                         }
+                    }else{
+                        sem_post(&act_inputs->socket_wrap->socket_sem);
                     }
-                    act_inputs->socket_wrap->socket_mutex.unlock();
                 }else{
                     memset(read_buf, '\0', LINE_MAX);
                     nbytes = read(sock_fd, read_buf, LINE_MAX);
@@ -261,28 +269,30 @@ void* libtools_socket_wrap::server_thread(void *inputs)
                     // Check the return
                     if(-1 == nbytes)
                     {
-                        act_inputs->socket_wrap->socket_mutex.lock();
+                        sem_wait(&act_inputs->socket_wrap->socket_sem);
                         if(LIBTOOLS_SOCKET_WRAP_STATE_CONNECTED == act_inputs->socket_wrap->socket_state)
                         {
-                            act_inputs->socket_wrap->socket_mutex.unlock();
+                            sem_post(&act_inputs->socket_wrap->socket_sem);
                             act_inputs->handle_disconnect();
+                        }else{
+                            sem_post(&act_inputs->socket_wrap->socket_sem);
                         }
-                        act_inputs->socket_wrap->socket_mutex.unlock();
-                        act_inputs->socket_wrap->socket_mutex.lock();
+                        sem_wait(&act_inputs->socket_wrap->socket_sem);
                         act_inputs->socket_wrap->socket_state = LIBTOOLS_SOCKET_WRAP_STATE_CLOSED;
-                        act_inputs->socket_wrap->socket_mutex.unlock();
+                        sem_post(&act_inputs->socket_wrap->socket_sem);
                         break;
                     }else if(0 == nbytes){
-                        act_inputs->socket_wrap->socket_mutex.lock();
+                        sem_wait(&act_inputs->socket_wrap->socket_sem);
                         if(LIBTOOLS_SOCKET_WRAP_STATE_CONNECTED == act_inputs->socket_wrap->socket_state)
                         {
-                            act_inputs->socket_wrap->socket_mutex.unlock();
+                            sem_post(&act_inputs->socket_wrap->socket_sem);
                             act_inputs->handle_disconnect();
+                        }else{
+                            sem_post(&act_inputs->socket_wrap->socket_sem);
                         }
-                        act_inputs->socket_wrap->socket_mutex.unlock();
-                        act_inputs->socket_wrap->socket_mutex.lock();
+                        sem_wait(&act_inputs->socket_wrap->socket_sem);
                         act_inputs->socket_wrap->socket_state = LIBTOOLS_SOCKET_WRAP_STATE_THREADED;
-                        act_inputs->socket_wrap->socket_mutex.unlock();
+                        sem_post(&act_inputs->socket_wrap->socket_sem);
                         break;
                     }else{
                         // Remove \n

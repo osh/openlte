@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013-2014 Ben Wojtowicz
+    Copyright 2013-2015 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -31,6 +31,7 @@
                                    latest LTE library.
     03/26/2014    Ben Wojtowicz    Using the latest LTE library.
     06/15/2014    Ben Wojtowicz    Added PCAP support.
+    03/11/2015    Ben Wojtowicz    Added 7.68MHz support.
 
 *******************************************************************************/
 
@@ -63,6 +64,17 @@
 #define BCH_DECODE_NUM_SAMPS_1_92MHZ                 (2 * ONE_FRAME_NUM_SAMPS_1_92MHZ)
 #define PDSCH_DECODE_SIB1_NUM_SAMPS_1_92MHZ          (2 * ONE_FRAME_NUM_SAMPS_1_92MHZ)
 #define PDSCH_DECODE_SI_GENERIC_NUM_SAMPS_1_92MHZ    (ONE_FRAME_NUM_SAMPS_1_92MHZ)
+
+// Sample rate 7.68MHZ defines
+#define ONE_SUBFRAME_NUM_SAMPS_7_68MHZ               (LIBLTE_PHY_N_SAMPS_PER_SUBFR_7_68MHZ)
+#define ONE_FRAME_NUM_SAMPS_7_68MHZ                  (10 * ONE_SUBFRAME_NUM_SAMPS_7_68MHZ)
+#define FREQ_CHANGE_WAIT_NUM_SAMPS_7_68MHZ           (100 * ONE_FRAME_NUM_SAMPS_7_68MHZ)
+#define COARSE_TIMING_SEARCH_NUM_SAMPS_7_68MHZ       (((COARSE_TIMING_N_SLOTS/2)+2) * ONE_SUBFRAME_NUM_SAMPS_7_68MHZ)
+#define PSS_AND_FINE_TIMING_SEARCH_NUM_SAMPS_7_68MHZ (COARSE_TIMING_SEARCH_NUM_SAMPS_7_68MHZ)
+#define SSS_SEARCH_NUM_SAMPS_7_68MHZ                 (COARSE_TIMING_SEARCH_NUM_SAMPS_7_68MHZ)
+#define BCH_DECODE_NUM_SAMPS_7_68MHZ                 (2 * ONE_FRAME_NUM_SAMPS_7_68MHZ)
+#define PDSCH_DECODE_SIB1_NUM_SAMPS_7_68MHZ          (2 * ONE_FRAME_NUM_SAMPS_7_68MHZ)
+#define PDSCH_DECODE_SI_GENERIC_NUM_SAMPS_7_68MHZ    (ONE_FRAME_NUM_SAMPS_7_68MHZ)
 
 // Sample rate 15.36MHZ defines
 #define ONE_SUBFRAME_NUM_SAMPS_15_36MHZ               (LIBLTE_PHY_N_SAMPS_PER_SUBFR_15_36MHZ)
@@ -125,6 +137,23 @@ LTE_fdd_dl_scan_state_machine::LTE_fdd_dl_scan_state_machine(uint32 samp_rate)
         bch_decode_num_samps                 = BCH_DECODE_NUM_SAMPS_1_92MHZ;
         pdsch_decode_sib1_num_samps          = PDSCH_DECODE_SIB1_NUM_SAMPS_1_92MHZ;
         pdsch_decode_si_generic_num_samps    = PDSCH_DECODE_SI_GENERIC_NUM_SAMPS_1_92MHZ;
+    }else if(samp_rate == 7680000){
+        liblte_phy_init(&phy_struct,
+                        LIBLTE_PHY_FS_7_68MHZ,
+                        LIBLTE_PHY_INIT_N_ID_CELL_UNKNOWN,
+                        4,
+                        LIBLTE_PHY_N_RB_DL_5MHZ,
+                        LIBLTE_PHY_N_SC_RB_DL_NORMAL_CP,
+                        liblte_rrc_phich_resource_num[LIBLTE_RRC_PHICH_RESOURCE_1]);
+        one_subframe_num_samps               = ONE_SUBFRAME_NUM_SAMPS_7_68MHZ;
+        one_frame_num_samps                  = ONE_FRAME_NUM_SAMPS_7_68MHZ;
+        freq_change_wait_num_samps           = FREQ_CHANGE_WAIT_NUM_SAMPS_7_68MHZ;
+        coarse_timing_search_num_samps       = COARSE_TIMING_SEARCH_NUM_SAMPS_7_68MHZ;
+        pss_and_fine_timing_search_num_samps = PSS_AND_FINE_TIMING_SEARCH_NUM_SAMPS_7_68MHZ;
+        sss_search_num_samps                 = SSS_SEARCH_NUM_SAMPS_7_68MHZ;
+        bch_decode_num_samps                 = BCH_DECODE_NUM_SAMPS_7_68MHZ;
+        pdsch_decode_sib1_num_samps          = PDSCH_DECODE_SIB1_NUM_SAMPS_7_68MHZ;
+        pdsch_decode_si_generic_num_samps    = PDSCH_DECODE_SI_GENERIC_NUM_SAMPS_7_68MHZ;
     }else{
         liblte_phy_init(&phy_struct,
                         LIBLTE_PHY_FS_15_36MHZ,

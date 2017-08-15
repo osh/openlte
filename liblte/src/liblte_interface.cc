@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013, 2016 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -27,6 +27,8 @@
     02/26/2013    Ben Wojtowicz    Created file.
     11/13/2013    Ben Wojtowicz    Added functions for getting corresponding
                                    EARFCNs for FDD configuration
+    12/18/2016    Ben Wojtowicz    Added support for band 26, 26, and 28 (thanks
+                                   to Jeremy Quirke).
 
 *******************************************************************************/
 
@@ -84,16 +86,17 @@ uint32 liblte_interface_dl_earfcn_to_frequency(uint16 dl_earfcn)
                                                         1844900000,   2110000000,   1475900000,    729000000,
                                                          746000000,    758000000,    734000000,    860000000,
                                                          875000000,    791000000,   1495900000, 3510000000UL,
-                                                      2180000000UL,   1525000000,   1930000000,   1900000000,
-                                                        2010000000,   1850000000,   1930000000,   1910000000,
-                                                      2570000000UL,   1880000000, 2300000000UL, 2496000000UL,
-                                                      3400000000UL, 3600000000UL};
+                                                      2180000000UL,   1525000000,   1930000000,    859000000,
+                                                         852000000,    758000000,   1900000000,   2010000000,
+                                                        1850000000,   1930000000,   1910000000, 2570000000UL,
+                                                        1880000000, 2300000000UL, 2496000000UL, 3400000000UL,
+                                                      3600000000UL};
     uint32 i;
     uint16 N_offs_dl[LIBLTE_INTERFACE_BAND_N_ITEMS] = {    0,   600,  1200,  1950,  2400,  2650,  2750,  3450,
                                                         3800,  4150,  4750,  5010,  5180,  5280,  5730,  5850,
-                                                        6000,  6150,  6450,  6600,  7500,  7700,  8040, 36000,
-                                                       36200, 36350, 36950, 37550, 37750, 38250, 38650, 39650,
-                                                       41590, 43590};
+                                                        6000,  6150,  6450,  6600,  7500,  7700,  8040,  8690,
+                                                        9040,  9210, 36000, 36200, 36350, 36950, 37550, 37750,
+                                                       38250, 38650, 39650, 41590, 43590};
 
     for(i=0; i<LIBLTE_INTERFACE_BAND_N_ITEMS; i++)
     {
@@ -119,7 +122,7 @@ uint16 liblte_interface_get_corresponding_dl_earfcn(uint16 ul_earfcn)
     if(0 != liblte_interface_ul_earfcn_to_frequency(ul_earfcn))
     {
         if(liblte_interface_first_ul_earfcn[0] <= ul_earfcn &&
-           liblte_interface_last_ul_earfcn[22] >= ul_earfcn)
+           liblte_interface_last_ul_earfcn[25] >= ul_earfcn)
         {
             // FDD
             dl_earfcn = ul_earfcn - 18000;
@@ -148,16 +151,17 @@ uint32 liblte_interface_ul_earfcn_to_frequency(uint16 ul_earfcn)
                                                         1749900000,   1710000000,   1427900000,    699000000,
                                                          777000000,    788000000,    704000000,    815000000,
                                                          830000000,    832000000,   1447900000, 3410000000UL,
-                                                        2000000000,   1626500000,   1850000000,   1900000000,
-                                                        2010000000,   1850000000,   1930000000,   1910000000,
-                                                      2570000000UL,   1880000000, 2300000000UL, 2496000000UL,
-                                                      3400000000UL, 3600000000UL};
+                                                        2000000000,   1626500000,   1850000000,    814000000,
+                                                         807000000,    703000000,   1900000000,   2010000000,
+                                                        1850000000,   1930000000,   1910000000, 2570000000UL,
+                                                        1880000000, 2300000000UL, 2496000000UL, 3400000000UL,
+                                                      3600000000UL};
     uint32 i;
     uint16 N_offs_ul[LIBLTE_INTERFACE_BAND_N_ITEMS] = {18000, 18600, 19200, 19950, 20400, 20650, 20750, 21450,
                                                        21800, 22150, 22750, 23010, 23180, 23280, 23730, 23850,
-                                                       24000, 24150, 24450, 24600, 25500, 25700, 26040, 36000,
-                                                       36200, 36350, 36950, 37550, 37750, 38250, 38650, 39650,
-                                                       41590, 43590};
+                                                       24000, 24150, 24450, 24600, 25500, 25700, 26040, 26690,
+                                                       27040, 27210, 36000, 36200, 36350, 36950, 37550, 37750,
+                                                       38250, 38650, 39650, 41590, 43590};
 
     for(i=0; i<LIBLTE_INTERFACE_BAND_N_ITEMS; i++)
     {
@@ -183,7 +187,7 @@ uint16 liblte_interface_get_corresponding_ul_earfcn(uint16 dl_earfcn)
     if(0 != liblte_interface_dl_earfcn_to_frequency(dl_earfcn))
     {
         if(liblte_interface_first_dl_earfcn[0] <= dl_earfcn &&
-           liblte_interface_last_dl_earfcn[22] >= dl_earfcn)
+           liblte_interface_last_dl_earfcn[25] >= dl_earfcn)
         {
             // FDD
             ul_earfcn = dl_earfcn + 18000;

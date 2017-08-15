@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013,2015 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -27,6 +27,7 @@
     08/26/2013    Ben Wojtowicz    Created file
     11/13/2013    Ben Wojtowicz    Added support for USRP B2X0.
     11/30/2013    Ben Wojtowicz    Added support for bladeRF.
+    12/06/2015    Ben Wojtowicz    Changed boost::mutex to pthread_mutex_t.
 
 *******************************************************************************/
 
@@ -38,7 +39,6 @@
 *******************************************************************************/
 
 #include "LTE_file_recorder_interface.h"
-#include <boost/thread/mutex.hpp>
 #include <gnuradio/top_block.h>
 #include <osmosdr/source.h>
 #include <gnuradio/blocks/file_sink.h>
@@ -95,9 +95,9 @@ private:
     osmosdr::source::sptr       samp_src;
     gr::blocks::file_sink::sptr file_sink;
 
-    pthread_t    start_thread;
-    boost::mutex start_mutex;
-    bool         started;
+    pthread_t       start_thread;
+    pthread_mutex_t start_mutex;
+    bool            started;
 };
 
 #endif /* __LTE_FILE_RECORDER_FLOWGRAPH_H__ */

@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013-2014 Ben Wojtowicz
+    Copyright 2013-2015 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -31,6 +31,10 @@
     11/30/2013    Ben Wojtowicz    Added support for bladeRF.
     04/12/2014    Ben Wojtowicz    Pulled in a patch from Jevgenij for
                                    supporting non-B2X0 USRPs.
+    12/16/2014    Ben Wojtowicz    Pulled in a patch from Ruben Merz to add
+                                   USRP X300 support.
+    03/11/2015    Ben Wojtowicz    Added UmTRX support.
+    12/06/2015    Ben Wojtowicz    Changed boost::mutex to pthread_mutex_t.
 
 *******************************************************************************/
 
@@ -43,7 +47,6 @@
 
 #include "LTE_fdd_dl_scan_interface.h"
 #include "LTE_fdd_dl_scan_state_machine.h"
-#include <boost/thread/mutex.hpp>
 #include <gnuradio/top_block.h>
 #include <gnuradio/filter/rational_resampler_base_ccf.h>
 #include <gnuradio/filter/firdes.h>
@@ -68,6 +71,8 @@ typedef enum{
     LTE_FDD_DL_SCAN_HW_TYPE_HACKRF,
     LTE_FDD_DL_SCAN_HW_TYPE_USRP_B,
     LTE_FDD_DL_SCAN_HW_TYPE_USRP_N,
+    LTE_FDD_DL_SCAN_HW_TYPE_UMTRX,
+    LTE_FDD_DL_SCAN_HW_TYPE_USRP_X,
     LTE_FDD_DL_SCAN_HW_TYPE_BLADERF,
     LTE_FDD_DL_SCAN_HW_TYPE_UNKNOWN,
 }LTE_FDD_DL_SCAN_HW_TYPE_ENUM;
@@ -105,9 +110,9 @@ private:
     osmosdr::source::sptr                         samp_src;
     LTE_fdd_dl_scan_state_machine_sptr            state_machine;
 
-    pthread_t    start_thread;
-    boost::mutex start_mutex;
-    bool         started;
+    pthread_t       start_thread;
+    pthread_mutex_t start_mutex;
+    bool            started;
 };
 
 #endif /* __LTE_FDD_DL_SCAN_FLOWGRAPH_H__ */

@@ -40,6 +40,7 @@
     09/28/2013    Ben Wojtowicz    Added support for setting the sample rate
                                    and input data type.
     06/15/2014    Ben Wojtowicz    Using the latest LTE library.
+    11/09/2014    Ben Wojtowicz    Added SIB13 printing.
 
 *******************************************************************************/
 
@@ -160,6 +161,8 @@ private:
     bool                              sib7_expected;
     bool                              sib8_printed;
     bool                              sib8_expected;
+    bool                              sib13_printed;
+    bool                              sib13_expected;
 
     // Helpers
     void init(void);
@@ -174,6 +177,7 @@ private:
     void print_sib6(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_6_STRUCT *sib6);
     void print_sib7(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7_STRUCT *sib7);
     void print_sib8(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT *sib8);
+    void print_sib13(LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_13_STRUCT *sib13);
     void print_page(LIBLTE_RRC_PAGING_STRUCT *page);
 
     // Configuration

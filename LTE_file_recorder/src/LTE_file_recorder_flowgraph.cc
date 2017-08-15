@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013 Ben Wojtowicz
+    Copyright 2013,2015 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -27,6 +27,7 @@
     08/26/2013    Ben Wojtowicz    Created file
     11/13/2013    Ben Wojtowicz    Added support for USRP B2X0.
     11/30/2013    Ben Wojtowicz    Added support for bladeRF.
+    12/06/2015    Ben Wojtowicz    Changed boost::mutex to pthread_mutex_t.
 
 *******************************************************************************/
 
@@ -35,6 +36,7 @@
 *******************************************************************************/
 
 #include "LTE_file_recorder_flowgraph.h"
+#include "libtools_scoped_lock.h"
 #include "uhd/usrp/multi_usrp.hpp"
 
 /*******************************************************************************
@@ -52,7 +54,7 @@
 *******************************************************************************/
 
 LTE_file_recorder_flowgraph* LTE_file_recorder_flowgraph::instance = NULL;
-boost::mutex                 flowgraph_instance_mutex;
+static pthread_mutex_t       flowgraph_instance_mutex              = PTHREAD_MUTEX_INITIALIZER;
 
 /*******************************************************************************
                               CLASS IMPLEMENTATIONS
@@ -61,7 +63,7 @@ boost::mutex                 flowgraph_instance_mutex;
 // Singleton
 LTE_file_recorder_flowgraph* LTE_file_recorder_flowgraph::get_instance(void)
 {
-    boost::mutex::scoped_lock lock(flowgraph_instance_mutex);
+    libtools_scoped_lock lock(flowgraph_instance_mutex);
 
     if(NULL == instance)
     {
@@ -72,7 +74,7 @@ LTE_file_recorder_flowgraph* LTE_file_recorder_flowgraph::get_instance(void)
 }
 void LTE_file_recorder_flowgraph::cleanup(void)
 {
-    boost::mutex::scoped_lock lock(flowgraph_instance_mutex);
+    libtools_scoped_lock lock(flowgraph_instance_mutex);
 
     if(NULL != instance)
     {
@@ -84,30 +86,32 @@ void LTE_file_recorder_flowgraph::cleanup(void)
 // Constructor/Destructor
 LTE_file_recorder_flowgraph::LTE_file_recorder_flowgraph()
 {
+    pthread_mutex_init(&start_mutex, NULL);
     started = false;
 }
 LTE_file_recorder_flowgraph::~LTE_file_recorder_flowgraph()
 {
-    boost::mutex::scoped_lock lock(start_mutex);
+    libtools_scoped_lock lock(start_mutex);
 
     if(started)
     {
-        start_mutex.unlock();
+        pthread_mutex_unlock(&start_mutex);
         stop();
     }
+    pthread_mutex_destroy(&start_mutex);
 }
 
 // Flowgraph
 bool LTE_file_recorder_flowgraph::is_started(void)
 {
-    boost::mutex::scoped_lock lock(start_mutex);
+    libtools_scoped_lock lock(start_mutex);
 
     return(started);
 }
 LTE_FILE_RECORDER_STATUS_ENUM LTE_file_recorder_flowgraph::start(uint16      earfcn,
                                                                  std::string file_name)
 {
-    boost::mutex::scoped_lock       lock(start_mutex);
+    libtools_scoped_lock            lock(start_mutex);
     LTE_file_recorder_interface    *interface = LTE_file_recorder_interface::get_instance();
     uhd::device_addr_t              hint;
     LTE_FILE_RECORDER_STATUS_ENUM   err           = LTE_FILE_RECORDER_STATUS_FAIL;
@@ -225,13 +229,13 @@ LTE_FILE_RECORDER_STATUS_ENUM LTE_file_recorder_flowgraph::start(uint16      ear
 }
 LTE_FILE_RECORDER_STATUS_ENUM LTE_file_recorder_flowgraph::stop(void)
 {
-    boost::mutex::scoped_lock     lock(start_mutex);
+    libtools_scoped_lock          lock(start_mutex);
     LTE_FILE_RECORDER_STATUS_ENUM err = LTE_FILE_RECORDER_STATUS_FAIL;
 
     if(started)
     {
         started = false;
-        start_mutex.unlock();
+        pthread_mutex_unlock(&start_mutex);
         top_block->stop();
         sleep(1); // Wait for state_machine to exit
         pthread_cancel(start_thread);

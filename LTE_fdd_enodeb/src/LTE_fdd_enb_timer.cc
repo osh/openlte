@@ -28,6 +28,7 @@
     05/04/2014    Ben Wojtowicz    Created file
     06/15/2014    Ben Wojtowicz    Added millisecond resolution and seperated
                                    the callback calling functionality.
+    11/29/2014    Ben Wojtowicz    Added timer reset support.
 
 *******************************************************************************/
 
@@ -91,6 +92,10 @@ LTE_fdd_enb_timer::~LTE_fdd_enb_timer()
 /****************************/
 /*    External Interface    */
 /****************************/
+void LTE_fdd_enb_timer::reset(void)
+{
+    current_m_seconds = 0;
+}
 void LTE_fdd_enb_timer::increment(void)
 {
     current_m_seconds++;

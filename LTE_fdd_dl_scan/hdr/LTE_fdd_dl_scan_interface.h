@@ -1,6 +1,7 @@
 /*******************************************************************************
 
-    Copyright 2013-2014 Ben Wojtowicz
+    Copyright 2013-2015 Ben Wojtowicz
+    Copyright 2014 Andrew Murphy (SIB13 printing)
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -27,6 +28,8 @@
     02/26/2013    Ben Wojtowicz    Created file
     07/21/2013    Ben Wojtowicz    Added support for decoding SIBs.
     06/15/2014    Ben Wojtowicz    Added PCAP support.
+    09/19/2014    Andrew Murphy    Added SIB13 printing.
+    12/06/2015    Ben Wojtowicz    Changed boost::mutex to pthread_mutex_t.
 
 *******************************************************************************/
 
@@ -40,7 +43,6 @@
 #include "liblte_interface.h"
 #include "liblte_rrc.h"
 #include "libtools_socket_wrap.h"
-#include <boost/thread/mutex.hpp>
 #include <string>
 
 /*******************************************************************************
@@ -94,6 +96,7 @@ public:
     void send_ctrl_sib6_decoded_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data, LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_6_STRUCT *sib6, uint32 sfn);
     void send_ctrl_sib7_decoded_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data, LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_7_STRUCT *sib7, uint32 sfn);
     void send_ctrl_sib8_decoded_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data, LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_8_STRUCT *sib8, uint32 sfn);
+    void send_ctrl_sib13_decoded_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data, LIBLTE_RRC_SYS_INFO_BLOCK_TYPE_13_STRUCT *sib13, uint32 sfn);
     void send_ctrl_channel_found_end_msg(LTE_FDD_DL_SCAN_CHAN_DATA_STRUCT *chan_data);
     void send_ctrl_channel_not_found_msg(void);
     void send_ctrl_status_msg(LTE_FDD_DL_SCAN_STATUS_ENUM status, std::string msg);
@@ -103,7 +106,7 @@ public:
     static void handle_ctrl_connect(void);
     static void handle_ctrl_disconnect(void);
     static void handle_ctrl_error(LIBTOOLS_SOCKET_WRAP_ERROR_ENUM err);
-    boost::mutex          ctrl_mutex;
+    pthread_mutex_t       ctrl_mutex;
     FILE                 *pcap_fd;
     libtools_socket_wrap *ctrl_socket;
     int16                 ctrl_port;
@@ -139,7 +142,7 @@ private:
     void write_enable_pcap(std::string enable_pcap_str);
 
     // Variables
-    boost::mutex               dl_earfcn_list_mutex;
+    pthread_mutex_t            dl_earfcn_list_mutex;
     LIBLTE_INTERFACE_BAND_ENUM band;
     uint16                     current_dl_earfcn;
     uint16                     dl_earfcn_list[65535];

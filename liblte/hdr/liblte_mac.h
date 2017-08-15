@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013-2014 Ben Wojtowicz
+    Copyright 2013-2016 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -29,6 +29,11 @@
     05/04/2014    Ben Wojtowicz    Added control element handling.
     06/15/2014    Ben Wojtowicz    Added support for padding LCIDs and breaking
                                    out max and min buffer sizes for BSRs.
+    11/29/2014    Ben Wojtowicz    Using byte message struct for SDUs.
+    02/15/2015    Ben Wojtowicz    Removed FIXME for transparent mode.
+    03/11/2015    Ben Wojtowicz    Fixed long BSR CE and added extended power
+                                   headroom CE support.
+    07/03/2016    Ben Wojtowicz    Fixed extended power headroom CE.
 
 *******************************************************************************/
 
@@ -118,10 +123,14 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_short_bsr_ce(uint8                          
 // Enums
 // Structs
 typedef struct{
-    uint8 buffer_size_0;
-    uint8 buffer_size_1;
-    uint8 buffer_size_2;
-    uint8 buffer_size_3;
+    uint8 max_buffer_size_0;
+    uint8 min_buffer_size_0;
+    uint8 max_buffer_size_1;
+    uint8 min_buffer_size_1;
+    uint8 max_buffer_size_2;
+    uint8 min_buffer_size_2;
+    uint8 max_buffer_size_3;
+    uint8 min_buffer_size_3;
 }LIBLTE_MAC_LONG_BSR_CE_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_mac_pack_long_bsr_ce(LIBLTE_MAC_LONG_BSR_CE_STRUCT  *long_bsr,
@@ -229,12 +238,23 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_power_headroom_ce(uint8                     
 // Enums
 // Structs
 typedef struct{
-    // FIXME
+    uint8 ph;
+    uint8 p_cmax;
+    bool  p;
+    bool  v;
+}LIBLTE_MAC_EPH_CELL_STRUCT;
+typedef struct{
+    LIBLTE_MAC_EPH_CELL_STRUCT pcell_type_1;
+    LIBLTE_MAC_EPH_CELL_STRUCT pcell_type_2;
+    LIBLTE_MAC_EPH_CELL_STRUCT scell[7];
+    bool                       pcell_type_2_present;
+    bool                       scell_present[7];
 }LIBLTE_MAC_EXT_POWER_HEADROOM_CE_STRUCT;
 // Functions
 LIBLTE_ERROR_ENUM liblte_mac_pack_ext_power_headroom_ce(LIBLTE_MAC_EXT_POWER_HEADROOM_CE_STRUCT  *ext_power_headroom,
                                                         uint8                                   **ce_ptr);
 LIBLTE_ERROR_ENUM liblte_mac_unpack_ext_power_headroom_ce(uint8                                   **ce_ptr,
+                                                          bool                                      simultaneous_pucch_pusch,
                                                           LIBLTE_MAC_EXT_POWER_HEADROOM_CE_STRUCT  *ext_power_headroom);
 
 /*********************************************************************
@@ -339,7 +359,7 @@ typedef union{
     LIBLTE_MAC_EXT_POWER_HEADROOM_CE_STRUCT          ext_power_headroom;
     LIBLTE_MAC_MCH_SCHEDULING_INFORMATION_CE_STRUCT  mch_sched_info;
     LIBLTE_MAC_ACTIVATION_DEACTIVATION_CE_STRUCT     act_deact;
-    LIBLTE_BIT_MSG_STRUCT                            sdu;
+    LIBLTE_BYTE_MSG_STRUCT                           sdu;
 }LIBLTE_MAC_SUBHEADER_PAYLOAD_UNION;
 typedef struct{
     LIBLTE_MAC_SUBHEADER_PAYLOAD_UNION payload;
@@ -354,6 +374,7 @@ typedef struct{
 LIBLTE_ERROR_ENUM liblte_mac_pack_mac_pdu(LIBLTE_MAC_PDU_STRUCT *mac_pdu,
                                           LIBLTE_BIT_MSG_STRUCT *pdu);
 LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_BIT_MSG_STRUCT *pdu,
+                                            bool                   simultaneous_pucch_pusch,
                                             LIBLTE_MAC_PDU_STRUCT *mac_pdu);
 
 /*********************************************************************
@@ -367,7 +388,6 @@ LIBLTE_ERROR_ENUM liblte_mac_unpack_mac_pdu(LIBLTE_BIT_MSG_STRUCT *pdu,
 // Enums
 // Structs
 // Functions
-// FIXME
 
 /*********************************************************************
     PDU Name: Random Access Response
@@ -424,10 +444,10 @@ typedef struct{
     LIBLTE_MAC_RAR_TPC_COMMAND_ENUM tpc_command;
     LIBLTE_MAC_RAR_UL_DELAY_ENUM    ul_delay;
     LIBLTE_MAC_RAR_CSI_REQ_ENUM     csi_req;
-    uint16                          rba; // FIXME
+    uint16                          rba;
     uint16                          timing_adv_cmd;
     uint16                          temp_c_rnti;
-    uint8                           mcs; // FIXME
+    uint8                           mcs;
     uint8                           RAPID;
     uint8                           BI;
 }LIBLTE_MAC_RAR_STRUCT;

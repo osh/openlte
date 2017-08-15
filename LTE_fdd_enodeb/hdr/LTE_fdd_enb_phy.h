@@ -1,6 +1,6 @@
 /*******************************************************************************
 
-    Copyright 2013-2014 Ben Wojtowicz
+    Copyright 2013-2017 Ben Wojtowicz
 
     This program is free software: you can redistribute it and/or modify
     it under the terms of the GNU Affero General Public License as published by
@@ -29,6 +29,14 @@
                                    added the ability to handle late subframes.
     05/04/2014    Ben Wojtowicz    Added PHICH support.
     06/15/2014    Ben Wojtowicz    Changed fn_combo to current_tti.
+    12/16/2014    Ben Wojtowicz    Added ol extension to message queue.
+    02/15/2015    Ben Wojtowicz    Moved to new message queue.
+    07/25/2015    Ben Wojtowicz    Combined the DL and UL schedule messages into
+                                   a single PHY schedule message.
+    12/06/2015    Ben Wojtowicz    Changed boost::mutex to sem_t.
+    07/31/2016    Ben Wojtowicz    Added an external interface for getting the
+                                   current TTIs.
+    07/29/2017    Ben Wojtowicz    Added IPC direct to a UE PHY.
 
 *******************************************************************************/
 
@@ -44,7 +52,6 @@
 #include "LTE_fdd_enb_msgq.h"
 #include "LTE_fdd_enb_radio.h"
 #include "liblte_phy.h"
-#include <boost/thread/mutex.hpp>
 
 /*******************************************************************************
                               DEFINES
@@ -74,12 +81,13 @@ public:
     static void cleanup(void);
 
     // Start/Stop
-    void start(LTE_fdd_enb_interface *iface);
+    void start(LTE_fdd_enb_msgq *from_mac, LTE_fdd_enb_msgq *to_mac, bool direct_to_ue, LTE_fdd_enb_interface *iface);
     void stop(void);
 
     // External interface
     void update_sys_info(void);
     uint32 get_n_cce(void);
+    void get_current_ttis(uint32 *dl_tti, uint32 *ul_tti);
 
     // Radio interface
     void radio_interface(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf, LTE_FDD_ENB_RADIO_RX_BUF_STRUCT *rx_buf);
@@ -96,20 +104,21 @@ private:
     bool                   started;
 
     // Communication
-    void handle_mac_msg(LTE_FDD_ENB_MESSAGE_STRUCT *msg);
-    LTE_fdd_enb_msgq                   *mac_comm_msgq;
-    boost::interprocess::message_queue *phy_mac_mq;
+    void handle_mac_msg(LTE_FDD_ENB_MESSAGE_STRUCT &msg);
+    void handle_ue_msg(LIBTOOLS_IPC_MSGQ_MESSAGE_STRUCT *msg);
+    LTE_fdd_enb_msgq  *msgq_from_mac;
+    LTE_fdd_enb_msgq  *msgq_to_mac;
+    libtools_ipc_msgq *msgq_to_ue;
 
     // Generic parameters
     LIBLTE_PHY_STRUCT *phy_struct;
 
     // Downlink
-    void handle_dl_schedule(LTE_FDD_ENB_DL_SCHEDULE_MSG_STRUCT *dl_sched);
-    void handle_ul_schedule(LTE_FDD_ENB_UL_SCHEDULE_MSG_STRUCT *ul_sched);
+    void handle_phy_schedule(LTE_FDD_ENB_PHY_SCHEDULE_MSG_STRUCT *phy_sched);
     void process_dl(LTE_FDD_ENB_RADIO_TX_BUF_STRUCT *tx_buf);
-    boost::mutex                       sys_info_mutex;
-    boost::mutex                       dl_sched_mutex;
-    boost::mutex                       ul_sched_mutex;
+    sem_t                              sys_info_sem;
+    sem_t                              dl_sched_sem;
+    sem_t                              ul_sched_sem;
     LTE_FDD_ENB_SYS_INFO_STRUCT        sys_info;
     LTE_FDD_ENB_DL_SCHEDULE_MSG_STRUCT dl_schedule[10];
     LTE_FDD_ENB_UL_SCHEDULE_MSG_STRUCT ul_schedule[10];

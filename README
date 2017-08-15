@@ -25,6 +25,8 @@ openLTE is dependant on the following:
 4) UHD
 5) HackRF
 6) bladeRF
+7) polarssl
+8) iptables
 
 To build the C++ and python code use the following:
 
@@ -144,9 +146,17 @@ USRP B2X0 hardware, run LTE_fdd_enodeb, and connect (via telnet, nc,
 etc) to the control port at port number 30000.  eNodeB parameters
 can be changed on the control port.  For a list of parameters simply
 type help on the control port.  A MAC and above level PCAP trace is
-output to /tmp/LTE_fdd_enodeb.pcap.
-NOTES: This application has been tested at 1.4, 3, and 5MHz
-bandwidths.  Higher bandwidths are supported and performance may
+output to /tmp/LTE_fdd_enodeb.pcap.  Data packets are routed through
+a tun device named tun_openlte.  Wireshark can be used to observe
+IP packets on tun_openlte to inspect the IP traffic to/from UEs. In
+order to configure properly, set the ip_addr_start parameter to the
+begining of a non-conflicting private address range (i.e. 10.0.0.1)
+and set the dns_addr parameter to the primary DNS address listed by
+your modem.  All UEs will be assigned IP addresses in the range
+of ip_addr_start to ip_addr_start+254 and all traffic will be tunneled
+through the tun device to the internet using NAT/iptables.
+NOTES: This application has been tested exclusively at 5MHz
+bandwidth.  Higher bandwidths are supported and performance may
 vary based on processing hardware.
 WARNINGS: By using this application you risk disruption of service in
 a public network, even if you are not directly interfering with the
